@@ -36,16 +36,39 @@ export const routes: RouteRecordRaw[] = [
     meta: { roles: ["worker"], title: "entrar no vínculo" },
   },
   {
-    path: "/vinculos/novo",
-    component: () => import("@/views/NewContractView.vue"),
-    meta: { roles: ["employer"], title: "novo vínculo" },
+    path: "/equipe",
+    component: () => import("@/views/TeamView.vue"),
+    meta: { roles: ["employer"], title: "equipe" },
   },
   {
-    path: "/vinculos/:id",
+    path: "/equipe/novo",
+    component: () => import("@/views/NewContractView.vue"),
+    meta: { roles: ["employer"], title: "adicionar profissional" },
+  },
+  // v1 links (e-mails, bookmarks, the e2e suite) keep working.
+  { path: "/vinculos/novo", redirect: (to) => ({ path: "/equipe/novo", query: to.query }) },
+  {
+    path: "/vinculos/:id/:rest(.*)*",
+    redirect: (to) => {
+      const rest = ([] as string[]).concat(to.params.rest ?? []).join("/");
+      return {
+        path: `/equipe/${String(to.params.id)}${rest ? `/${rest}` : ""}`,
+        query: to.query,
+        hash: to.hash,
+      };
+    },
+  },
+  {
+    path: "/equipe/:id",
     component: () => import("@/views/contract/ContractView.vue"),
     props: true,
     children: [
       { path: "", name: "contract-card", component: () => import("@/views/contract/CardTab.vue") },
+      {
+        path: "visao-geral",
+        name: "contract-overview",
+        component: () => import("@/views/contract/OverviewTab.vue"),
+      },
       {
         path: "pagamentos",
         name: "contract-payments",
@@ -76,14 +99,12 @@ export const routes: RouteRecordRaw[] = [
   },
   {
     path: "/cartao",
-    component: () => import("@/views/ContractPickerView.vue"),
-    props: { tab: "card" },
+    component: () => import("@/views/BoardView.vue"),
     meta: { title: "cartão" },
   },
   {
     path: "/pagamentos",
-    component: () => import("@/views/ContractPickerView.vue"),
-    props: { tab: "payments" },
+    component: () => import("@/views/PaymentsView.vue"),
     meta: { title: "pagamentos" },
   },
   {

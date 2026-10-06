@@ -122,7 +122,7 @@ const fileName = computed(() =>
   position: relative;
   display: grid;
   grid-template-columns: 1fr;
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
 }
@@ -177,7 +177,7 @@ const fileName = computed(() =>
   width: calc(var(--notch) * 2);
   height: calc(var(--notch) * 2);
   border-radius: 50%;
-  background: var(--paper);
+  background: var(--bg);
   border: 1px solid var(--rule);
 }
 

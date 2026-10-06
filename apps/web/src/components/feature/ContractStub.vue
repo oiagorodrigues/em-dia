@@ -24,7 +24,7 @@ const showExpected = computed(
 </script>
 
 <template>
-  <RouterLink :to="`/vinculos/${item.contract.id}`" class="cs">
+  <RouterLink :to="`/equipe/${item.contract.id}`" class="cs">
     <div class="cs__head">
       <div class="cs__who">
         <p class="cs__name">{{ item.contract.workerName }}</p>
@@ -77,7 +77,7 @@ const showExpected = computed(
   display: grid;
   gap: var(--s-4);
   padding: var(--s-5) var(--s-9) var(--s-5) var(--s-5);
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-left: 3px solid var(--ink);
   border-radius: var(--r-1) var(--r-2) var(--r-2) var(--r-1);

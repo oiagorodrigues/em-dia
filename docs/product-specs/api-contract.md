@@ -115,3 +115,22 @@ Receipt rules: max `RECEIPT_MAX_BYTES` (5 MB), type detected from magic bytes (n
 ## Health
 
 `GET /api/health` → `{ status: "ok", db: "ok", version }` (no auth).
+
+## Team management (v2)
+
+Additions to `Contract`: `contactEmail`, `contactPhone` (typed by the employer before the worker has an account; optional, validated by `createContractSchema`/`updateContractSchema`; PATCH leaves them alone when omitted) and `archivedAt` (logical removal).
+
+| Method | Path                                   | Who      | Body                   | Response                                                                                                                                                                                                   |
+| ------ | -------------------------------------- | -------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/contracts`                           | employer | `createContractSchema` | 201 `{ contract, invite: InviteDelivery \| null }`. When `contactEmail` or `contactPhone` is given and no worker is linked, an invite is created right away; with an e-mail it is sent through the mailer. |
+| POST   | `/contracts/:id/invite`                | employer | –                      | `{ invite: InviteDelivery }` (was `{ code, expiresAt }`). Regenerates and, when the contract has `contactEmail`, e-mails it again.                                                                         |
+| DELETE | `/contracts/:id`                       | employer | –                      | 204. Logical removal: sets `archivedAt`, drops the pending invite. Nothing is deleted.                                                                                                                     |
+| POST   | `/contracts/:id/restore`               | employer | –                      | `{ contract }` with `archivedAt = null`.                                                                                                                                                                   |
+| GET    | `/contracts?include=archived`          | both     | –                      | Archived contracts are excluded unless `include=archived`.                                                                                                                                                 |
+| GET    | `/team?month=YYYY-MM&include=archived` | both     | –                      | `{ items: DashboardItem[], month, today }` for every contract the caller can see (active and ended; archived only when asked), each with that month's summary. Powers the team table.                      |
+
+`InviteDelivery` = `{ code, expiresAt, signupUrl, emailSent, whatsappUrl }`. `signupUrl` is `WEB_ORIGIN/criar-conta?convite=CODE`. `whatsappUrl` is `https://wa.me/55<digits>?text=<message with signupUrl>` when a phone is known (contact or linked profile), else null: WhatsApp has no free sending API, so the employer taps the link to send it. E-mail goes through SMTP when `SMTP_URL` is set; in development it lands in `/api/v1/dev/outbox`.
+
+Archived contracts are read-only: writes to entries, clock, adjustments and payments return 409 `CONFLICT` ("Este vínculo foi removido"). The worker keeps read access to history and sees the contract as removed. `/dashboard` never includes archived contracts.
+
+Shared estimate helpers (`packages/shared/src/estimate.ts`): `estimateMonthCost` (rate × expected days, × hours per day for hourly, fixed for monthly) and `estimateAverageMonthlyCost` (12-month average). Both return `null` when the schedule can't be priced (on demand, or hourly without expected times).

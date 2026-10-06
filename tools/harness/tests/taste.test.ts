@@ -54,6 +54,20 @@ describe.skipIf(!exists(WEB_SRC))("web taste", () => {
     expect(bad, bad.join("\n")).toEqual([]);
   });
 
+  it("renders collections with DataTable, not a raw <table> in views", () => {
+    const bad = collect(
+      files(`${WEB_SRC}/views`, [".vue"]),
+      /<table[\s>]/,
+      (f, h) =>
+        `${rel(f)}:${h.line} ${violation(
+          "raw <table> in a view",
+          "render the collection with components/ui/DataTable.vue (table on desktop, cards on mobile)",
+          "docs/FRONTEND.md#tables",
+        )}`,
+    );
+    expect(bad, bad.join("\n")).toEqual([]);
+  });
+
   it("uses no raw hex colors outside styles/tokens.css", () => {
     const candidates = all.filter((f) => rel(f) !== `${WEB_SRC}/styles/tokens.css`);
     const bad = collect(

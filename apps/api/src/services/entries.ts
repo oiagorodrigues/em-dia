@@ -3,7 +3,7 @@ import { nowInZone, shiftMinutes } from "@emdia/shared";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
 import type { LocatedContract } from "../repos/index.ts";
-import { loadContract } from "./access.ts";
+import { loadContract, loadWritableContract } from "./access.ts";
 import { audit, nowIso, requirePermission, type Actor, type ServiceDeps } from "./context.ts";
 
 const FUTURE_ALLOWED = new Set<EntryStatus>(["day_off", "holiday", "excused"]);
@@ -65,7 +65,7 @@ export function entriesService(deps: ServiceDeps) {
     },
 
     upsert(actor: Actor, contractId: string, date: IsoDate, input: UpsertEntryInput) {
-      const located = loadContract(deps, actor, contractId);
+      const located = loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "entry:write");
       assertWithinContract(located, date);
       const today = nowInZone(located.timezone, deps.clock()).date;
@@ -97,7 +97,7 @@ export function entriesService(deps: ServiceDeps) {
     },
 
     remove(actor: Actor, contractId: string, date: IsoDate): void {
-      loadContract(deps, actor, contractId);
+      loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "entry:write");
       const entry = findEntry(contractId, date);
       if (actor.role !== "employer" && (entry.createdBy !== actor.id || entry.confirmedAt)) {
@@ -117,7 +117,7 @@ export function entriesService(deps: ServiceDeps) {
     },
 
     confirm(actor: Actor, contractId: string, date: IsoDate): WorkEntry {
-      loadContract(deps, actor, contractId);
+      loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "entry:confirm");
       const entry = findEntry(contractId, date);
       if (entry.createdBy === actor.id) throw forbidden("A confirmação é feita pela outra parte");
@@ -139,7 +139,7 @@ export function entriesService(deps: ServiceDeps) {
     },
 
     clock(actor: Actor, contractId: string, action: "in" | "out"): WorkEntry {
-      const located = loadContract(deps, actor, contractId);
+      const located = loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "entry:clock");
       if (located.contract.status === "ended")
         throw new AppError("CONFLICT", "Este vínculo está encerrado");

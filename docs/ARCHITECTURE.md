@@ -80,7 +80,7 @@ Generated column detail: [generated/db-schema.md](generated/README.md).
 
 - `users`: email, password hash (scrypt), role, name, phone, Pix key, token version, lockout counters.
 - `households`: owned by an employer user; has a timezone.
-- `contracts`: household + worker (nullable until the invite is used), occupation, pay type, rate in cents, expected times, start and end dates, status, and the agreed schedule: `schedule_kind` (`weekly`, `month_days`, `per_month`, `on_demand`), `schedule_weekdays` (JSON), `every_weeks` (1 to 4), `month_days` (JSON), `visits_per_month`, plus `deduct_absences` (monthly pay only). Schedule logic lives in `packages/shared/src/schedule.ts`; migration 003 converted the old weekday list.
+- `contracts`: household + worker (nullable until the invite is used), occupation, pay type, rate in cents, expected times, start and end dates, status, and the agreed schedule: `schedule_kind` (`weekly`, `month_days`, `per_month`, `on_demand`), `schedule_weekdays` (JSON), `every_weeks` (1 to 4), `month_days` (JSON), `visits_per_month`, plus `deduct_absences` (monthly pay only). Schedule logic lives in `packages/shared/src/schedule.ts`; migration 003 converted the old weekday list. Migration 004 added `archived_at` (logical removal), `contact_email` and `contact_phone` (typed by the employer before the worker has an account).
 - `work_entries`: one per contract per date. Status, check-in/out, break, derived minutes, creator, confirmer.
 - `adjustments`: bonus, transport, advance, deduction per contract and month, in cents.
 - `payments`: contract, reference month, paid date, amount in cents, method, receipt metadata (stored filename, mime, size, display name), acknowledged-at.
@@ -88,6 +88,14 @@ Generated column detail: [generated/db-schema.md](generated/README.md).
 - `password_resets`: hashed token, expiry, used-at.
 - `invites`: contract, code hash or code, expiry, used-at.
 - `audit_log`: actor, contract, action, target, JSON detail, timestamp. Feeds the activity endpoint.
+
+## Team endpoint and mail
+
+- `GET /team?month=` returns one `DashboardItem` (contract plus that month's summary) per visible contract, so the team table, board and payments views load in one request. Archived contracts appear only with `include=archived`.
+- Archived contracts are read-only; services reject writes with 409 `CONFLICT`.
+- The mailer (`lib/mailer.ts`) sends through SMTP via nodemailer when `SMTP_URL` is set. Outside production it also keeps the last 50 messages in memory, served at `/api/v1/dev/outbox`. In production without `SMTP_URL` it logs a warning at startup and drops messages (the send reports failure, and the invite view falls back to showing the code).
+- Invites carry a `signupUrl` and, when a phone is known, a `wa.me` link. The server never sends WhatsApp messages.
+- Cost estimates (`estimateMonthCost`, `estimateAverageMonthlyCost`) live in `packages/shared/src/estimate.ts`.
 
 ## Cross-cutting rules
 

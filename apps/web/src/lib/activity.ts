@@ -24,6 +24,8 @@ const CONTRACT_FIELDS: Record<string, string> = {
   rateCents: "valor",
   schedule: "frequência",
   deductAbsences: "desconto de faltas",
+  contactEmail: "contato",
+  contactPhone: "contato",
   expectedStart: "horário",
   expectedEnd: "horário",
   startedOn: "data de início",
@@ -124,10 +126,28 @@ export function describeActivity(item: ActivityItem, meId: string | null): Activ
       };
     }
     case "contract.invite":
-      return { actor, text: "gerou um código de convite", tone: "neutral" };
+    case "contract.invite_sent":
+      return {
+        actor,
+        text: m?.email === true ? "mandou o convite por e-mail" : "gerou um código de convite",
+        tone: "neutral",
+      };
+    case "contract.archive":
+      return { actor, text: "removeu o vínculo", tone: "alert" };
+    case "contract.restore":
+      return { actor, text: "restaurou o vínculo", tone: "ok" };
     case "contract.join":
       return { actor, text: "entrou no vínculo com o código", tone: "ok" };
     default:
       return { actor, text: "fez uma alteração", tone: "neutral" };
   }
+}
+
+export type ActivityGroup = "registros" | "pagamentos" | "vinculo";
+
+/** History filter buckets: days, money (payments and extras), and the contract itself. */
+export function activityGroup(action: string): ActivityGroup {
+  if (action.startsWith("entry.")) return "registros";
+  if (action.startsWith("payment.") || action.startsWith("adjustment.")) return "pagamentos";
+  return "vinculo";
 }

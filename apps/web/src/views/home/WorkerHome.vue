@@ -18,6 +18,7 @@ import ReceiptStub from "@/components/feature/ReceiptStub.vue";
 import ReceiptViewer from "@/components/feature/ReceiptViewer.vue";
 import TodayRow from "@/components/feature/TodayRow.vue";
 import Button from "@/components/ui/Button.vue";
+import KpiCard from "@/components/ui/KpiCard.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import Segmented from "@/components/ui/Segmented.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
@@ -28,6 +29,7 @@ import { firstName } from "@/lib/format.ts";
 import { greeting } from "@/lib/greeting.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
+import { isWritable } from "@/lib/contract.ts";
 
 const auth = useAuthStore();
 const toast = useToastStore();
@@ -57,7 +59,7 @@ const options = computed(
     data.value?.items.map((i) => ({ value: i.contract.id, label: i.contract.employerName })) ?? [],
 );
 const clockState = computed(() =>
-  item.value ? clockStateOf(item.value.today, item.value.contract.status === "active") : "off",
+  item.value ? clockStateOf(item.value.today, isWritable(item.value.contract)) : "off",
 );
 const ledgerLines = computed<LedgerLine[]>(() => {
   if (!item.value) return [];
@@ -189,66 +191,83 @@ const stopShortcut = watch(
       </template>
     </EmptyState>
 
-    <template v-else-if="data && item">
-      <Segmented
-        v-if="options.length > 1"
-        v-model="selectedId"
-        :options="options"
-        label="Onde você está trabalhando"
-      />
-
-      <section ref="clockWrap" class="wh__clock" aria-label="Bater ponto">
-        <ClockButton :state="clockState" :loading="clocking" @press="onClock" />
-        <p class="wh__where">
-          <span class="label">em</span>
-          {{ item.contract.householdName }} · {{ item.contract.employerName }}
-        </p>
-        <p class="wh__sched mono">{{ describeSchedule(item.contract.schedule) }}</p>
-      </section>
-
-      <TodayRow :entry="item.today" :date="data.today" :fresh="freshDate === data.today" />
-
-      <section class="wh__month" aria-labelledby="wh-month">
-        <div class="wh__monthhead">
-          <h2 id="wh-month" class="section-title">{{ month }}</h2>
-          <Button :to="`/vinculos/${item.contract.id}`" variant="ghost" icon-right="arrow-right"
-            >ver cartão</Button
-          >
-        </div>
-        <div class="wh__big">
-          <div>
-            <p class="label">horas</p>
-            <p class="wh__num mono">{{ formatDuration(item.summary.totalMinutes) }}</p>
-          </div>
-          <div class="wh__right">
-            <p class="label">a receber</p>
-            <p class="wh__num mono">{{ formatCents(Math.max(0, item.summary.balanceCents)) }}</p>
-          </div>
-        </div>
-        <Ledger :lines="ledgerLines" />
-        <p v-if="item.summary.pendingConfirmation > 0" class="wh__pending">
-          {{ item.summary.pendingConfirmation }}
-          {{
-            item.summary.pendingConfirmation === 1
-              ? "dia aguardando confirmação"
-              : "dias aguardando confirmação"
-          }}
-        </p>
-      </section>
-
-      <section v-if="item.lastPayment" class="wh__pay" aria-labelledby="wh-pay">
-        <h2 id="wh-pay" class="section-title">último pagamento</h2>
-        <ReceiptStub
-          :payment="item.lastPayment"
-          can-acknowledge
-          :busy="acking"
-          @acknowledge="acknowledge(item.lastPayment)"
-          @view="view(item.lastPayment)"
+    <div v-else-if="data && item" class="wh__grid">
+      <div class="wh__left">
+        <Segmented
+          v-if="options.length > 1"
+          v-model="selectedId"
+          :options="options"
+          label="Onde você está trabalhando"
         />
-      </section>
 
-      <InstallHint />
-    </template>
+        <section ref="clockWrap" class="wh__clock sheet" aria-label="Bater ponto">
+          <ClockButton :state="clockState" :loading="clocking" @press="onClock" />
+          <p class="wh__where">
+            <span class="label">em</span>
+            {{ item.contract.householdName }} · {{ item.contract.employerName }}
+          </p>
+          <p class="wh__sched mono">{{ describeSchedule(item.contract.schedule) }}</p>
+        </section>
+
+        <TodayRow :entry="item.today" :date="data.today" :fresh="freshDate === data.today" />
+
+        <InstallHint />
+      </div>
+
+      <div class="wh__right">
+        <section class="wh__kpis" aria-label="Resumo do mês">
+          <KpiCard
+            tint="mint"
+            icon="clock"
+            :label="`horas em ${month}`"
+            :value="formatDuration(item.summary.totalMinutes)"
+          />
+          <KpiCard
+            tint="peach"
+            icon="coins"
+            label="a receber"
+            :value="formatCents(Math.max(0, item.summary.balanceCents))"
+            :caption="`de ${formatCents(item.summary.dueCents)} no mês`"
+          />
+          <KpiCard
+            tint="sky"
+            icon="calendar"
+            :label="item.contract.schedule.kind === 'per_month' ? 'visitas' : 'dias'"
+            :value="attendanceText(item.summary, item.contract.schedule.kind)"
+            :caption="item.summary.absences ? `${item.summary.absences} falta(s)` : 'sem faltas'"
+          />
+        </section>
+
+        <section class="wh__month sheet" aria-labelledby="wh-month">
+          <div class="wh__monthhead">
+            <h2 id="wh-month" class="section-title">conta de {{ month }}</h2>
+            <Button :to="`/equipe/${item.contract.id}`" variant="ghost" icon-right="arrow-right"
+              >ver cartão</Button
+            >
+          </div>
+          <Ledger :lines="ledgerLines" />
+          <p v-if="item.summary.pendingConfirmation > 0" class="wh__pending">
+            {{ item.summary.pendingConfirmation }}
+            {{
+              item.summary.pendingConfirmation === 1
+                ? "dia aguardando confirmação"
+                : "dias aguardando confirmação"
+            }}
+          </p>
+        </section>
+
+        <section v-if="item.lastPayment" class="wh__pay" aria-labelledby="wh-pay">
+          <h2 id="wh-pay" class="section-title">último pagamento</h2>
+          <ReceiptStub
+            :payment="item.lastPayment"
+            can-acknowledge
+            :busy="acking"
+            @acknowledge="acknowledge(item.lastPayment)"
+            @view="view(item.lastPayment)"
+          />
+        </section>
+      </div>
+    </div>
 
     <ReceiptViewer v-model:open="viewerOpen" :payment="viewing" />
   </div>
@@ -258,14 +277,23 @@ const stopShortcut = watch(
 .wh {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-7);
+  gap: var(--s-6);
+}
+
+.wh__grid,
+.wh__left,
+.wh__right {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-6);
+  align-content: start;
 }
 
 .wh__clock {
   display: grid;
   justify-items: center;
   gap: var(--s-4);
-  padding: var(--s-4) 0 0;
+  padding: var(--s-6) var(--s-4);
 }
 
 .wh__clock :deep(.round) {
@@ -280,6 +308,8 @@ const stopShortcut = watch(
 
 .wh__where {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: var(--s-2);
   align-items: baseline;
   font-size: var(--t-14);
@@ -287,34 +317,27 @@ const stopShortcut = watch(
   text-align: center;
 }
 
+.wh__kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+
+.wh__kpis > :first-child {
+  grid-column: 1 / -1;
+}
+
 .wh__month {
   display: grid;
-  gap: var(--s-5);
+  gap: var(--s-4);
+  padding: var(--s-5);
 }
 
 .wh__monthhead {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.wh__big {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--s-4);
-  padding-bottom: var(--s-4);
-  border-bottom: 1px solid var(--ink);
-}
-
-.wh__right {
-  text-align: right;
-}
-
-.wh__num {
-  font-size: clamp(var(--t-28), 9vw, var(--t-40));
-  font-weight: 600;
-  letter-spacing: -0.05em;
-  line-height: 1.1;
+  gap: var(--s-3);
 }
 
 .wh__pending {
@@ -325,5 +348,22 @@ const stopShortcut = watch(
 .wh__pay {
   display: grid;
   gap: var(--s-4);
+}
+
+@media (min-width: 960px) {
+  .wh__grid {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--s-7);
+  }
+  .wh__kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .wh__kpis > :first-child {
+    grid-column: auto;
+  }
+  .wh__left {
+    position: sticky;
+    top: var(--s-6);
+  }
 }
 </style>

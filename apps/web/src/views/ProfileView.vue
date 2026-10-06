@@ -262,7 +262,7 @@ async function install(): Promise<void> {
   flex: none;
   border-radius: 50%;
   background: var(--ink);
-  color: var(--sheet);
+  color: var(--surface);
   font-size: var(--t-20);
   font-weight: 700;
 }

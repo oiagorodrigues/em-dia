@@ -25,7 +25,7 @@ const online = useOnline();
   gap: var(--s-2);
   padding: calc(var(--s-2) + env(safe-area-inset-top)) var(--gutter) var(--s-2);
   background: var(--ink);
-  color: var(--sheet);
+  color: var(--surface);
   font-size: var(--t-12);
   font-weight: 500;
   text-align: center;
@@ -33,7 +33,7 @@ const online = useOnline();
 
 @media (min-width: 960px) {
   :global(.layout-app .offline) {
-    margin-left: var(--rail-w);
+    margin-left: var(--sidebar-w);
   }
 }
 

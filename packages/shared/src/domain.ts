@@ -132,6 +132,9 @@ export interface Contract {
   /** From the linked worker's profile; null until linked or when not set. */
   workerPhone: string | null;
   workerPixKey: string | null;
+  /** Contact typed by the employer before the worker has an account; used to send the invite. */
+  contactEmail: string | null;
+  contactPhone: string | null;
   occupation: Occupation;
   payType: PayType;
   rateCents: number;
@@ -144,6 +147,8 @@ export interface Contract {
   startedOn: IsoDate;
   endedOn: IsoDate | null;
   status: ContractStatus;
+  /** Logical removal by the employer: hidden from lists, kept for history, restorable. */
+  archivedAt: string | null;
   createdAt: string;
 }
 
@@ -238,6 +243,17 @@ export interface MonthSummary {
   avgPerDayCents: number;
   /** (grossCents - absenceDeductionCents) per hour actually worked, 0 when no minutes. */
   effectiveHourlyCents: number;
+}
+
+export interface InviteDelivery {
+  code: string;
+  expiresAt: string;
+  /** Link the worker opens to sign up with the code prefilled. */
+  signupUrl: string;
+  /** True when an e-mail with the link was handed to the mail transport. */
+  emailSent: boolean;
+  /** wa.me link with the message prefilled, when a phone is known. The employer taps it to send. */
+  whatsappUrl: string | null;
 }
 
 export interface DashboardItem {

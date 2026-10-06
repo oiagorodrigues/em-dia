@@ -12,12 +12,12 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
-  background: var(--paper);
+  background: var(--bg);
 }
 
 body {
   min-height: 100dvh;
-  background: var(--paper);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font-text);
   font-size: var(--t-16);
@@ -157,10 +157,9 @@ p {
   width: 100%;
   min-height: 48px;
   padding: var(--s-3) var(--s-3);
-  background: var(--sheet);
+  background: var(--surface);
   color: var(--blue);
   border: 1px solid var(--rule);
-  border-bottom-color: var(--ink-2);
   border-radius: var(--r-1);
   font-size: var(--t-16);
   line-height: 1.3;
@@ -177,13 +176,12 @@ p {
 
 .input:hover:not(:disabled) {
   border-color: var(--ink-3);
-  border-bottom-color: var(--ink);
 }
 
 .input:focus {
   outline: none;
   border-color: var(--blue);
-  box-shadow: inset 0 -1px 0 var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-wash);
 }
 
 .input:focus-visible {
@@ -192,12 +190,12 @@ p {
 
 .input[aria-invalid="true"] {
   border-color: var(--red);
-  box-shadow: inset 0 -1px 0 var(--red);
+  box-shadow: 0 0 0 3px var(--red-wash);
 }
 
 .input:disabled {
   color: var(--ink-3);
-  background: transparent;
+  background: var(--surface-2);
 }
 
 .input--mono {
@@ -241,16 +239,70 @@ input[type="date"].input::-webkit-calendar-picker-indicator {
   gap: var(--s-5);
 }
 
-.row {
-  display: flex;
-  gap: var(--s-3);
-  align-items: center;
-}
-
 .sheet {
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
+  box-shadow: var(--shadow-1);
+}
+
+/* 12-column page grid: children span with .span-N (lg+); everything stacks below lg. */
+.page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
+}
+
+@media (min-width: 960px) {
+  .page-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--s-6);
+  }
+  .page-grid > * {
+    grid-column: span 12;
+  }
+  .page-grid > .span-3 {
+    grid-column: span 3;
+  }
+  .page-grid > .span-4 {
+    grid-column: span 4;
+  }
+  .page-grid > .span-5 {
+    grid-column: span 5;
+  }
+  .page-grid > .span-6 {
+    grid-column: span 6;
+  }
+  .page-grid > .span-7 {
+    grid-column: span 7;
+  }
+  .page-grid > .span-8 {
+    grid-column: span 8;
+  }
+  .page-grid > .span-9 {
+    grid-column: span 9;
+  }
+}
+
+@media (min-width: 1280px) {
+  .page-grid > .xl-span-4 {
+    grid-column: span 4;
+  }
+  .page-grid > .xl-span-8 {
+    grid-column: span 8;
+  }
+  .page-grid > .xl-span-3 {
+    grid-column: span 3;
+  }
+  .page-grid > .xl-span-9 {
+    grid-column: span 9;
+  }
+}
+
+/* Forms stay a readable column on wide screens. */
+.form-column {
+  width: 100%;
+  max-width: var(--form);
 }
 
 .page-title {
@@ -301,4 +353,26 @@ input[type="date"].input::-webkit-calendar-picker-indicator {
   from {
     opacity: 0;
   }
+}
+
+/* Pastel tints: background + readable ink. Used by KPI cards, avatars and status chips. */
+.tint-mint {
+  background: var(--tint-mint);
+  color: var(--tint-mint-ink);
+}
+.tint-peach {
+  background: var(--tint-peach);
+  color: var(--tint-peach-ink);
+}
+.tint-butter {
+  background: var(--tint-butter);
+  color: var(--tint-butter-ink);
+}
+.tint-sky {
+  background: var(--tint-sky);
+  color: var(--tint-sky-ink);
+}
+.tint-rose {
+  background: var(--tint-rose);
+  color: var(--tint-rose-ink);
 }

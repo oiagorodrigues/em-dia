@@ -46,10 +46,11 @@ const name = useId();
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  border: 1px solid var(--ink);
-  border-radius: var(--r-1);
-  overflow: hidden;
-  background: var(--sheet);
+  gap: 2px;
+  padding: 3px;
+  border-radius: calc(var(--r-1) + 3px);
+  background: var(--surface-2);
+  border: 1px solid var(--rule);
 }
 
 .seg__opt {
@@ -57,8 +58,9 @@ const name = useId();
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 44px;
+  min-height: 40px;
   padding: 0 var(--s-3);
+  border-radius: var(--r-1);
   font-size: var(--t-14);
   font-weight: 600;
   text-align: center;
@@ -67,11 +69,8 @@ const name = useId();
   color: var(--ink-2);
   transition:
     background-color var(--d-fast) var(--ease),
-    color var(--d-fast) var(--ease);
-}
-
-.seg__opt + .seg__opt {
-  border-left: 1px solid var(--rule);
+    color var(--d-fast) var(--ease),
+    box-shadow var(--d-fast) var(--ease);
 }
 
 .seg__opt:hover {
@@ -79,40 +78,43 @@ const name = useId();
 }
 
 .seg__opt.is-on {
-  background: var(--ink);
-  color: var(--sheet);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
 }
 
 .seg__opt:has(:focus-visible) {
   outline: 2px solid var(--blue);
-  outline-offset: -4px;
+  outline-offset: -2px;
 }
 
+/* Chip variant: free-wrapping options (função, forma de pagamento…). */
 .seg--wrap {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
+  padding: 0;
   border: 0;
   background: none;
-  overflow: visible;
 }
 
 .seg--wrap .seg__opt {
   flex: none;
-  border: 1px solid var(--rule);
-  border-radius: var(--r-1);
-  background: var(--sheet);
+  min-height: 44px;
   padding: 0 var(--s-4);
+  border: 1px solid var(--rule);
+  background: var(--surface);
 }
 
-.seg--wrap .seg__opt + .seg__opt {
-  border-left: 1px solid var(--rule);
+.seg--wrap .seg__opt:hover {
+  border-color: var(--ink-3);
 }
 
 .seg--wrap .seg__opt.is-on {
-  background: var(--ink);
-  color: var(--sheet);
-  border-color: var(--ink);
+  background: var(--blue-wash);
+  color: var(--blue);
+  border-color: var(--blue);
+  box-shadow: none;
 }
 
 .seg--wrap .seg__opt:has(:focus-visible) {

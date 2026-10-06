@@ -45,7 +45,7 @@ const auth = useAuthStore();
   width: 100%;
   margin: var(--s-6) 0 var(--s-2);
   padding: var(--s-6) var(--s-5);
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
 }

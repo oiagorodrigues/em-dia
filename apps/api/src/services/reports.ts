@@ -37,6 +37,17 @@ export function reportsService(deps: ServiceDeps) {
     return { summary, entries };
   }
 
+  function teamItem(located: LocatedContract, month: YearMonth): DashboardItem {
+    const { contract } = located;
+    const latest = repos.payments.latest(contract.id);
+    return {
+      contract,
+      summary: summarize(located, month).summary,
+      today: repos.entries.find(contract.id, todayIn(located.timezone)) ?? null,
+      lastPayment: latest ? toPayment(latest) : null,
+    };
+  }
+
   return {
     summary(actor: Actor, contractId: string, month: YearMonth): MonthSummary {
       return summarize(loadContract(deps, actor, contractId), month).summary;
@@ -120,18 +131,24 @@ export function reportsService(deps: ServiceDeps) {
     dashboard(actor: Actor): { items: DashboardItem[]; month: YearMonth; today: IsoDate } {
       const items = listContracts(deps, actor)
         .filter((l) => l.contract.status === "active")
-        .map((located): DashboardItem => {
-          const today = todayIn(located.timezone);
-          const latest = repos.payments.latest(located.contract.id);
-          return {
-            contract: located.contract,
-            summary: summarize(located, toYearMonth(today)).summary,
-            today: repos.entries.find(located.contract.id, today) ?? null,
-            lastPayment: latest ? toPayment(latest) : null,
-          };
+        .map((located) => {
+          const month = toYearMonth(todayIn(located.timezone));
+          return teamItem(located, month);
         });
       const today = todayIn(DEFAULT_TIMEZONE);
       return { items, month: toYearMonth(today), today };
+    },
+
+    /** Every contract the actor can see, ended ones included, with `month`'s numbers. */
+    team(
+      actor: Actor,
+      month: YearMonth | undefined,
+      includeArchived: boolean,
+    ): { items: DashboardItem[]; month: YearMonth; today: IsoDate } {
+      const today = todayIn(DEFAULT_TIMEZONE);
+      const target = month ?? toYearMonth(today);
+      const items = listContracts(deps, actor, includeArchived).map((l) => teamItem(l, target));
+      return { items, month: target, today };
     },
   };
 }

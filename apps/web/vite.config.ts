@@ -4,7 +4,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import { defineConfig } from "vite-plus";
 
 const INK = "#15171C";
-const PAPER = "#F2F1EC";
+const PAPER = "#FAF7F2";
 
 export default defineConfig({
   plugins: [

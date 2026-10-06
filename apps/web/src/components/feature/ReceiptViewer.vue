@@ -91,7 +91,7 @@ function onClosed(): void {
   width: 100%;
   max-height: 64dvh;
   object-fit: contain;
-  background: var(--paper);
+  background: var(--bg);
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
 }

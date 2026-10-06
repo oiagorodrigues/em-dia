@@ -31,6 +31,7 @@ import { clockStateOf } from "@/lib/entry.ts";
 import { attendanceLabel, attendanceText } from "@/lib/schedule.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
+import { isWritable } from "@/lib/contract.ts";
 
 const auth = useAuthStore();
 const toast = useToastStore();
@@ -150,7 +151,7 @@ async function confirmAll(): Promise<void> {
 }
 
 const isCurrent = computed(() => month.value === currentMonth);
-const active = computed(() => contract.value.status === "active");
+const active = computed(() => isWritable(contract.value));
 const todayEntry = computed(() => entries.data.value?.find((e) => e.date === today) ?? null);
 const showClock = computed(
   () => auth.isEmployer && active.value && isCurrent.value && !!entries.data.value,
@@ -258,105 +259,119 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 
 <template>
   <div class="ct">
-    <MonthSwitcher v-model="monthModel" :min="minMonth" :max="maxMonth" prefix="cartão de" />
-    <p class="ct__sched">
-      <span>{{ describeSchedule(contract.schedule) }}</span>
-      <span v-if="kind === 'per_month' && summary.data.value" class="ct__visits mono">
-        visitas: {{ summary.data.value.daysWorked }} de {{ summary.data.value.expectedDays }}
-      </span>
-    </p>
-
-    <section v-if="showClock" class="ct__clock" aria-label="Bater ponto">
-      <ClockButton
-        :state="clockStateOf(todayEntry, active)"
-        :loading="clocking"
-        :size="168"
-        @press="onClock"
-      />
-      <p class="ct__clockhint">
-        Bater o ponto por {{ contract.workerName }}.
-        <template v-if="contract.workerId"> Fica no seu nome até a confirmação. </template>
-      </p>
-    </section>
-
-    <div v-if="toConfirm.length > 0" class="ct__confirm" role="status">
-      <p>
-        <strong class="mono">{{ toConfirm.length }}</strong>
-        {{
-          toConfirm.length === 1
-            ? "dia anotado pela outra parte espera"
-            : "dias anotados pela outra parte esperam"
-        }}
-        sua confirmação.
-      </p>
-      <Button icon="check" :loading="confirmingAll" @click="confirmAll">confirmar todos</Button>
-    </div>
-
-    <div v-if="auth.isEmployer && active && unrecorded.length > 0" class="ct__bulk" role="status">
-      <p>
-        <strong class="mono">{{ unrecorded.length }}</strong>
-        {{ unrecorded.length === 1 ? "dia previsto sem registro" : "dias previstos sem registro" }}
-        neste mês.
-      </p>
-      <Button icon="check" @click="bulkOpen = true">marcar como trabalhados</Button>
-    </div>
-
-    <div ref="cardWrap" class="ct__card">
-      <div
-        v-if="entries.loading.value && !entries.data.value"
-        class="ct__skel"
-        aria-busy="true"
-        aria-label="Carregando cartão"
-      >
-        <Skeleton v-for="i in 10" :key="i" h="38px" :gap="i === 1 ? '0' : '8px'" />
+    <div class="ct__main">
+      <div class="ct__head">
+        <MonthSwitcher v-model="monthModel" :min="minMonth" :max="maxMonth" prefix="cartão de" />
+        <p class="ct__sched">
+          <span>{{ describeSchedule(contract.schedule) }}</span>
+          <span v-if="kind === 'per_month' && summary.data.value" class="ct__visits mono">
+            visitas: {{ summary.data.value.daysWorked }} de {{ summary.data.value.expectedDays }}
+          </span>
+        </p>
       </div>
-      <EmptyState
-        v-else-if="entries.error.value"
-        tone="error"
-        title="Não deu para carregar o cartão."
-      >
-        {{ entries.error.value.message }}
-        <template #actions><Button @click="entries.reload">tentar de novo</Button></template>
-      </EmptyState>
-      <TimeCard
-        v-else-if="entries.data.value"
-        :month="month"
-        :entries="entries.data.value"
-        :contract="contract"
-        :expected-dates="expectedDates"
-        :today="today"
-        :fresh="freshDate"
-        :confirmable="!!contract.workerId"
-        @select="openDay"
-      />
-    </div>
 
-    <ul v-if="legend.ok || legend.open || legend.today" class="ct__legend" aria-label="Legenda">
-      <li v-if="legend.ok"><span class="lg lg--ok" /> confirmado</li>
-      <li v-if="legend.open"><span class="lg lg--open" /> aguardando confirmação</li>
-      <li v-if="legend.today"><span class="lg lg--today" /> hoje</li>
-    </ul>
-
-    <section class="ct__totals" aria-labelledby="totals-title">
-      <h2 id="totals-title" class="section-title">conta de {{ monthLabel }}</h2>
-      <div v-if="summary.loading.value && !summary.data.value" aria-busy="true">
-        <Skeleton v-for="i in 5" :key="i" h="18px" :gap="i === 1 ? '0' : '12px'" />
+      <div v-if="toConfirm.length > 0" class="ct__confirm ct__note" role="status">
+        <p>
+          <strong class="mono">{{ toConfirm.length }}</strong>
+          {{
+            toConfirm.length === 1
+              ? "dia anotado pela outra parte espera"
+              : "dias anotados pela outra parte esperam"
+          }}
+          sua confirmação.
+        </p>
+        <Button icon="check" :loading="confirmingAll" @click="confirmAll">confirmar todos</Button>
       </div>
-      <p v-else-if="summary.error.value" class="form-error">{{ summary.error.value.message }}</p>
-      <Ledger v-else-if="ledger" :lines="ledger.lines" :total="ledger.total" />
-      <div class="ct__actions">
-        <Button
-          v-if="
-            auth.isEmployer && active && summary.data.value && summary.data.value.balanceCents > 0
-          "
-          :to="{ path: '/pagamentos/novo', query: { vinculo: contract.id, mes: month } }"
-          variant="primary"
-          icon="plus"
-          >registrar pagamento</Button
+
+      <div ref="cardWrap" class="ct__card">
+        <div
+          v-if="entries.loading.value && !entries.data.value"
+          class="ct__skel"
+          aria-busy="true"
+          aria-label="Carregando cartão"
         >
-        <Button icon="download" :loading="downloading" @click="downloadCsv">baixar planilha</Button>
+          <Skeleton v-for="i in 10" :key="i" h="38px" :gap="i === 1 ? '0' : '8px'" />
+        </div>
+        <EmptyState
+          v-else-if="entries.error.value"
+          tone="error"
+          title="Não deu para carregar o cartão."
+        >
+          {{ entries.error.value.message }}
+          <template #actions><Button @click="entries.reload">tentar de novo</Button></template>
+        </EmptyState>
+        <TimeCard
+          v-else-if="entries.data.value"
+          :month="month"
+          :entries="entries.data.value"
+          :contract="contract"
+          :expected-dates="expectedDates"
+          :today="today"
+          :fresh="freshDate"
+          :confirmable="!!contract.workerId"
+          @select="openDay"
+        />
       </div>
-    </section>
+
+      <ul v-if="legend.ok || legend.open || legend.today" class="ct__legend" aria-label="Legenda">
+        <li v-if="legend.ok"><span class="lg lg--ok" /> confirmado</li>
+        <li v-if="legend.open"><span class="lg lg--open" /> aguardando confirmação</li>
+        <li v-if="legend.today"><span class="lg lg--today" /> hoje</li>
+      </ul>
+    </div>
+
+    <aside class="ct__aside" aria-label="Ponto e conta do mês">
+      <section v-if="showClock" class="ct__clock" aria-label="Bater ponto">
+        <ClockButton
+          :state="clockStateOf(todayEntry, active)"
+          :loading="clocking"
+          :size="168"
+          @press="onClock"
+        />
+        <p class="ct__clockhint">
+          Bater o ponto por {{ contract.workerName }}.
+          <template v-if="contract.workerId"> Fica no seu nome até a confirmação. </template>
+        </p>
+      </section>
+
+      <div
+        v-if="auth.isEmployer && active && unrecorded.length > 0"
+        class="ct__bulk ct__note"
+        role="status"
+      >
+        <p>
+          <strong class="mono">{{ unrecorded.length }}</strong>
+          {{
+            unrecorded.length === 1 ? "dia previsto sem registro" : "dias previstos sem registro"
+          }}
+          neste mês.
+        </p>
+        <Button icon="check" @click="bulkOpen = true">marcar como trabalhados</Button>
+      </div>
+
+      <section class="ct__totals" aria-labelledby="totals-title">
+        <h2 id="totals-title" class="section-title">conta de {{ monthLabel }}</h2>
+        <div v-if="summary.loading.value && !summary.data.value" aria-busy="true">
+          <Skeleton v-for="i in 5" :key="i" h="18px" :gap="i === 1 ? '0' : '12px'" />
+        </div>
+        <p v-else-if="summary.error.value" class="form-error">{{ summary.error.value.message }}</p>
+        <Ledger v-else-if="ledger" :lines="ledger.lines" :total="ledger.total" />
+        <div class="ct__actions">
+          <Button
+            v-if="
+              auth.isEmployer && active && summary.data.value && summary.data.value.balanceCents > 0
+            "
+            :to="{ path: '/pagamentos/novo', query: { vinculo: contract.id, mes: month } }"
+            variant="primary"
+            icon="plus"
+            >registrar pagamento</Button
+          >
+          <Button icon="download" :loading="downloading" @click="downloadCsv"
+            >baixar planilha</Button
+          >
+        </div>
+      </section>
+    </aside>
 
     <BulkFillSheet
       v-model:open="bulkOpen"
@@ -382,6 +397,43 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-5);
+}
+
+/* Below lg the two columns dissolve and `order` restores the phone sequence: clock above the card. */
+.ct__main,
+.ct__aside {
+  display: contents;
+}
+
+.ct__head {
+  order: 1;
+  display: grid;
+  gap: var(--s-5);
+}
+
+.ct__clock {
+  order: 2;
+}
+
+.ct__confirm {
+  order: 3;
+}
+
+.ct__bulk {
+  order: 4;
+}
+
+.ct__card {
+  order: 5;
+  touch-action: pan-y;
+}
+
+.ct__legend {
+  order: 6;
+}
+
+.ct__totals {
+  order: 7;
 }
 
 .ct__clock {
@@ -412,8 +464,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   color: var(--blue);
 }
 
-.ct__bulk,
-.ct__confirm {
+.ct__note {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -425,18 +476,13 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   font-size: var(--t-14);
 }
 
-.ct__bulk p,
-.ct__confirm p {
+.ct__note p {
   flex: 1 1 14rem;
-}
-
-.ct__card {
-  touch-action: pan-y;
 }
 
 .ct__skel {
   padding: var(--s-4);
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
 }
@@ -483,9 +529,10 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   display: grid;
   gap: var(--s-4);
   padding: var(--s-5);
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
+  box-shadow: var(--shadow-1);
 }
 
 .ct__actions {
@@ -499,6 +546,51 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   .ct__clock {
     flex-direction: column;
     text-align: center;
+  }
+}
+
+@media (min-width: 960px) {
+  .ct {
+    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+    gap: var(--s-6);
+    align-items: start;
+  }
+  .ct__main,
+  .ct__aside {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-5);
+    align-content: start;
+  }
+  .ct__aside {
+    position: sticky;
+    top: var(--s-6);
+  }
+  .ct__head {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: var(--s-5);
+  }
+  .ct__sched {
+    justify-content: flex-end;
+    margin-top: 0;
+    text-align: right;
+  }
+  .ct__clock {
+    flex-direction: column;
+    text-align: center;
+    padding: var(--s-5);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--r-2);
+    box-shadow: var(--shadow-1);
+  }
+  .ct__bulk {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ct__bulk p {
+    flex: none;
   }
 }
 </style>

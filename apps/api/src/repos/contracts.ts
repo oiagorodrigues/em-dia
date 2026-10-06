@@ -23,6 +23,8 @@ export interface ContractFields {
   rateCents: number;
   schedule: Schedule;
   deductAbsences: boolean;
+  contactEmail: string | null;
+  contactPhone: string | null;
   expectedStart: ClockTime | null;
   expectedEnd: ClockTime | null;
   startedOn: IsoDate;
@@ -48,6 +50,9 @@ interface Row {
   month_days: string;
   visits_per_month: number | null;
   deduct_absences: number;
+  contact_email: string | null;
+  contact_phone: string | null;
+  archived_at: string | null;
   expected_start: string | null;
   expected_end: string | null;
   started_on: string;
@@ -64,16 +69,19 @@ const SELECT = `
   JOIN users u ON u.id = h.owner_id
   LEFT JOIN users w ON w.id = c.worker_id`;
 
+const NOT_ARCHIVED = "AND c.archived_at IS NULL";
 const ORDER = "ORDER BY c.status = 'ended', c.created_at, c.id";
 
-function scheduleParams({ schedule, deductAbsences }: ContractFields): Param[] {
+function scheduleParams(f: ContractFields): Param[] {
   return [
-    schedule.kind,
-    JSON.stringify(schedule.weekdays),
-    schedule.everyWeeks,
-    JSON.stringify(schedule.monthDays),
-    schedule.visitsPerMonth,
-    deductAbsences ? 1 : 0,
+    f.schedule.kind,
+    JSON.stringify(f.schedule.weekdays),
+    f.schedule.everyWeeks,
+    JSON.stringify(f.schedule.monthDays),
+    f.schedule.visitsPerMonth,
+    f.deductAbsences ? 1 : 0,
+    f.contactEmail,
+    f.contactPhone,
   ];
 }
 
@@ -101,6 +109,9 @@ function toLocated(r: Row): LocatedContract {
         visitsPerMonth: r.visits_per_month,
       },
       deductAbsences: r.deduct_absences === 1,
+      contactEmail: r.contact_email,
+      contactPhone: r.contact_phone,
+      archivedAt: r.archived_at,
       expectedStart: r.expected_start,
       expectedEnd: r.expected_end,
       startedOn: r.started_on,
@@ -118,21 +129,29 @@ export function contractsRepo(db: Db) {
       return r && toLocated(r);
     },
 
-    listForEmployer(ownerId: string): LocatedContract[] {
-      return queryAll<Row>(db, `${SELECT} WHERE h.owner_id = ? ${ORDER}`, ownerId).map(toLocated);
+    listForEmployer(ownerId: string, includeArchived = false): LocatedContract[] {
+      return queryAll<Row>(
+        db,
+        `${SELECT} WHERE h.owner_id = ? ${includeArchived ? "" : NOT_ARCHIVED} ${ORDER}`,
+        ownerId,
+      ).map(toLocated);
     },
 
-    listForWorker(workerId: string): LocatedContract[] {
-      return queryAll<Row>(db, `${SELECT} WHERE c.worker_id = ? ${ORDER}`, workerId).map(toLocated);
+    listForWorker(workerId: string, includeArchived = false): LocatedContract[] {
+      return queryAll<Row>(
+        db,
+        `${SELECT} WHERE c.worker_id = ? ${includeArchived ? "" : NOT_ARCHIVED} ${ORDER}`,
+        workerId,
+      ).map(toLocated);
     },
 
     insert(c: { id: string; householdId: string; createdAt: string } & ContractFields): void {
       execute(
         db,
         `INSERT INTO contracts (id, household_id, worker_name, occupation, pay_type, rate_cents, schedule_kind,
-           schedule_weekdays, every_weeks, month_days, visits_per_month, deduct_absences, expected_start,
-           expected_end, started_on, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+           schedule_weekdays, every_weeks, month_days, visits_per_month, deduct_absences, contact_email,
+           contact_phone, expected_start, expected_end, started_on, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
         c.id,
         c.householdId,
         c.workerName,
@@ -152,7 +171,7 @@ export function contractsRepo(db: Db) {
         db,
         `UPDATE contracts SET worker_name = ?, occupation = ?, pay_type = ?, rate_cents = ?, schedule_kind = ?,
            schedule_weekdays = ?, every_weeks = ?, month_days = ?, visits_per_month = ?, deduct_absences = ?,
-           expected_start = ?, expected_end = ?, started_on = ?
+           contact_email = ?, contact_phone = ?, expected_start = ?, expected_end = ?, started_on = ?
          WHERE id = ?`,
         f.workerName,
         f.occupation,
@@ -168,6 +187,10 @@ export function contractsRepo(db: Db) {
 
     end(id: string, endedOn: IsoDate): void {
       execute(db, "UPDATE contracts SET ended_on = ?, status = 'ended' WHERE id = ?", endedOn, id);
+    },
+
+    setArchivedAt(id: string, archivedAt: string | null): void {
+      execute(db, "UPDATE contracts SET archived_at = ? WHERE id = ?", archivedAt, id);
     },
 
     linkWorker(id: string, workerId: string): void {

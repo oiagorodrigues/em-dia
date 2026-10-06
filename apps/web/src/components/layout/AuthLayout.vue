@@ -84,7 +84,7 @@ const SAMPLE = [
     flex-direction: column;
     gap: var(--s-8);
     padding: var(--s-8) var(--s-9);
-    background: var(--sheet);
+    background: var(--surface);
     border-right: 1px solid var(--rule);
     position: sticky;
     top: 0;
@@ -106,7 +106,7 @@ const SAMPLE = [
     max-width: 440px;
     border: 1px solid var(--rule);
     border-radius: var(--r-2);
-    background: var(--paper);
+    background: var(--bg);
     padding-top: 10px;
     transform: rotate(-1.2deg);
   }
@@ -115,8 +115,8 @@ const SAMPLE = [
     position: absolute;
     inset: 0 0 auto;
     height: 7px;
-    background: radial-gradient(circle at 50% 0, var(--sheet) 4px, transparent 4.5px) 0 0 / 16px 8px
-      repeat-x;
+    background: radial-gradient(circle at 50% 0, var(--surface) 4px, transparent 4.5px) 0 0 / 16px
+      8px repeat-x;
   }
 
   .auth__row {

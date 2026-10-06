@@ -6,6 +6,7 @@ import type {
   CreateContractInput,
   DashboardItem,
   Household,
+  InviteDelivery,
   IsoDate,
   LoginInput,
   MonthSummary,
@@ -56,10 +57,20 @@ export const householdsApi = {
 };
 
 export const contractsApi = {
-  list: () => request<{ contracts: Contract[] }>("/contracts"),
+  list: (opts: { archived?: boolean } = {}) =>
+    request<{ contracts: Contract[] }>("/contracts", {
+      query: { include: opts.archived ? "archived" : undefined },
+    }),
   get: (id: string) => request<{ contract: Contract }>(`/contracts/${enc(id)}`),
   create: (body: CreateContractInput) =>
-    request<{ contract: Contract }>("/contracts", { method: "POST", body }),
+    request<{ contract: Contract; invite: InviteDelivery | null }>("/contracts", {
+      method: "POST",
+      body,
+    }),
+  /** Logical removal: sets archivedAt, keeps the history. */
+  remove: (id: string) => request<void>(`/contracts/${enc(id)}`, { method: "DELETE" }),
+  restore: (id: string) =>
+    request<{ contract: Contract }>(`/contracts/${enc(id)}/restore`, { method: "POST" }),
   update: (id: string, body: UpdateContractInput) =>
     request<{ contract: Contract }>(`/contracts/${enc(id)}`, { method: "PATCH", body }),
   end: (id: string, endedOn: IsoDate) =>
@@ -68,7 +79,7 @@ export const contractsApi = {
       body: { endedOn },
     }),
   invite: (id: string) =>
-    request<{ code: string; expiresAt: string }>(`/contracts/${enc(id)}/invite`, {
+    request<{ invite: InviteDelivery }>(`/contracts/${enc(id)}/invite`, {
       method: "POST",
     }),
   join: (code: string) =>
@@ -145,6 +156,14 @@ export const paymentsApi = {
         method: "POST",
       },
     ),
+};
+
+export const teamApi = {
+  /** Every contract (active and ended; archived on request) with that month's summary. */
+  list: (month: YearMonth, opts: { archived?: boolean } = {}) =>
+    request<{ items: DashboardItem[]; month: YearMonth; today: IsoDate }>("/team", {
+      query: { month, include: opts.archived ? "archived" : undefined },
+    }),
 };
 
 export const dashboardApi = {

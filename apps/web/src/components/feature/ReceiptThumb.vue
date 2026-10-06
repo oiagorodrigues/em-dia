@@ -45,7 +45,7 @@ onMounted(async () => {
   height: 64px;
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
-  background: var(--paper);
+  background: var(--bg);
   overflow: hidden;
   flex: none;
 }

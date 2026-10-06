@@ -8,3 +8,6 @@ export function parse<S extends z.ZodType>(schema: S, value: unknown): z.output<
   }
   return result.data;
 }
+
+/** `?include=archived` on listings that hide removed contracts by default. */
+export const includeQuerySchema = z.object({ include: z.literal("archived").optional() });

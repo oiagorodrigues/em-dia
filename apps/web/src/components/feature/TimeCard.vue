@@ -11,6 +11,7 @@ import {
   type YearMonth,
 } from "@emdia/shared";
 import { computed } from "vue";
+import StatusChip from "@/components/ui/StatusChip.vue";
 import Stamp from "@/components/ui/Stamp.vue";
 import {
   formatBreak,
@@ -19,6 +20,7 @@ import {
   WEEKDAY_LETTER,
   WEEKDAY_LONG,
 } from "@/lib/format.ts";
+import { ENTRY_TONE } from "@/lib/entry.ts";
 import Typewriter from "./Typewriter.vue";
 
 const {
@@ -133,7 +135,10 @@ function describe(
       <span>saída</span>
       <span class="col-break">pausa</span>
       <span class="col-total">total</span>
-      <span />
+      <span class="col-wide">status</span>
+      <span class="col-wide">nota</span>
+      <span class="col-wide">confirmação</span>
+      <span class="col-dot" />
     </div>
     <ol class="card__rows">
       <li v-for="row in rows" :key="row.date">
@@ -191,14 +196,27 @@ function describe(
               :tilt="row.day % 2 ? -4 : -2.5"
               size="sm"
             />
-            <span v-if="row.entry.note" class="row__note">{{ row.entry.note }}</span>
+            <span v-if="row.entry.note" class="row__note col-narrow">{{ row.entry.note }}</span>
           </span>
 
           <span v-else-if="row.kind === 'missing'" class="row__missing">— registrar</span>
           <span v-else-if="row.scheduled && row.future" class="row__expected">previsto</span>
           <span v-else class="row__blank" />
 
-          <span class="row__state" aria-hidden="true">
+          <span class="col-wide row__status">
+            <StatusChip v-if="row.entry" :tone="ENTRY_TONE[row.entry.status]">{{
+              ENTRY_STATUS_LABEL[row.entry.status].toLowerCase()
+            }}</StatusChip>
+          </span>
+          <span class="col-wide row__notecol">{{ row.entry?.note ?? "" }}</span>
+          <span class="col-wide row__conf">
+            <template v-if="row.entry && confirmable">
+              <span class="dot" :class="row.entry.confirmedAt ? 'dot--ok' : 'dot--open'" />
+              {{ row.entry.confirmedAt ? "confirmado" : "aguardando" }}
+            </template>
+          </span>
+
+          <span class="row__state col-dot" aria-hidden="true">
             <span
               v-if="row.entry && confirmable"
               class="dot"
@@ -214,7 +232,8 @@ function describe(
 <style scoped>
 .card {
   position: relative;
-  background: var(--sheet);
+  container: card / inline-size;
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
   padding-top: 14px;
@@ -226,7 +245,7 @@ function describe(
   position: absolute;
   inset: 0 0 auto;
   height: 7px;
-  background: radial-gradient(circle at 50% 0, var(--paper) 4px, transparent 4.5px) 0 0 / 16px 8px
+  background: radial-gradient(circle at 50% 0, var(--bg) 4px, transparent 4.5px) 0 0 / 16px 8px
     repeat-x;
   border-bottom: 1px dashed var(--rule);
 }
@@ -293,7 +312,7 @@ function describe(
 
 .row.is-weekend,
 .row--outside {
-  background: color-mix(in srgb, var(--paper) 55%, transparent);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
 }
 
 .row--outside {
@@ -424,6 +443,55 @@ function describe(
   .row__expected,
   .row__blank {
     grid-column: 2 / span 3;
+  }
+}
+
+.col-wide {
+  display: none;
+}
+
+.row__notecol {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-12);
+  color: var(--ink-2);
+  font-style: italic;
+}
+
+.row__conf {
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-12);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* With room (md+, the 8 columns of lg), the card grows status, nota and confirmação columns. */
+@container card (min-width: 640px) {
+  .card__head,
+  .row {
+    grid-template-columns: 60px 1fr 1fr 0.8fr 0.9fr 132px minmax(0, 1.6fr) 112px;
+    padding-left: var(--s-5);
+    padding-right: var(--s-4);
+    column-gap: var(--s-3);
+  }
+  .row {
+    min-height: 50px;
+  }
+  .card__head {
+    font-size: 11px;
+  }
+  .col-wide {
+    display: block;
+  }
+  .row__conf {
+    display: flex;
+  }
+  .col-dot,
+  .col-narrow {
+    display: none;
   }
 }
 </style>

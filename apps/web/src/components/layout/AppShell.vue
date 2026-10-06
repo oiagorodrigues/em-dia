@@ -1,14 +1,20 @@
 <script setup lang="ts">
-import AppNav from "./AppNav.vue";
+import BottomBar from "./BottomBar.vue";
+import Sidebar from "./Sidebar.vue";
+import TopBar from "./TopBar.vue";
 </script>
 
 <template>
   <div class="shell">
     <a href="#conteudo" class="skip">Pular para o conteúdo</a>
-    <AppNav />
-    <main id="conteudo" class="shell__main" tabindex="-1">
-      <slot />
-    </main>
+    <Sidebar />
+    <div class="shell__body">
+      <TopBar />
+      <main id="conteudo" class="shell__main" tabindex="-1">
+        <slot />
+      </main>
+    </div>
+    <BottomBar />
   </div>
 </template>
 
@@ -17,20 +23,17 @@ import AppNav from "./AppNav.vue";
   width: 100%;
   max-width: calc(var(--content) + 2 * var(--gutter));
   margin: 0 auto;
-  padding: calc(var(--s-5) + env(safe-area-inset-top))
-    max(var(--gutter), env(safe-area-inset-right))
-    calc(var(--nav-h) + env(safe-area-inset-bottom) + var(--s-9))
-    max(var(--gutter), env(safe-area-inset-left));
+  padding: var(--s-6) var(--gutter) calc(var(--nav-h) + env(safe-area-inset-bottom) + var(--s-9));
   outline: none;
 }
 
 @media (min-width: 960px) {
-  .shell {
-    padding-left: var(--rail-w);
+  .shell__body {
+    padding-left: var(--sidebar-w);
   }
   .shell__main {
-    max-width: calc(var(--content) + 2 * var(--s-7));
-    padding: var(--s-8) var(--s-7) var(--s-10);
+    padding-top: var(--s-8);
+    padding-bottom: var(--s-10);
   }
 }
 
@@ -41,7 +44,7 @@ import AppNav from "./AppNav.vue";
   top: -60px;
   padding: var(--s-3) var(--s-4);
   background: var(--ink);
-  color: var(--sheet);
+  color: var(--surface);
   border-radius: var(--r-1);
 }
 

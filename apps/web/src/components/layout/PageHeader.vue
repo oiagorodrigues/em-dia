@@ -5,12 +5,12 @@ import Icon from "@/components/ui/Icon.vue";
 
 const {
   title,
-  lede,
+  subtitle,
   back,
   backLabel = "voltar",
 } = defineProps<{
   title: string;
-  lede?: string;
+  subtitle?: string;
   back?: RouteLocationRaw;
   backLabel?: string;
 }>();
@@ -24,8 +24,11 @@ const {
     </RouterLink>
     <div class="ph__row">
       <div class="ph__text">
-        <h1 class="page-title">{{ title }}</h1>
-        <p v-if="lede" class="ph__lede">{{ lede }}</p>
+        <slot name="eyebrow" />
+        <h1 class="ph__title">{{ title }}</h1>
+        <p v-if="subtitle || $slots.subtitle" class="ph__sub">
+          <slot name="subtitle">{{ subtitle }}</slot>
+        </p>
       </div>
       <div v-if="$slots.actions" class="ph__actions"><slot name="actions" /></div>
     </div>
@@ -60,20 +63,29 @@ const {
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--s-3);
+  gap: var(--s-3) var(--s-5);
 }
 
 .ph__text {
   min-width: 0;
 }
 
-.ph__lede {
+.ph__title {
+  font-size: clamp(var(--t-28), 3vw, var(--t-40));
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variation-settings: "opsz" 96;
+  line-height: 1.05;
+}
+
+.ph__sub {
   margin-top: var(--s-2);
   color: var(--ink-2);
 }
 
 .ph__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s-2);
 }
 </style>

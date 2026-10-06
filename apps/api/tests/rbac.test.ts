@@ -208,22 +208,22 @@ describe("contracts and invites", () => {
     const invite = () => t.http().post(`/api/v1/contracts/${id}/invite`).auth(employer.token, as);
 
     const first = await invite();
-    expect(first.body.code).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/);
-    expect(first.body.expiresAt).toBe("2026-10-13T15:00:00.000Z");
+    expect(first.body.invite.code).toMatch(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/);
+    expect(first.body.invite.expiresAt).toBe("2026-10-13T15:00:00.000Z");
 
     const second = await invite();
     const worker = await t.register("worker");
     const join = (code: string) =>
       t.http().post("/api/v1/contracts/join").auth(worker.token, as).send({ code });
 
-    expect((await join(first.body.code)).status).toBe(404);
+    expect((await join(first.body.invite.code)).status).toBe(404);
     t.clock.advance(8 * 24 * 60 * 60 * 1000);
     await t.reauth(worker);
     await t.reauth(employer);
-    expect((await join(second.body.code)).status).toBe(404);
+    expect((await join(second.body.invite.code)).status).toBe(404);
 
     const third = await invite();
-    const joined = await join(third.body.code.toLowerCase());
+    const joined = await join(third.body.invite.code.toLowerCase());
     expect(joined.status).toBe(200);
     expect(joined.body.contract.workerId).toBe(worker.user.id);
 

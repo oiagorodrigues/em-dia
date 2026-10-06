@@ -59,7 +59,7 @@ const canNext = computed(() => !max || next.value <= max);
   height: 44px;
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
-  background: var(--sheet);
+  background: var(--surface);
   color: var(--ink);
   transition:
     border-color var(--d-fast) var(--ease),

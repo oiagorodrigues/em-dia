@@ -58,7 +58,7 @@ const toast = useToastStore();
 @media (min-width: 960px) {
   .toasts {
     bottom: var(--s-6);
-    left: calc(50% + var(--rail-w) / 2);
+    left: calc(50% + var(--sidebar-w) / 2);
   }
 }
 
@@ -76,7 +76,7 @@ const toast = useToastStore();
   min-height: 52px;
   padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
   background: var(--ink);
-  color: var(--sheet);
+  color: var(--surface);
   border-radius: var(--r-1);
 }
 
@@ -99,7 +99,7 @@ const toast = useToastStore();
   padding: 0 var(--s-3);
   font-weight: 700;
   font-size: var(--t-14);
-  color: var(--sheet);
+  color: var(--surface);
   text-decoration: underline;
   text-underline-offset: 3px;
   border-radius: var(--r-1);
@@ -110,13 +110,13 @@ const toast = useToastStore();
   place-items: center;
   width: 40px;
   height: 40px;
-  color: color-mix(in srgb, var(--sheet) 70%, transparent);
+  color: color-mix(in srgb, var(--surface) 70%, transparent);
   border-radius: var(--r-1);
 }
 
 .toast__action:focus-visible,
 .toast__close:focus-visible {
-  outline-color: var(--sheet);
+  outline-color: var(--surface);
 }
 
 .toast-enter-active,

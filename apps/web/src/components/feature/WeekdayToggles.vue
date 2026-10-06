@@ -43,7 +43,7 @@ function toggle(day: number): void {
   height: 48px;
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
-  background: var(--sheet);
+  background: var(--surface);
   font-size: var(--t-16);
   font-weight: 600;
   color: var(--ink-2);
@@ -62,9 +62,10 @@ function toggle(day: number): void {
 }
 
 .wd__day.is-on {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--sheet);
+  background: var(--blue-wash);
+  border-color: var(--blue);
+  color: var(--blue);
+  font-weight: 700;
 }
 
 @media (max-width: 360px) {

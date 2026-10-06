@@ -129,7 +129,7 @@ function clear(): void {
   align-items: center;
   gap: var(--s-3);
   padding: var(--s-3);
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
 }
@@ -151,7 +151,7 @@ function clear(): void {
   font-size: 10px;
   font-weight: 700;
   color: var(--red-text);
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .rd__meta {
@@ -182,7 +182,7 @@ function clear(): void {
 
 .rd__x:hover {
   color: var(--ink);
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .rd__err {

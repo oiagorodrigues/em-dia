@@ -3,8 +3,9 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Services } from "../../services/index.ts";
 import { actorOf } from "../context.ts";
-import { parse } from "../validate.ts";
+import { includeQuerySchema, parse } from "../validate.ts";
 
+const teamQuerySchema = monthQuerySchema.partial().extend(includeQuerySchema.shape);
 const activityQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
 });
@@ -29,6 +30,11 @@ export function reportRoutes({ reports }: Services): Router {
   router.get("/contracts/:id/activity", (req, res) => {
     const { limit } = parse(activityQuerySchema, req.query);
     res.json({ activity: reports.activity(actorOf(res), req.params.id, limit) });
+  });
+
+  router.get("/team", (req, res) => {
+    const { month, include } = parse(teamQuerySchema, req.query);
+    res.json(reports.team(actorOf(res), month, include === "archived"));
   });
 
   router.get("/dashboard", (_req, res) => {

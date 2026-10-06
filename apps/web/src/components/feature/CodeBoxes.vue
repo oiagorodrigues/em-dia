@@ -119,7 +119,7 @@ function onPaste(i: number, e: ClipboardEvent): void {
   font-weight: 600;
   text-transform: uppercase;
   color: var(--blue);
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-bottom: 2px solid var(--ink-2);
   border-radius: var(--r-1);

@@ -14,7 +14,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { contractsApi, paymentsApi } from "@/api";
 import ReceiptDrop from "@/components/feature/ReceiptDrop.vue";
-import WorkerContact from "@/components/feature/WorkerContact.vue";
+import PaymentsSidePanel from "@/components/feature/PaymentsSidePanel.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
@@ -26,6 +26,7 @@ import Skeleton from "@/components/ui/Skeleton.vue";
 import { useForm } from "@/composables/form.ts";
 import { useResource } from "@/composables/resource.ts";
 import { useToastStore } from "@/stores/toast.ts";
+import { isWritable } from "@/lib/contract.ts";
 
 const route = useRoute();
 const router = useRouter();
@@ -39,7 +40,7 @@ const queryMonth =
 
 const contracts = useResource(
   () => 0,
-  () => contractsApi.list().then((r) => r.contracts.filter((c) => c.status === "active")),
+  () => contractsApi.list().then((r) => r.contracts.filter(isWritable)),
 );
 const contractId = ref(typeof route.query.vinculo === "string" ? route.query.vinculo : "");
 watch(contracts.data, (list) => {
@@ -99,9 +100,9 @@ function onSubmit(): void {
 }
 
 const back = computed(() =>
-  contractId.value
+  typeof route.query.vinculo === "string" && contractId.value
     ? { name: "contract-payments", params: { id: contractId.value } }
-    : { path: "/" },
+    : { path: "/pagamentos" },
 );
 </script>
 
@@ -110,7 +111,7 @@ const back = computed(() =>
     <PageHeader
       :back="back"
       title="novo pagamento"
-      lede="Fica guardado com o comprovante, e a pessoa confirma que recebeu."
+      subtitle="Fica guardado com o comprovante, e a pessoa confirma que recebeu."
     />
 
     <div v-if="contracts.loading.value && !contracts.data.value" aria-busy="true">
@@ -127,111 +128,121 @@ const back = computed(() =>
     <EmptyState v-else-if="contracts.data.value?.length === 0" title="Nenhum vínculo ativo.">
       Cadastre quem trabalha na sua casa para registrar pagamentos.
       <template #actions
-        ><Button to="/vinculos/novo" variant="primary" icon="plus"
+        ><Button to="/equipe/novo" variant="primary" icon="plus"
           >adicionar profissional</Button
         ></template
       >
     </EmptyState>
 
-    <form v-else class="np__form" novalidate @submit.prevent="onSubmit">
-      <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
+    <div v-else class="np__layout">
+      <form class="np__form" novalidate @submit.prevent="onSubmit">
+        <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
 
-      <Field v-if="(contracts.data.value?.length ?? 0) > 1" v-slot="{ id }" label="Para quem">
-        <select :id="id" v-model="contractId" class="input">
-          <option v-for="c in contracts.data.value" :key="c.id" :value="c.id">
-            {{ c.workerName }}
-          </option>
-        </select>
-      </Field>
-      <p v-else-if="contract" class="np__who">
-        <span class="label">para</span> <strong>{{ contract.workerName }}</strong>
-      </p>
+        <Field v-if="(contracts.data.value?.length ?? 0) > 1" v-slot="{ id }" label="Para quem">
+          <select :id="id" v-model="contractId" class="input">
+            <option v-for="c in contracts.data.value" :key="c.id" :value="c.id">
+              {{ c.workerName }}
+            </option>
+          </select>
+        </Field>
+        <p v-else-if="contract" class="np__who">
+          <span class="label">para</span> <strong>{{ contract.workerName }}</strong>
+        </p>
 
-      <div class="np__two">
+        <div class="np__two">
+          <Field
+            v-slot="{ id, invalid, describedBy }"
+            label="Mês de referência"
+            :error="errors.referenceMonth"
+          >
+            <MonthField
+              :id="id"
+              v-model="values.referenceMonth"
+              label="Mês de referência"
+              :invalid="invalid"
+              :described-by="describedBy"
+              @update:model-value="clearError('referenceMonth')"
+            />
+          </Field>
+          <Field v-slot="{ id, invalid, describedBy }" label="Pago em" :error="errors.paidOn">
+            <input
+              :id="id"
+              v-model="values.paidOn"
+              class="input"
+              type="date"
+              :max="today"
+              :aria-invalid="invalid || undefined"
+              :aria-describedby="describedBy"
+              @input="clearError('paidOn')"
+            />
+          </Field>
+        </div>
+
         <Field
           v-slot="{ id, invalid, describedBy }"
-          label="Mês de referência"
-          :error="errors.referenceMonth"
+          label="Valor"
+          :error="errors.amountCents ? 'Informe o valor' : null"
+          :hint="
+            summary.data.value
+              ? summary.data.value.balanceCents > 0
+                ? `Falta pagar ${formatCents(summary.data.value.balanceCents)} deste mês.`
+                : 'Este mês já está pago.'
+              : undefined
+          "
         >
-          <MonthField
+          <MoneyInput
             :id="id"
-            v-model="values.referenceMonth"
-            label="Mês de referência"
+            v-model="values.amountCents"
             :invalid="invalid"
             :described-by="describedBy"
-            @update:model-value="clearError('referenceMonth')"
+            @update:model-value="
+              touchedAmount = true;
+              clearError('amountCents');
+            "
           />
         </Field>
-        <Field v-slot="{ id, invalid, describedBy }" label="Pago em" :error="errors.paidOn">
-          <input
+
+        <fieldset class="np__set">
+          <legend class="label">Como pagou</legend>
+          <Segmented v-model="values.method" :options="methodOptions" label="Como pagou" wrap />
+        </fieldset>
+
+        <fieldset class="np__set">
+          <legend class="label">Comprovante <span class="np__opt">opcional</span></legend>
+          <ReceiptDrop v-model="receipt" />
+        </fieldset>
+
+        <Field
+          v-slot="{ id, invalid, describedBy }"
+          label="Observação"
+          optional
+          :error="errors.note"
+        >
+          <textarea
             :id="id"
-            v-model="values.paidOn"
+            v-model="values.note"
             class="input"
-            type="date"
-            :max="today"
+            rows="2"
+            maxlength="500"
             :aria-invalid="invalid || undefined"
             :aria-describedby="describedBy"
-            @input="clearError('paidOn')"
           />
         </Field>
-      </div>
 
-      <Field
-        v-slot="{ id, invalid, describedBy }"
-        label="Valor"
-        :error="errors.amountCents ? 'Informe o valor' : null"
-        :hint="
-          summary.data.value
-            ? summary.data.value.balanceCents > 0
-              ? `Falta pagar ${formatCents(summary.data.value.balanceCents)} deste mês.`
-              : 'Este mês já está pago.'
-            : undefined
-        "
-      >
-        <MoneyInput
-          :id="id"
-          v-model="values.amountCents"
-          :invalid="invalid"
-          :described-by="describedBy"
-          @update:model-value="
-            touchedAmount = true;
-            clearError('amountCents');
-          "
-        />
-      </Field>
-
-      <fieldset class="np__set">
-        <legend class="label">Como pagou</legend>
-        <Segmented v-model="values.method" :options="methodOptions" label="Como pagou" wrap />
-        <WorkerContact
-          v-if="values.method === 'pix' && contract?.workerPixKey"
-          class="np__pix"
-          :pix-key="contract.workerPixKey"
-          compact
-        />
-      </fieldset>
-
-      <fieldset class="np__set">
-        <legend class="label">Comprovante <span class="np__opt">opcional</span></legend>
-        <ReceiptDrop v-model="receipt" />
-      </fieldset>
-
-      <Field v-slot="{ id, invalid, describedBy }" label="Observação" optional :error="errors.note">
-        <textarea
-          :id="id"
-          v-model="values.note"
-          class="input"
-          rows="2"
-          maxlength="500"
-          :aria-invalid="invalid || undefined"
-          :aria-describedby="describedBy"
-        />
-      </Field>
-
-      <Button type="submit" variant="primary" :loading="submitting" :disabled="!contract"
-        >registrar pagamento</Button
-      >
-    </form>
+        <Button type="submit" variant="primary" :loading="submitting" :disabled="!contract"
+          >registrar pagamento</Button
+        >
+      </form>
+      <PaymentsSidePanel
+        v-if="contract"
+        class="np__panel"
+        :contract="contract"
+        :month="values.referenceMonth"
+        :summary="summary.data.value ?? null"
+        :loading="summary.loading.value"
+        :highlight-pix="values.method === 'pix'"
+      />
+    </div>
   </div>
 </template>
 
@@ -240,6 +251,24 @@ const back = computed(() =>
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-6);
+}
+
+.np__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-6);
+}
+
+@media (min-width: 960px) {
+  .np__layout {
+    grid-template-columns: minmax(0, var(--form)) minmax(280px, 380px);
+    column-gap: var(--s-8);
+    align-items: start;
+  }
+  .np__panel {
+    position: sticky;
+    top: var(--s-6);
+  }
 }
 
 .np__form {
@@ -277,10 +306,6 @@ const back = computed(() =>
 .np__set legend {
   padding: 0;
   margin-bottom: var(--s-3);
-}
-
-.np__pix {
-  margin-top: var(--s-3);
 }
 
 .np__opt {

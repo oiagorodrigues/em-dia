@@ -126,4 +126,24 @@ describe("TimeCard", () => {
     await card.findAll(".row")[4]!.trigger("click");
     expect(card.emitted("select")).toEqual([["2026-10-05"]]);
   });
+
+  it("fills the wide status, nota and confirmação columns", () => {
+    const card = render([
+      entry("2026-10-02", { note: "saiu mais cedo" }),
+      entry("2026-10-05", {
+        status: "absent",
+        checkIn: null,
+        checkOut: null,
+        minutes: 0,
+        confirmedAt: "2026-10-06T10:00:00Z",
+      }),
+    ]);
+    const worked = card.findAll(".row")[1]!;
+    expect(worked.find(".row__status").text()).toBe("trabalhou");
+    expect(worked.find(".row__notecol").text()).toBe("saiu mais cedo");
+    expect(worked.find(".row__conf").text()).toBe("aguardando");
+    const absent = card.findAll(".row")[4]!;
+    expect(absent.find(".row__status").text()).toBe("faltou");
+    expect(absent.find(".row__conf").text()).toBe("confirmado");
+  });
 });

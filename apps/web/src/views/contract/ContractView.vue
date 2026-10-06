@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { OCCUPATION_LABEL, PAY_TYPE_LABEL, formatCents, type Contract } from "@emdia/shared";
+import { describeSchedule, OCCUPATION_LABEL, type Contract } from "@emdia/shared";
 import { computed, nextTick, onBeforeUnmount, reactive, useTemplateRef, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import { contractsApi } from "@/api";
+import ContactActions from "@/components/feature/ContactActions.vue";
+import Avatar from "@/components/ui/Avatar.vue";
 import Button from "@/components/ui/Button.vue";
+import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import Icon from "@/components/ui/Icon.vue";
+import Menu from "@/components/ui/Menu.vue";
+import type { MenuItem } from "@/components/ui/menu.ts";
 import Skeleton from "@/components/ui/Skeleton.vue";
-import Stamp from "@/components/ui/Stamp.vue";
-import WorkerContact from "@/components/feature/WorkerContact.vue";
+import StatusChip from "@/components/ui/StatusChip.vue";
 import { provideContract, useMonthQuery } from "@/composables/contractContext.ts";
+import { useContractRemoval } from "@/composables/contractRemoval.ts";
 import { useResource } from "@/composables/resource.ts";
+import { contactChannels, contractStatus, isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
+import { MQ, useMediaQuery } from "@/lib/media.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 
 const { id } = defineProps<{ id: string }>();
@@ -28,16 +35,25 @@ const { data, error, loading, reload, mutate } = useResource(
 // Tabs only render once `data` is loaded, so children always see a contract.
 const contract = computed(() => data.value as Contract);
 
+const { confirmOpen, removing, restoring, askRemove, confirmRemove, restore } = useContractRemoval(
+  data,
+  (next) => mutate(next),
+);
+
 provideContract({
   contract,
   month,
   currentMonth,
   setMonth,
   replaceContract: (next) => mutate(next),
+  askRemove,
+  restore,
+  restoring,
 });
 
 const tabs = computed(() => {
   const base = [
+    { name: "contract-overview", label: "Visão geral" },
     { name: "contract-card", label: "Cartão" },
     { name: "contract-payments", label: "Pagamentos" },
     { name: "contract-extras", label: "Extras" },
@@ -47,13 +63,22 @@ const tabs = computed(() => {
   return base;
 });
 
-const counterpart = computed(() =>
-  data.value
-    ? auth.isEmployer
-      ? data.value.workerName
-      : `${data.value.employerName} · ${data.value.householdName}`
-    : "",
+const status = computed(() => (data.value ? contractStatus(data.value) : null));
+const channels = computed(() => (data.value ? contactChannels(data.value) : null));
+const writable = computed(() => !!data.value && isWritable(data.value));
+
+const wide = useMediaQuery(MQ.md);
+
+const title = computed(() =>
+  data.value ? (auth.isEmployer ? data.value.workerName : data.value.employerName) : "",
 );
+
+const menuItems = computed<MenuItem[]>(() => {
+  if (!data.value) return [];
+  if (data.value.archivedAt)
+    return [{ label: "restaurar", icon: "undo", onSelect: () => void restore() }];
+  return [{ label: "remover da equipe", icon: "archive", danger: true, onSelect: askRemove }];
+});
 
 const tabsEl = useTemplateRef<HTMLElement>("tabsEl");
 const fade = reactive({ left: false, right: false });
@@ -122,38 +147,62 @@ onBeforeUnmount(() => resize.disconnect());
     </EmptyState>
 
     <template v-else-if="data">
-      <header class="cv__head">
-        <RouterLink to="/" class="cv__back"
-          ><Icon name="arrow-left" :size="18" /> início</RouterLink
+      <header class="pf">
+        <RouterLink :to="auth.isEmployer ? '/equipe' : '/'" class="cv__back"
+          ><Icon name="arrow-left" :size="18" />
+          {{ auth.isEmployer ? "equipe" : "início" }}</RouterLink
         >
-        <div class="cv__title">
-          <div>
-            <p class="cv__meta">
-              <span class="label"
-                >{{ OCCUPATION_LABEL[data.occupation] }} ·
-                {{ PAY_TYPE_LABEL[data.payType].toLowerCase() }}</span
-              >
-              <span class="mono cv__rate">{{ formatCents(data.rateCents) }}</span>
+        <div class="pf__row">
+          <Avatar :name="title" :size="wide ? 64 : 48" />
+          <div class="pf__id">
+            <div class="pf__name">
+              <h1 class="page-title">{{ title }}</h1>
+              <StatusChip v-if="status" :tone="status.tone">
+                {{ status.label
+                }}<template v-if="status.state === 'ended' && data.endedOn">
+                  em <span class="mono">{{ formatDateShort(data.endedOn) }}</span></template
+                >
+              </StatusChip>
+            </div>
+            <p class="pf__sub">
+              <span v-if="auth.isWorker">{{ data.householdName }} · </span
+              >{{ OCCUPATION_LABEL[data.occupation] }} · {{ describeSchedule(data.schedule) }}
             </p>
-            <h1 class="page-title">{{ counterpart }}</h1>
           </div>
-          <Stamp
-            v-if="data.status === 'ended'"
-            text="encerrado"
-            :label="`Vínculo encerrado em ${data.endedOn ? formatDateShort(data.endedOn) : ''}`"
-            tone="ink"
-            size="md"
-          />
-          <span v-else-if="auth.isEmployer && !data.workerId" class="cv__pending"
-            >convite pendente</span
-          >
+          <div v-if="auth.isEmployer" class="pf__actions">
+            <ContactActions v-if="channels" :channels="channels" />
+            <Button
+              v-if="writable"
+              :to="{ path: '/pagamentos/novo', query: { vinculo: data.id, mes: month } }"
+              variant="primary"
+              icon="plus"
+              >registrar pagamento</Button
+            >
+            <Button
+              v-if="writable"
+              :to="{ name: 'contract-settings', params: { id }, query: route.query }"
+              icon="pencil"
+              class="pf__edit"
+              >editar</Button
+            >
+            <Menu :items="menuItems" label="Mais ações" />
+          </div>
         </div>
-        <WorkerContact
-          v-if="auth.isEmployer"
-          :pix-key="data.workerPixKey"
-          :phone="data.workerPhone"
-        />
       </header>
+
+      <div v-if="data.archivedAt" class="cv__archived" role="status">
+        <Icon name="archive" :size="18" />
+        <p>
+          {{
+            auth.isEmployer
+              ? "Removido da equipe. Dá para consultar tudo, mas nada pode ser anotado até restaurar."
+              : "Este vínculo foi removido por quem contrata. Seu histórico continua aqui."
+          }}
+        </p>
+        <Button v-if="auth.isEmployer" icon="undo" :loading="restoring" @click="restore"
+          >restaurar</Button
+        >
+      </div>
 
       <div class="tabs-wrap">
         <nav
@@ -179,6 +228,15 @@ onBeforeUnmount(() => resize.disconnect());
       <RouterView v-slot="{ Component }">
         <component :is="Component" :key="id" />
       </RouterView>
+
+      <ConfirmDialog
+        v-model:open="confirmOpen"
+        :title="`remover ${data.workerName} da equipe?`"
+        message="O histórico fica guardado e você pode restaurar em Equipe → removidos."
+        confirm-label="remover"
+        :loading="removing"
+        @confirm="confirmRemove"
+      />
     </template>
   </div>
 </template>
@@ -212,36 +270,73 @@ onBeforeUnmount(() => resize.disconnect());
   color: var(--ink);
 }
 
-.cv__title {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--s-3);
+.pf {
+  display: grid;
+  gap: var(--s-2);
 }
 
-.cv__title h1 {
-  margin-top: var(--s-1);
-}
-
-.cv__meta {
+.pf__row {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 2px var(--s-2);
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
 }
 
-.cv__rate {
-  font-size: var(--t-12);
-  letter-spacing: 0;
-  text-transform: none;
+.pf__id {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+.pf__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-3);
+}
+
+.pf__name h1 {
+  font-size: clamp(var(--t-28), 3vw, var(--t-40));
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.pf__sub {
+  margin-top: var(--s-1);
+  color: var(--ink-2);
+}
+
+.pf__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+@media (max-width: 639px) {
+  .pf__actions {
+    flex-basis: 100%;
+  }
+  /* The Ajustes tab is one tap away; the row keeps contact, payment and the menu. */
+  .pf__edit {
+    display: none;
+  }
+}
+
+.cv__archived {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
+  border-radius: var(--r-2);
+  background: var(--tint-rose);
+  color: var(--tint-rose-ink);
+  font-size: var(--t-14);
+}
+
+.cv__archived p {
+  flex: 1 1 18rem;
   color: var(--ink);
-}
-
-.cv__pending {
-  font-size: var(--t-12);
-  color: var(--blue);
-  font-weight: 600;
-  white-space: nowrap;
 }
 
 .tabs-wrap {

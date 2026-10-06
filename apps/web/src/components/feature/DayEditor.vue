@@ -22,6 +22,7 @@ import { useForm } from "@/composables/form.ts";
 import { formatDayMonth, formatRelative, WEEKDAY_LONG } from "@/lib/format.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
+import { isWritable } from "@/lib/contract.ts";
 
 const open = defineModel<boolean>("open", { required: true });
 const { date, entry, contract, today } = defineProps<{
@@ -94,7 +95,7 @@ const canConfirm = computed(
 const canDelete = computed(
   () => !!entry && (auth.isEmployer || (mine.value && !entry.confirmedAt)),
 );
-const ended = computed(() => contract.status === "ended");
+const ended = computed(() => !isWritable(contract));
 
 const authorText = computed(() => {
   if (!entry) return null;
@@ -176,7 +177,13 @@ async function onRemove(): Promise<void> {
   >
     <form id="day-editor" class="de" novalidate @submit.prevent="onSave">
       <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
-      <p v-if="ended" class="form-error">Este vínculo foi encerrado. Só dá para consultar.</p>
+      <p v-if="ended" class="form-error">
+        {{
+          contract.archivedAt
+            ? "Este vínculo foi removido. Só dá para consultar."
+            : "Este vínculo foi encerrado. Só dá para consultar."
+        }}
+      </p>
 
       <div v-if="entry && contract.workerId" class="de__state">
         <span class="de__dot" :class="entry.confirmedAt ? 'is-ok' : 'is-open'" aria-hidden="true" />
