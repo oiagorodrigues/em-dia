@@ -7,12 +7,12 @@ import { parse } from "../validate.ts";
 export function meRoutes(services: Services): Router {
   const router = Router();
 
-  router.get("/me", (_req, res) => {
+  router.get("/me", async (_req, res) => {
     res.json({ user: actorOf(res) });
   });
 
-  router.patch("/me", (req, res) => {
-    res.json({ user: services.me.update(actorOf(res), parse(updateMeSchema, req.body)) });
+  router.patch("/me", async (req, res) => {
+    res.json({ user: await services.me.update(actorOf(res), parse(updateMeSchema, req.body)) });
   });
 
   return router;

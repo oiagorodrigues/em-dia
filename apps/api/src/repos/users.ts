@@ -1,5 +1,5 @@
 import type { PublicUser, Role } from "@emdia/shared";
-import { execute, queryOne, type Db } from "../db/index.ts";
+import type { Executor } from "../db/index.ts";
 
 export interface UserRecord extends PublicUser {
   passwordHash: string;
@@ -48,28 +48,27 @@ export function toPublicUser(u: UserRecord): PublicUser {
   };
 }
 
-export function usersRepo(db: Db) {
+export function usersRepo(db: Executor) {
   return {
-    findById(id: string): UserRecord | undefined {
-      const r = queryOne<Row>(db, "SELECT * FROM users WHERE id = ?", id);
+    async findById(id: string): Promise<UserRecord | undefined> {
+      const r = await db.get<Row>("SELECT * FROM users WHERE id = ?", id);
       return r && toRecord(r);
     },
 
-    findByEmail(email: string): UserRecord | undefined {
-      const r = queryOne<Row>(db, "SELECT * FROM users WHERE email = ?", email);
+    async findByEmail(email: string): Promise<UserRecord | undefined> {
+      const r = await db.get<Row>("SELECT * FROM users WHERE email = ?", email);
       return r && toRecord(r);
     },
 
-    insert(u: {
+    async insert(u: {
       id: string;
       email: string;
       name: string;
       role: Role;
       passwordHash: string;
       createdAt: string;
-    }): void {
-      execute(
-        db,
+    }): Promise<void> {
+      await db.run(
         "INSERT INTO users (id, email, name, role, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         u.id,
         u.email,
@@ -80,12 +79,11 @@ export function usersRepo(db: Db) {
       );
     },
 
-    updateProfile(
+    async updateProfile(
       id: string,
       p: { name: string; phone: string | null; pixKey: string | null },
-    ): void {
-      execute(
-        db,
+    ): Promise<void> {
+      await db.run(
         "UPDATE users SET name = ?, phone = ?, pix_key = ? WHERE id = ?",
         p.name,
         p.phone,
@@ -95,9 +93,8 @@ export function usersRepo(db: Db) {
     },
 
     /** Also bumps the token version (kills access tokens) and clears any lockout. */
-    setPassword(id: string, passwordHash: string): void {
-      execute(
-        db,
+    async setPassword(id: string, passwordHash: string): Promise<void> {
+      await db.run(
         `UPDATE users SET password_hash = ?, token_version = token_version + 1, failed_logins = 0, locked_until = NULL
          WHERE id = ?`,
         passwordHash,
@@ -105,14 +102,17 @@ export function usersRepo(db: Db) {
       );
     },
 
-    bumpTokenVersion(id: string): void {
-      execute(db, "UPDATE users SET token_version = token_version + 1 WHERE id = ?", id);
+    async bumpTokenVersion(id: string): Promise<void> {
+      await db.run("UPDATE users SET token_version = token_version + 1 WHERE id = ?", id);
     },
 
     /** Counts a failed login atomically; returns the lock expiry when this failure reached the threshold. */
-    recordLoginFailure(id: string, threshold: number, lockUntil: string): string | null {
-      const row = queryOne<{ locked_until: string | null }>(
-        db,
+    async recordLoginFailure(
+      id: string,
+      threshold: number,
+      lockUntil: string,
+    ): Promise<string | null> {
+      const row = await db.get<{ locked_until: string | null }>(
         `UPDATE users SET
            failed_logins = CASE WHEN failed_logins + 1 >= ? THEN 0 ELSE failed_logins + 1 END,
            locked_until = CASE WHEN failed_logins + 1 >= ? THEN ? ELSE locked_until END
@@ -125,24 +125,19 @@ export function usersRepo(db: Db) {
       return row?.locked_until === lockUntil ? lockUntil : null;
     },
 
-    clearLoginFailures(id: string): void {
-      execute(db, "UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = ?", id);
+    async clearLoginFailures(id: string): Promise<void> {
+      await db.run("UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = ?", id);
     },
 
     /** Keeps the row (history points at it) but removes everything that identifies the person. */
-    anonymize(id: string, placeholderEmail: string): void {
-      execute(
-        db,
+    async anonymize(id: string, placeholderEmail: string): Promise<void> {
+      await db.run(
         `UPDATE users SET email = ?, name = 'Conta excluída', phone = NULL, pix_key = NULL, password_hash = '!',
            token_version = token_version + 1, failed_logins = 0, locked_until = NULL
          WHERE id = ?`,
         placeholderEmail,
         id,
       );
-    },
-
-    deleteByEmail(email: string): void {
-      execute(db, "DELETE FROM users WHERE email = ?", email);
     },
   };
 }

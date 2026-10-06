@@ -7,21 +7,23 @@ import { parse } from "../validate.ts";
 export function agreementRoutes({ agreements }: Services): Router {
   const router = Router();
 
-  router.get("/contracts/:id/agreements", (req, res) => {
-    res.json({ agreements: agreements.list(actorOf(res), req.params.id) });
+  router.get("/contracts/:id/agreements", async (req, res) => {
+    res.json({ agreements: await agreements.list(actorOf(res), req.params.id) });
   });
 
-  router.post("/contracts/:id/agreements", (req, res) => {
+  router.post("/contracts/:id/agreements", async (req, res) => {
     const input = parse(createAgreementSchema, req.body);
-    res.status(201).json({ agreement: agreements.create(actorOf(res), req.params.id, input) });
+    res
+      .status(201)
+      .json({ agreement: await agreements.create(actorOf(res), req.params.id, input) });
   });
 
-  router.post("/contracts/:id/agreements/:aid/accept", (req, res) => {
-    res.json({ agreement: agreements.accept(actorOf(res), req.params.id, req.params.aid) });
+  router.post("/contracts/:id/agreements/:aid/accept", async (req, res) => {
+    res.json({ agreement: await agreements.accept(actorOf(res), req.params.id, req.params.aid) });
   });
 
-  router.post("/contracts/:id/agreements/:aid/cancel", (req, res) => {
-    res.json({ agreement: agreements.cancel(actorOf(res), req.params.id, req.params.aid) });
+  router.post("/contracts/:id/agreements/:aid/cancel", async (req, res) => {
+    res.json({ agreement: await agreements.cancel(actorOf(res), req.params.id, req.params.aid) });
   });
 
   return router;

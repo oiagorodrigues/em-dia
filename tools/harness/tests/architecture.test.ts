@@ -29,11 +29,14 @@ const API_ALLOWED: Record<ApiLayer, readonly ApiLayer[]> = {
 const FRAMEWORK_IN_CORE =
   /^(express|express-rate-limit|helmet|multer|cookie-parser|supertest)(\/|$)/;
 
-function apiLayerOf(path: string): ApiLayer | "server" | null {
+/** Composition roots: they wire every layer together, so they may import anything. */
+const API_ENTRYPOINTS = ["server", "runtime", "vercel", "scripts"] as const;
+
+function apiLayerOf(path: string): ApiLayer | "entry" | null {
   const m = path.match(/^apps\/api\/src\/([^/]+)/);
   if (!m) return null;
   const name = m[1]!.replace(/\.ts$/, "");
-  if (name === "server") return "server";
+  if ((API_ENTRYPOINTS as readonly string[]).includes(name)) return "entry";
   return (API_LAYERS as readonly string[]).includes(name) ? (name as ApiLayer) : null;
 }
 
@@ -56,17 +59,16 @@ describe.skipIf(!exists("apps/api/src"))("api layering", () => {
     const bad = violationsFor("apps/api/src", (file, spec) => {
       if (!spec.startsWith(".")) return null;
       const from = apiLayerOf(rel(file));
-      if (from === null || from === "server") return null;
+      if (from === null || from === "entry") return null;
       const target = resolveRelative(file, spec);
       const to = apiLayerOf(target);
-      if (to === null || to === "server") {
-        return to === "server"
-          ? violation(
-              `${from} imports server.ts (${spec})`,
-              "server.ts is the composition root; move shared code into lib/ or config/",
-              `${ARCH}#api-layering`,
-            )
-          : null;
+      if (to === null) return null;
+      if (to === "entry") {
+        return violation(
+          `layer "${from}" imports entrypoint ${spec}`,
+          `entrypoints (${API_ENTRYPOINTS.join(", ")}) are composition roots; move shared code into lib/ or config/`,
+          `${ARCH}#api-layering`,
+        );
       }
       if (to === from || API_ALLOWED[from].includes(to)) return null;
       return violation(
@@ -78,15 +80,15 @@ describe.skipIf(!exists("apps/api/src"))("api layering", () => {
     expect(bad, bad.join("\n")).toEqual([]);
   });
 
-  it("only server.ts imports from src/http", () => {
+  it("only entrypoints (server, runtime, vercel, scripts) import from src/http", () => {
     const bad = violationsFor("apps/api/src", (file, spec) => {
       if (!spec.startsWith(".")) return null;
       const from = apiLayerOf(rel(file));
-      if (from === "http" || from === "server" || from === null) return null;
+      if (from === "http" || from === "entry" || from === null) return null;
       return apiLayerOf(resolveRelative(file, spec)) === "http"
         ? violation(
             `${rel(file)} imports http layer (${spec})`,
-            "nothing outside src/http may import it; wire routes in server.ts",
+            "only server.ts, runtime.ts, vercel.ts and scripts/ may import src/http; wire it in runtime.ts",
             `${ARCH}#api-layering`,
           )
         : null;
@@ -97,7 +99,7 @@ describe.skipIf(!exists("apps/api/src"))("api layering", () => {
   it("repos, services, db and config never import express or other http libraries", () => {
     const bad = violationsFor("apps/api/src", (file, spec) => {
       const from = apiLayerOf(rel(file));
-      if (from === null || from === "http" || from === "server" || from === "lib") return null;
+      if (from === null || from === "http" || from === "entry" || from === "lib") return null;
       return FRAMEWORK_IN_CORE.test(spec)
         ? violation(
             `layer "${from}" imports "${spec}"`,

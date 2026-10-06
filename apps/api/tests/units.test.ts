@@ -67,10 +67,10 @@ describe("logger", () => {
 });
 
 describe("file names", () => {
-  test("stored names cannot escape the upload dir", () => {
+  test("stored names cannot escape the upload dir", async () => {
     const store = createFileStore("/tmp/emdia-never-used");
-    expect(() => store.open("../../etc/passwd")).toThrow();
-    expect(() => store.open("abc.png")).toThrow();
+    await expect(store.open("../../etc/passwd")).rejects.toThrow();
+    await expect(store.open("abc.png")).rejects.toThrow();
   });
 
   test("original names are sanitised for display", () => {

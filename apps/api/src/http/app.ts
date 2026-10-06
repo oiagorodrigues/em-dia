@@ -43,20 +43,20 @@ export function createApp({ config, logger, services }: AppDeps): Express {
     res.setHeader("Cache-Control", "no-store");
     next();
   });
-  api.use(createRateLimiter(config.rateLimit.global));
+  api.use(createRateLimiter(config.rateLimit.global, "global", config));
   api.use(express.json({ limit: "100kb" }));
   api.use(cookieParser());
   app.use("/api", api);
 
-  api.get("/health", (_req, res) => {
-    const dbOk = services.health.databaseOk();
+  api.get("/health", async (_req, res) => {
+    const dbOk = await services.health.databaseOk();
     res
       .status(dbOk ? 200 : 503)
       .json({ status: dbOk ? "ok" : "error", db: dbOk ? "ok" : "error", version: config.version });
   });
 
   const v1 = Router();
-  v1.use(authRoutes(services, config, createRateLimiter(config.rateLimit.auth)));
+  v1.use(authRoutes(services, config, createRateLimiter(config.rateLimit.auth, "auth", config)));
   if (!config.isProduction) {
     v1.get("/dev/outbox", (_req, res) => {
       res.json({ messages: services.outbox() });
@@ -68,13 +68,13 @@ export function createApp({ config, logger, services }: AppDeps): Express {
   v1.use(contractRoutes(services));
   v1.use(entryRoutes(services));
   v1.use(adjustmentRoutes(services));
-  v1.use(paymentRoutes(services));
+  v1.use(paymentRoutes(services, config.receiptMaxBytes));
   v1.use(agreementRoutes(services));
   v1.use(reportRoutes(services));
   api.use("/v1", v1);
   if (config.webDistDir) app.use(webRoutes(config.webDistDir));
 
   app.use(notFoundHandler);
-  app.use(errorHandler(logger));
+  app.use(errorHandler(logger, config.receiptMaxBytes));
   return app;
 }

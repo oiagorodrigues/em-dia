@@ -2,8 +2,9 @@ import type { Config } from "../config/index.ts";
 import { createAccessTokens } from "../lib/jwt.ts";
 import type { Logger } from "../lib/logger.ts";
 import type { Mailer } from "../lib/mailer.ts";
-import { createFileStore } from "../lib/storage.ts";
-import { createRepos, type Db } from "../repos/index.ts";
+import { createBlobStore } from "../lib/blob-store.ts";
+import { createFileStore, type FileStore } from "../lib/storage.ts";
+import { createRepos, type Database } from "../repos/index.ts";
 import { adjustmentsService } from "./adjustments.ts";
 import { agreementsService } from "./agreements.ts";
 import { authService } from "./auth.ts";
@@ -16,12 +17,18 @@ import { paymentsService } from "./payments.ts";
 import { reportsService } from "./reports.ts";
 
 export interface ServiceOptions {
-  db: Db;
+  db: Database;
   config: Config;
   logger: Logger;
   mailer: Mailer;
   /** Injected so tests can move time (token expiry, lockout, "today"). */
   clock?: () => Date;
+  /** Defaults to the store the config selects (Vercel Blob or the upload dir). */
+  files?: FileStore;
+}
+
+export function createReceiptStore(config: Config): FileStore {
+  return config.blob ? createBlobStore(config.blob) : createFileStore(config.uploadDir);
 }
 
 export function createServices({
@@ -30,6 +37,7 @@ export function createServices({
   logger,
   mailer,
   clock = () => new Date(),
+  files = createReceiptStore(config),
 }: ServiceOptions) {
   const deps: ServiceDeps = {
     repos: createRepos(db),
@@ -37,7 +45,7 @@ export function createServices({
     logger,
     mailer,
     clock,
-    files: createFileStore(config.uploadDir),
+    files,
     tokens: createAccessTokens(config.jwtSecret, clock),
   };
   return {
@@ -50,7 +58,13 @@ export function createServices({
     payments: paymentsService(deps),
     agreements: agreementsService(deps),
     reports: reportsService(deps),
-    health: { databaseOk: () => deps.repos.ping() },
+    health: {
+      databaseOk: () =>
+        deps.repos.ping().catch((err: unknown) => {
+          logger.error("database health check failed", { err });
+          return false;
+        }),
+    },
     outbox: () => deps.mailer.outbox(),
   };
 }

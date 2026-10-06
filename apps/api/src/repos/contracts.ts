@@ -8,7 +8,7 @@ import type {
   Schedule,
   ScheduleKind,
 } from "@emdia/shared";
-import { execute, queryAll, queryOne, type Db, type Param } from "../db/index.ts";
+import type { Executor, Param } from "../db/index.ts";
 
 /** A contract plus the timezone of its household, which every "today" computation needs. */
 export interface LocatedContract {
@@ -122,32 +122,35 @@ function toLocated(r: Row): LocatedContract {
   };
 }
 
-export function contractsRepo(db: Db) {
+export function contractsRepo(db: Executor) {
   return {
-    findById(id: string): LocatedContract | undefined {
-      const r = queryOne<Row>(db, `${SELECT} WHERE c.id = ?`, id);
+    async findById(id: string): Promise<LocatedContract | undefined> {
+      const r = await db.get<Row>(`${SELECT} WHERE c.id = ?`, id);
       return r && toLocated(r);
     },
 
-    listForEmployer(ownerId: string, includeArchived = false): LocatedContract[] {
-      return queryAll<Row>(
-        db,
-        `${SELECT} WHERE h.owner_id = ? ${includeArchived ? "" : NOT_ARCHIVED} ${ORDER}`,
-        ownerId,
+    async listForEmployer(ownerId: string, includeArchived = false): Promise<LocatedContract[]> {
+      return (
+        await db.all<Row>(
+          `${SELECT} WHERE h.owner_id = ? ${includeArchived ? "" : NOT_ARCHIVED} ${ORDER}`,
+          ownerId,
+        )
       ).map(toLocated);
     },
 
-    listForWorker(workerId: string, includeArchived = false): LocatedContract[] {
-      return queryAll<Row>(
-        db,
-        `${SELECT} WHERE c.worker_id = ? ${includeArchived ? "" : NOT_ARCHIVED} ${ORDER}`,
-        workerId,
+    async listForWorker(workerId: string, includeArchived = false): Promise<LocatedContract[]> {
+      return (
+        await db.all<Row>(
+          `${SELECT} WHERE c.worker_id = ? ${includeArchived ? "" : NOT_ARCHIVED} ${ORDER}`,
+          workerId,
+        )
       ).map(toLocated);
     },
 
-    insert(c: { id: string; householdId: string; createdAt: string } & ContractFields): void {
-      execute(
-        db,
+    async insert(
+      c: { id: string; householdId: string; createdAt: string } & ContractFields,
+    ): Promise<void> {
+      await db.run(
         `INSERT INTO contracts (id, household_id, worker_name, occupation, pay_type, rate_cents, schedule_kind,
            schedule_weekdays, every_weeks, month_days, visits_per_month, deduct_absences, contact_email,
            contact_phone, expected_start, expected_end, started_on, status, created_at)
@@ -166,9 +169,8 @@ export function contractsRepo(db: Db) {
       );
     },
 
-    update(id: string, f: ContractFields): void {
-      execute(
-        db,
+    async update(id: string, f: ContractFields): Promise<void> {
+      await db.run(
         `UPDATE contracts SET worker_name = ?, occupation = ?, pay_type = ?, rate_cents = ?, schedule_kind = ?,
            schedule_weekdays = ?, every_weeks = ?, month_days = ?, visits_per_month = ?, deduct_absences = ?,
            contact_email = ?, contact_phone = ?, expected_start = ?, expected_end = ?, started_on = ?
@@ -185,20 +187,20 @@ export function contractsRepo(db: Db) {
       );
     },
 
-    end(id: string, endedOn: IsoDate): void {
-      execute(db, "UPDATE contracts SET ended_on = ?, status = 'ended' WHERE id = ?", endedOn, id);
+    async end(id: string, endedOn: IsoDate): Promise<void> {
+      await db.run("UPDATE contracts SET ended_on = ?, status = 'ended' WHERE id = ?", endedOn, id);
     },
 
-    setArchivedAt(id: string, archivedAt: string | null): void {
-      execute(db, "UPDATE contracts SET archived_at = ? WHERE id = ?", archivedAt, id);
+    async setArchivedAt(id: string, archivedAt: string | null): Promise<void> {
+      await db.run("UPDATE contracts SET archived_at = ? WHERE id = ?", archivedAt, id);
     },
 
-    unlinkWorker(workerId: string): void {
-      execute(db, "UPDATE contracts SET worker_id = NULL WHERE worker_id = ?", workerId);
+    async unlinkWorker(workerId: string): Promise<void> {
+      await db.run("UPDATE contracts SET worker_id = NULL WHERE worker_id = ?", workerId);
     },
 
-    linkWorker(id: string, workerId: string): void {
-      execute(db, "UPDATE contracts SET worker_id = ? WHERE id = ?", workerId, id);
+    async linkWorker(id: string, workerId: string): Promise<void> {
+      await db.run("UPDATE contracts SET worker_id = ? WHERE id = ?", workerId, id);
     },
   };
 }

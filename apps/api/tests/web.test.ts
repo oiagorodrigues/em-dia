@@ -20,8 +20,8 @@ beforeAll(() => {
 });
 afterAll(() => rmSync(dist, { recursive: true, force: true }));
 
-beforeEach(() => {
-  t = setup({ WEB_DIST_DIR: dist });
+beforeEach(async () => {
+  t = await setup({ WEB_DIST_DIR: dist });
 });
 afterEach(() => t.cleanup());
 
@@ -79,30 +79,30 @@ describe("web app serving", () => {
     expect(
       (await t.http().get("/").set(html)).headers["strict-transport-security"],
     ).toBeUndefined();
-    const prod = setup({ WEB_DIST_DIR: dist, NODE_ENV: "production" });
+    const prod = await setup({ WEB_DIST_DIR: dist, NODE_ENV: "production" });
     const res = await prod.http().get("/").set(html);
-    prod.cleanup();
+    await prod.cleanup();
     expect(res.headers["strict-transport-security"]).toBe("max-age=31536000; includeSubDomains");
   });
 
   test("static files are not rate limited by the API limiter", async () => {
-    const limited = setup({ WEB_DIST_DIR: dist, RATE_LIMIT_GLOBAL: "2" });
+    const limited = await setup({ WEB_DIST_DIR: dist, RATE_LIMIT_GLOBAL: "2" });
     const statuses = [];
     for (let i = 0; i < 5; i++)
       statuses.push((await limited.http().get("/assets/index-abc123.js")).status);
-    limited.cleanup();
+    await limited.cleanup();
     expect(statuses).toEqual([200, 200, 200, 200, 200]);
   });
 
-  test("a dist dir without index.html fails fast", () => {
-    expect(() => setup({ WEB_DIST_DIR: join(dist, "assets") })).toThrow(/index.html/);
+  test("a dist dir without index.html fails fast", async () => {
+    await expect(setup({ WEB_DIST_DIR: join(dist, "assets") })).rejects.toThrow(/index.html/);
   });
 });
 
 test("without WEB_DIST_DIR non-API paths are plain 404s with the strict CSP", async () => {
-  const api = setup();
+  const api = await setup();
   const res = await api.http().get("/").set(html);
-  api.cleanup();
+  await api.cleanup();
   expect(res.status).toBe(404);
   expect(res.headers["content-security-policy"]).toContain("default-src 'none'");
 });

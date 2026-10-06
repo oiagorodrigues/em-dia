@@ -10,7 +10,7 @@ const as = { type: "bearer" } as const;
 const CSRF = { "X-Requested-With": "emdia" };
 
 beforeEach(async () => {
-  t = setup();
+  t = await setup();
   ({ employer, worker, contractId } = await t.linkedPair());
   base = `/api/v1/contracts/${contractId}`;
 });

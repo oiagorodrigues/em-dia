@@ -9,7 +9,7 @@ let base: string;
 const as = { type: "bearer" } as const;
 
 beforeEach(async () => {
-  t = setup();
+  t = await setup();
   // Daily R$ 180 on Mon/Wed/Fri.
   const pair = await t.linkedPair({ schedule: { kind: "weekly", weekdays: [1, 3, 5] } });
   ({ employer, worker, contractId } = pair);

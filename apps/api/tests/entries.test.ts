@@ -8,7 +8,7 @@ let base: string;
 const as = { type: "bearer" } as const;
 
 beforeEach(async () => {
-  t = setup();
+  t = await setup();
   const pair = await t.linkedPair({ payType: "hourly", rateCents: 3000 });
   employer = pair.employer;
   worker = pair.worker;

@@ -21,12 +21,12 @@ function checkTimezone(timezone: string): string {
 export function householdsService(deps: ServiceDeps) {
   const { households } = deps.repos;
   return {
-    list(actor: Actor): Household[] {
+    list(actor: Actor): Promise<Household[]> {
       requirePermission(actor, "household:manage");
       return households.listByOwner(actor.id);
     },
 
-    create(actor: Actor, input: HouseholdInput): Household {
+    async create(actor: Actor, input: HouseholdInput): Promise<Household> {
       requirePermission(actor, "household:manage");
       const household: Household = {
         id: newId(),
@@ -35,19 +35,19 @@ export function householdsService(deps: ServiceDeps) {
         timezone: checkTimezone(input.timezone ?? DEFAULT_TIMEZONE),
         createdAt: nowIso(deps),
       };
-      households.insert(household);
+      await households.insert(household);
       return household;
     },
 
-    update(actor: Actor, id: string, input: HouseholdInput): Household {
+    async update(actor: Actor, id: string, input: HouseholdInput): Promise<Household> {
       requirePermission(actor, "household:manage");
-      const current = households.findById(id);
+      const current = await households.findById(id);
       if (!current || current.ownerId !== actor.id) throw notFound("Casa não encontrada");
       const next = {
         name: input.name,
         timezone: checkTimezone(input.timezone ?? current.timezone),
       };
-      households.update(id, next);
+      await households.update(id, next);
       return { ...current, ...next };
     },
   };

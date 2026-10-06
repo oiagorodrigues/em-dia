@@ -2,7 +2,7 @@ import type { EntryStatus, IsoDate, UpsertEntryInput, WorkEntry, YearMonth } fro
 import { nowInZone, shiftMinutes } from "@emdia/shared";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
-import type { LocatedContract } from "../repos/index.ts";
+import type { LocatedContract, TxRepos } from "../repos/index.ts";
 import { loadContract, loadWritableContract } from "./access.ts";
 import { audit, nowIso, requirePermission, type Actor, type ServiceDeps } from "./context.ts";
 
@@ -29,7 +29,8 @@ export function entriesService(deps: ServiceDeps) {
    * Any write makes the writer the entry's author and clears confirmation,
    * so the other party has to confirm the new version.
    */
-  function write(
+  async function write(
+    r: TxRepos,
     actor: Actor,
     contractId: string,
     date: IsoDate,
@@ -48,24 +49,24 @@ export function entriesService(deps: ServiceDeps) {
       confirmedAt: null,
       updatedAt: nowIso(deps),
     };
-    repos.entries.save(entry);
+    await r.entries.save(entry);
     return entry;
   }
 
-  function findEntry(contractId: string, date: IsoDate): WorkEntry {
-    const entry = repos.entries.find(contractId, date);
+  async function findEntry(contractId: string, date: IsoDate): Promise<WorkEntry> {
+    const entry = await repos.entries.find(contractId, date);
     if (!entry) throw notFound("Registro não encontrado");
     return entry;
   }
 
   return {
-    list(actor: Actor, contractId: string, month: YearMonth): WorkEntry[] {
-      loadContract(deps, actor, contractId);
+    async list(actor: Actor, contractId: string, month: YearMonth): Promise<WorkEntry[]> {
+      await loadContract(deps, actor, contractId);
       return repos.entries.listByMonth(contractId, month);
     },
 
-    upsert(actor: Actor, contractId: string, date: IsoDate, input: UpsertEntryInput) {
-      const located = loadWritableContract(deps, actor, contractId);
+    async upsert(actor: Actor, contractId: string, date: IsoDate, input: UpsertEntryInput) {
+      const located = await loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "entry:write");
       assertWithinContract(located, date);
       const today = nowInZone(located.timezone, deps.clock()).date;
@@ -73,7 +74,6 @@ export function entriesService(deps: ServiceDeps) {
         throw fieldError("date", "Datas futuras só aceitam folga, feriado ou falta justificada");
       }
 
-      const existing = repos.entries.find(contractId, date);
       const fields: EntryFields = {
         status: input.status,
         checkIn: input.checkIn,
@@ -81,106 +81,123 @@ export function entriesService(deps: ServiceDeps) {
         breakMinutes: input.breakMinutes,
         note: input.note || null,
       };
-      const entry = repos.tx(() => {
-        const saved = write(actor, contractId, date, fields, existing);
-        audit(deps, {
-          actorId: actor.id,
-          contractId,
-          action: existing ? "entry.update" : "entry.create",
-          entity: "entry",
-          entityId: saved.id,
-          meta: { date, status: saved.status },
-        });
-        return saved;
+      return repos.tx(async (r) => {
+        const existing = await r.entries.find(contractId, date);
+        const entry = await write(r, actor, contractId, date, fields, existing);
+        await audit(
+          deps,
+          {
+            actorId: actor.id,
+            contractId,
+            action: existing ? "entry.update" : "entry.create",
+            entity: "entry",
+            entityId: entry.id,
+            meta: { date, status: entry.status },
+          },
+          r,
+        );
+        return { entry, created: !existing };
       });
-      return { entry, created: !existing };
     },
 
-    remove(actor: Actor, contractId: string, date: IsoDate): void {
-      loadWritableContract(deps, actor, contractId);
+    async remove(actor: Actor, contractId: string, date: IsoDate): Promise<void> {
+      await loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "entry:write");
-      const entry = findEntry(contractId, date);
+      const entry = await findEntry(contractId, date);
       if (actor.role !== "employer" && (entry.createdBy !== actor.id || entry.confirmedAt)) {
         throw forbidden("Só quem lançou pode apagar, e apenas antes da confirmação");
       }
-      repos.tx(() => {
-        repos.entries.delete(contractId, date);
-        audit(deps, {
-          actorId: actor.id,
-          contractId,
-          action: "entry.delete",
-          entity: "entry",
-          entityId: entry.id,
-          meta: { date },
-        });
+      await repos.tx(async (r) => {
+        await r.entries.delete(contractId, date);
+        await audit(
+          deps,
+          {
+            actorId: actor.id,
+            contractId,
+            action: "entry.delete",
+            entity: "entry",
+            entityId: entry.id,
+            meta: { date },
+          },
+          r,
+        );
       });
     },
 
-    confirm(actor: Actor, contractId: string, date: IsoDate): WorkEntry {
-      loadWritableContract(deps, actor, contractId);
+    async confirm(actor: Actor, contractId: string, date: IsoDate): Promise<WorkEntry> {
+      await loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "entry:confirm");
-      const entry = findEntry(contractId, date);
+      const entry = await findEntry(contractId, date);
       if (entry.createdBy === actor.id) throw forbidden("A confirmação é feita pela outra parte");
       if (entry.confirmedAt) return entry;
 
       const confirmed = { ...entry, confirmedBy: actor.id, confirmedAt: nowIso(deps) };
-      repos.tx(() => {
-        repos.entries.save(confirmed);
-        audit(deps, {
-          actorId: actor.id,
-          contractId,
-          action: "entry.confirm",
-          entity: "entry",
-          entityId: entry.id,
-          meta: { date },
-        });
+      await repos.tx(async (r) => {
+        await r.entries.save(confirmed);
+        await audit(
+          deps,
+          {
+            actorId: actor.id,
+            contractId,
+            action: "entry.confirm",
+            entity: "entry",
+            entityId: entry.id,
+            meta: { date },
+          },
+          r,
+        );
       });
       return confirmed;
     },
 
-    clock(actor: Actor, contractId: string, action: "in" | "out"): WorkEntry {
-      const located = loadWritableContract(deps, actor, contractId);
+    async clock(actor: Actor, contractId: string, action: "in" | "out"): Promise<WorkEntry> {
+      const located = await loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "entry:clock");
       if (located.contract.status === "ended")
         throw new AppError("CONFLICT", "Este vínculo está encerrado");
       const { date, time } = nowInZone(located.timezone, deps.clock());
       assertWithinContract(located, date);
 
-      const existing = repos.entries.find(contractId, date);
-      const checkedIn = existing?.status === "worked" && existing.checkIn !== null;
-      let fields: EntryFields;
-      if (action === "in") {
-        if (checkedIn) throw new AppError("CONFLICT", "A entrada de hoje já foi registrada");
-        fields = {
-          status: "worked",
-          checkIn: time,
-          checkOut: null,
-          breakMinutes: 0,
-          note: existing?.note ?? null,
-        };
-      } else {
-        if (!existing || !checkedIn)
-          throw new AppError("CONFLICT", "Nenhuma entrada registrada hoje");
-        if (existing.checkOut) throw new AppError("CONFLICT", "A saída de hoje já foi registrada");
-        fields = {
-          status: existing.status,
-          checkIn: existing.checkIn,
-          checkOut: time,
-          breakMinutes: existing.breakMinutes,
-          note: existing.note,
-        };
-      }
+      return repos.tx(async (r) => {
+        const existing = await r.entries.find(contractId, date);
+        const checkedIn = existing?.status === "worked" && existing.checkIn !== null;
+        let fields: EntryFields;
+        if (action === "in") {
+          if (checkedIn) throw new AppError("CONFLICT", "A entrada de hoje já foi registrada");
+          fields = {
+            status: "worked",
+            checkIn: time,
+            checkOut: null,
+            breakMinutes: 0,
+            note: existing?.note ?? null,
+          };
+        } else {
+          if (!existing || !checkedIn)
+            throw new AppError("CONFLICT", "Nenhuma entrada registrada hoje");
+          if (existing.checkOut)
+            throw new AppError("CONFLICT", "A saída de hoje já foi registrada");
+          fields = {
+            status: existing.status,
+            checkIn: existing.checkIn,
+            checkOut: time,
+            breakMinutes: existing.breakMinutes,
+            note: existing.note,
+          };
+        }
 
-      return repos.tx(() => {
-        const entry = write(actor, contractId, date, fields, existing);
-        audit(deps, {
-          actorId: actor.id,
-          contractId,
-          action: action === "in" ? "entry.clock_in" : "entry.clock_out",
-          entity: "entry",
-          entityId: entry.id,
-          meta: { date, time },
-        });
+        const entry = await write(r, actor, contractId, date, fields, existing);
+        await audit(
+          deps,
+          {
+            actorId: actor.id,
+            contractId,
+            action: action === "in" ? "entry.clock_in" : "entry.clock_out",
+            entity: "entry",
+            entityId: entry.id,
+            meta: { date, time },
+          },
+          r,
+        );
         return entry;
       });
     },

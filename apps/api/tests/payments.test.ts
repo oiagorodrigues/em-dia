@@ -11,7 +11,7 @@ const as = { type: "bearer" } as const;
 const png = solidPng(4, 4, [35, 64, 232]);
 
 beforeEach(async () => {
-  t = setup();
+  t = await setup();
   const pair = await t.linkedPair();
   employer = pair.employer;
   worker = pair.worker;

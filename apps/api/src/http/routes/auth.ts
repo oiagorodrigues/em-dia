@@ -45,14 +45,14 @@ export function authRoutes(
     }
   });
 
-  router.post("/auth/logout", requireCsrfHeader, (req, res) => {
-    auth.logout(refreshCookieOf(req));
+  router.post("/auth/logout", requireCsrfHeader, async (req, res) => {
+    await auth.logout(refreshCookieOf(req));
     clearRefreshCookie(res, config);
     res.status(204).end();
   });
 
-  router.post("/auth/logout-all", authenticate(services), (_req, res) => {
-    auth.logoutAll(actorOf(res));
+  router.post("/auth/logout-all", authenticate(services), async (_req, res) => {
+    await auth.logoutAll(actorOf(res));
     clearRefreshCookie(res, config);
     res.status(204).end();
   });

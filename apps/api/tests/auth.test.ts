@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import { PASSWORD, refreshCookie, setup, type TestEnv } from "./helpers.ts";
 
 let t: TestEnv;
-beforeEach(() => {
-  t = setup();
+beforeEach(async () => {
+  t = await setup();
 });
 afterEach(() => t.cleanup());
 
@@ -131,9 +131,9 @@ describe("access token", () => {
   });
 
   test("a token signed with another secret is rejected", async () => {
-    const other = setup({ JWT_SECRET: "another-secret-that-is-long-enough-987654" });
+    const other = await setup({ JWT_SECRET: "another-secret-that-is-long-enough-987654" });
     const foreign = await other.register("employer");
-    other.cleanup();
+    await other.cleanup();
     await t.register("employer");
     expect((await t.http().get("/api/v1/me").auth(foreign.token, { type: "bearer" })).status).toBe(
       401,
@@ -362,13 +362,13 @@ describe("password change and reset", () => {
 
 describe("rate limiting", () => {
   test("auth routes are limited per IP with a RATE_LIMITED body", async () => {
-    const limited = setup({ RATE_LIMIT_AUTH: "2" });
+    const limited = await setup({ RATE_LIMIT_AUTH: "2" });
     const login = () =>
       limited.http().post("/api/v1/auth/login").send({ email: "a@test.dev", password: "x" });
     await login();
     await login();
     const res = await login();
-    limited.cleanup();
+    await limited.cleanup();
     expect(res.status).toBe(429);
     expect(res.body.error.code).toBe("RATE_LIMITED");
   });

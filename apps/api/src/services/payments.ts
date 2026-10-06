@@ -1,10 +1,10 @@
-import type { ReadStream } from "node:fs";
+import type { Readable } from "node:stream";
 import type { CreatePaymentInput, Payment, Receipt, ReceiptMimeType } from "@emdia/shared";
-import { formatCents, RECEIPT_MAX_BYTES, RECEIPT_MIME_TYPES } from "@emdia/shared";
+import { formatCents, RECEIPT_MIME_TYPES } from "@emdia/shared";
 import { fileTypeFromBuffer } from "file-type";
-import { AppError, fieldError, notFound } from "../lib/errors.ts";
+import { AppError, fieldError, notFound, receiptTooLarge } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
-import { toPayment, type PaymentRecord } from "../repos/index.ts";
+import { toPayment, type PaymentRecord, type TxRepos } from "../repos/index.ts";
 import { loadContract, loadWritableContract } from "./access.ts";
 import { audit, nowIso, requirePermission, type Actor, type ServiceDeps } from "./context.ts";
 
@@ -14,7 +14,7 @@ export interface UploadedFile {
 }
 
 export interface ReceiptDownload {
-  stream: ReadStream;
+  stream: Readable;
   mimeType: ReceiptMimeType;
   sizeBytes: number;
   filename: string;
@@ -46,8 +46,8 @@ export function paymentsService(deps: ServiceDeps) {
   const { repos, files } = deps;
 
   async function storeReceipt(file: UploadedFile): Promise<{ name: string; receipt: Receipt }> {
-    if (file.buffer.length > RECEIPT_MAX_BYTES) {
-      throw new AppError("PAYLOAD_TOO_LARGE", "O comprovante deve ter no máximo 5 MB");
+    if (file.buffer.length > deps.config.receiptMaxBytes) {
+      throw receiptTooLarge(deps.config.receiptMaxBytes);
     }
     const detected = await fileTypeFromBuffer(file.buffer);
     if (!detected || !isReceiptMime(detected.mime)) {
@@ -56,7 +56,7 @@ export function paymentsService(deps: ServiceDeps) {
         "Envie o comprovante como imagem (JPG, PNG, WEBP) ou PDF",
       );
     }
-    const name = await files.save(file.buffer, EXTENSION[detected.mime]);
+    const name = await files.save(file.buffer, EXTENSION[detected.mime], detected.mime);
     return {
       name,
       receipt: {
@@ -69,8 +69,13 @@ export function paymentsService(deps: ServiceDeps) {
   }
 
   /** Runs before the file is stored and again inside the insert transaction, so concurrent installments can't overpay. */
-  function assertAgreementRoom(contractId: string, agreementId: string, amountCents: number): void {
-    const agreement = repos.agreements.find(contractId, agreementId);
+  async function assertAgreementRoom(
+    r: TxRepos,
+    contractId: string,
+    agreementId: string,
+    amountCents: number,
+  ): Promise<void> {
+    const agreement = await r.agreements.find(contractId, agreementId);
     if (!agreement) throw fieldError("agreementId", "Acordo não encontrado");
     if (agreement.cancelledAt) throw fieldError("agreementId", "Este acordo foi cancelado");
     if (amountCents > agreement.remainingCents) {
@@ -81,8 +86,8 @@ export function paymentsService(deps: ServiceDeps) {
     }
   }
 
-  function findPayment(contractId: string, paymentId: string): PaymentRecord {
-    const payment = repos.payments.find(contractId, paymentId);
+  async function findPayment(contractId: string, paymentId: string): Promise<PaymentRecord> {
+    const payment = await repos.payments.find(contractId, paymentId);
     if (!payment) throw notFound("Pagamento não encontrado");
     return payment;
   }
@@ -97,9 +102,9 @@ export function paymentsService(deps: ServiceDeps) {
   }
 
   return {
-    list(actor: Actor, contractId: string, year: number | undefined): Payment[] {
-      loadContract(deps, actor, contractId);
-      return repos.payments.list(contractId, year).map(toPayment);
+    async list(actor: Actor, contractId: string, year: number | undefined): Promise<Payment[]> {
+      await loadContract(deps, actor, contractId);
+      return (await repos.payments.list(contractId, year)).map(toPayment);
     },
 
     async create(
@@ -108,10 +113,10 @@ export function paymentsService(deps: ServiceDeps) {
       input: CreatePaymentInput,
       file?: UploadedFile,
     ): Promise<Payment> {
-      loadWritableContract(deps, actor, contractId);
+      await loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "payment:write");
       const agreementId = input.agreementId ?? null;
-      if (agreementId) assertAgreementRoom(contractId, agreementId, input.amountCents);
+      if (agreementId) await assertAgreementRoom(repos, contractId, agreementId, input.amountCents);
       const stored = file ? await storeReceipt(file) : undefined;
       const payment: PaymentRecord = {
         id: newId(),
@@ -129,22 +134,28 @@ export function paymentsService(deps: ServiceDeps) {
         createdAt: nowIso(deps),
       };
       try {
-        repos.tx(() => {
-          if (agreementId) assertAgreementRoom(contractId, agreementId, payment.amountCents);
-          repos.payments.insert(payment);
-          audit(deps, {
-            actorId: actor.id,
-            contractId,
-            action: "payment.create",
-            entity: "payment",
-            entityId: payment.id,
-            meta: {
-              referenceMonth: payment.referenceMonth,
-              amountCents: payment.amountCents,
-              receipt: !!stored,
-              method: payment.method,
+        await repos.tx(async (r) => {
+          if (agreementId) {
+            await assertAgreementRoom(r, contractId, agreementId, payment.amountCents);
+          }
+          await r.payments.insert(payment);
+          await audit(
+            deps,
+            {
+              actorId: actor.id,
+              contractId,
+              action: "payment.create",
+              entity: "payment",
+              entityId: payment.id,
+              meta: {
+                referenceMonth: payment.referenceMonth,
+                amountCents: payment.amountCents,
+                receipt: !!stored,
+                method: payment.method,
+              },
             },
-          });
+            r,
+          );
         });
       } catch (err) {
         if (stored) await discardFile(stored.name);
@@ -159,32 +170,42 @@ export function paymentsService(deps: ServiceDeps) {
       paymentId: string,
       file: UploadedFile,
     ): Promise<Payment> {
-      loadWritableContract(deps, actor, contractId);
+      await loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "payment:write");
-      const previous = findPayment(contractId, paymentId);
+      const previous = await findPayment(contractId, paymentId);
       const stored = await storeReceipt(file);
-      repos.tx(() => {
-        repos.payments.setReceipt(paymentId, stored.name, stored.receipt);
-        audit(deps, {
-          actorId: actor.id,
-          contractId,
-          action: "payment.receipt",
-          entity: "payment",
-          entityId: paymentId,
-        });
+      await repos.tx(async (r) => {
+        await r.payments.setReceipt(paymentId, stored.name, stored.receipt);
+        await audit(
+          deps,
+          {
+            actorId: actor.id,
+            contractId,
+            action: "payment.receipt",
+            entity: "payment",
+            entityId: paymentId,
+          },
+          r,
+        );
       });
       if (previous.receiptFile) await discardFile(previous.receiptFile);
       return toPayment({ ...previous, receipt: stored.receipt, receiptFile: stored.name });
     },
 
-    openReceipt(actor: Actor, contractId: string, paymentId: string): ReceiptDownload {
-      loadContract(deps, actor, contractId);
+    async openReceipt(
+      actor: Actor,
+      contractId: string,
+      paymentId: string,
+    ): Promise<ReceiptDownload> {
+      await loadContract(deps, actor, contractId);
       requirePermission(actor, "receipt:read");
-      const payment = findPayment(contractId, paymentId);
+      const payment = await findPayment(contractId, paymentId);
       if (!payment.receipt || !payment.receiptFile)
         throw notFound("Este pagamento não tem comprovante");
+      const stream = await files.open(payment.receiptFile);
+      if (!stream) throw notFound("Comprovante indisponível");
       return {
-        stream: files.open(payment.receiptFile),
+        stream,
         mimeType: payment.receipt.mimeType,
         sizeBytes: payment.receipt.sizeBytes,
         filename: `comprovante-${payment.referenceMonth}.${EXTENSION[payment.receipt.mimeType]}`,
@@ -192,38 +213,46 @@ export function paymentsService(deps: ServiceDeps) {
     },
 
     async remove(actor: Actor, contractId: string, paymentId: string): Promise<void> {
-      loadWritableContract(deps, actor, contractId);
+      await loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "payment:write");
-      const payment = findPayment(contractId, paymentId);
-      repos.tx(() => {
-        repos.payments.delete(paymentId);
-        audit(deps, {
-          actorId: actor.id,
-          contractId,
-          action: "payment.delete",
-          entity: "payment",
-          entityId: paymentId,
-          meta: { referenceMonth: payment.referenceMonth, amountCents: payment.amountCents },
-        });
+      const payment = await findPayment(contractId, paymentId);
+      await repos.tx(async (r) => {
+        await r.payments.delete(paymentId);
+        await audit(
+          deps,
+          {
+            actorId: actor.id,
+            contractId,
+            action: "payment.delete",
+            entity: "payment",
+            entityId: paymentId,
+            meta: { referenceMonth: payment.referenceMonth, amountCents: payment.amountCents },
+          },
+          r,
+        );
       });
       if (payment.receiptFile) await discardFile(payment.receiptFile);
     },
 
-    acknowledge(actor: Actor, contractId: string, paymentId: string): Payment {
-      loadWritableContract(deps, actor, contractId);
+    async acknowledge(actor: Actor, contractId: string, paymentId: string): Promise<Payment> {
+      await loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "payment:acknowledge");
-      const payment = findPayment(contractId, paymentId);
+      const payment = await findPayment(contractId, paymentId);
       if (payment.acknowledgedAt) return toPayment(payment);
       const acknowledgedAt = nowIso(deps);
-      repos.tx(() => {
-        repos.payments.acknowledge(paymentId, acknowledgedAt);
-        audit(deps, {
-          actorId: actor.id,
-          contractId,
-          action: "payment.acknowledge",
-          entity: "payment",
-          entityId: paymentId,
-        });
+      await repos.tx(async (r) => {
+        await r.payments.acknowledge(paymentId, acknowledgedAt);
+        await audit(
+          deps,
+          {
+            actorId: actor.id,
+            contractId,
+            action: "payment.acknowledge",
+            entity: "payment",
+            entityId: paymentId,
+          },
+          r,
+        );
       });
       return toPayment({ ...payment, acknowledgedAt });
     },

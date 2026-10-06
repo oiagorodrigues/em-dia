@@ -7,14 +7,14 @@ import { parse } from "../validate.ts";
 export function entryRoutes({ entries }: Services): Router {
   const router = Router();
 
-  router.get("/contracts/:id/entries", (req, res) => {
+  router.get("/contracts/:id/entries", async (req, res) => {
     const { month } = parse(monthQuerySchema, req.query);
-    res.json({ entries: entries.list(actorOf(res), req.params.id, month) });
+    res.json({ entries: await entries.list(actorOf(res), req.params.id, month) });
   });
 
-  router.put("/contracts/:id/entries/:date", (req, res) => {
+  router.put("/contracts/:id/entries/:date", async (req, res) => {
     const date = parse(isoDate, req.params.date);
-    const { entry, created } = entries.upsert(
+    const { entry, created } = await entries.upsert(
       actorOf(res),
       req.params.id,
       date,
@@ -23,20 +23,20 @@ export function entryRoutes({ entries }: Services): Router {
     res.status(created ? 201 : 200).json({ entry });
   });
 
-  router.delete("/contracts/:id/entries/:date", (req, res) => {
-    entries.remove(actorOf(res), req.params.id, parse(isoDate, req.params.date));
+  router.delete("/contracts/:id/entries/:date", async (req, res) => {
+    await entries.remove(actorOf(res), req.params.id, parse(isoDate, req.params.date));
     res.status(204).end();
   });
 
-  router.post("/contracts/:id/entries/:date/confirm", (req, res) => {
+  router.post("/contracts/:id/entries/:date/confirm", async (req, res) => {
     res.json({
-      entry: entries.confirm(actorOf(res), req.params.id, parse(isoDate, req.params.date)),
+      entry: await entries.confirm(actorOf(res), req.params.id, parse(isoDate, req.params.date)),
     });
   });
 
-  router.post("/contracts/:id/clock", (req, res) => {
+  router.post("/contracts/:id/clock", async (req, res) => {
     const { action } = parse(clockSchema, req.body);
-    res.json({ entry: entries.clock(actorOf(res), req.params.id, action) });
+    res.json({ entry: await entries.clock(actorOf(res), req.params.id, action) });
   });
 
   return router;
