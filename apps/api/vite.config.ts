@@ -7,7 +7,7 @@ export default defineConfig({
     platform: "node",
     target: "node24",
     sourcemap: true,
-    deps: { alwaysBundle: ["@ponto/shared"] },
+    deps: { alwaysBundle: ["@emdia/shared"] },
   },
   test: {
     include: ["tests/**/*.test.ts"],

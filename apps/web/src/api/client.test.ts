@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import {
+  announceLogout,
   ApiError,
   configureAuthHooks,
   filenameFromDisposition,
@@ -48,6 +49,7 @@ describe("api client", () => {
     onSessionLost.mockReset();
     vi.stubGlobal("fetch", fetchMock);
     configureAuthHooks({ onSession, onSessionLost });
+    announceLogout();
     setAccessToken("old");
   });
 
@@ -74,7 +76,7 @@ describe("api client", () => {
 
     const refreshCall = fetchMock.mock.calls[1];
     expect(refreshCall?.[0]).toBe("/api/v1/auth/refresh");
-    expect(headersOf(refreshCall)["X-Requested-With"]).toBe("ponto");
+    expect(headersOf(refreshCall)["X-Requested-With"]).toBe("emdia");
     expect(headersOf(fetchMock.mock.calls[2]).Authorization).toBe("Bearer new");
     expect(getAccessToken()).toBe("new");
     expect(onSession).toHaveBeenCalledOnce();
@@ -138,7 +140,7 @@ describe("api client", () => {
       .mockResolvedValueOnce(json(200, { accessToken: "new", user }))
       .mockResolvedValueOnce(json(200, {}));
     await request("/me");
-    expect(lockRequest).toHaveBeenCalledWith("ponto-refresh", expect.any(Function));
+    expect(lockRequest).toHaveBeenCalledWith("emdia-refresh", expect.any(Function));
   });
 
   it("does not try to refresh on other errors", async () => {

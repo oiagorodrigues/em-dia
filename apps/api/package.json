@@ -1,5 +1,5 @@
 {
-  "name": "@ponto/api",
+  "name": "@emdia/api",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "seed": "tsx --env-file-if-exists=.env src/scripts/seed.ts"
   },
   "dependencies": {
-    "@ponto/shared": "workspace:*",
+    "@emdia/shared": "workspace:*",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
     "express-rate-limit": "^8.7.1",

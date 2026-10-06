@@ -1,4 +1,4 @@
-import { clockSchema, isoDate, monthQuerySchema, upsertEntrySchema } from "@ponto/shared";
+import { clockSchema, isoDate, monthQuerySchema, upsertEntrySchema } from "@emdia/shared";
 import { Router } from "express";
 import type { Services } from "../../services/index.ts";
 import { actorOf } from "../context.ts";

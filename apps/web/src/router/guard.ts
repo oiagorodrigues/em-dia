@@ -1,4 +1,4 @@
-import type { PublicUser } from "@ponto/shared";
+import type { PublicUser } from "@emdia/shared";
 import type { RouteLocationNormalized, RouteLocationRaw } from "vue-router";
 
 export interface GuardAuth {

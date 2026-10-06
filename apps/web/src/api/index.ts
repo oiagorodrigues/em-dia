@@ -17,12 +17,12 @@ import type {
   UpsertEntryInput,
   WorkEntry,
   YearMonth,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { request, requestBlob, type Session } from "./client.ts";
 
 export { ApiError, errorMessage, type Session } from "./client.ts";
 
-const csrf = { "X-Requested-With": "ponto" };
+const csrf = { "X-Requested-With": "emdia" };
 
 export const authApi = {
   login: (body: LoginInput) =>

@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { formatCents, formatDuration, OCCUPATION_LABEL, type DashboardItem } from "@ponto/shared";
+import {
+  describeSchedule,
+  formatCents,
+  formatDuration,
+  OCCUPATION_LABEL,
+  type DashboardItem,
+} from "@emdia/shared";
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import Icon from "@/components/ui/Icon.vue";
@@ -12,6 +18,9 @@ const working = computed(
   () => item.today?.status === "worked" && !!item.today.checkIn && !item.today.checkOut,
 );
 const balance = computed(() => item.summary.balanceCents);
+const showExpected = computed(
+  () => item.contract.schedule.kind !== "on_demand" && item.summary.expectedDays > 0,
+);
 </script>
 
 <template>
@@ -23,6 +32,7 @@ const balance = computed(() => item.summary.balanceCents);
           {{ OCCUPATION_LABEL[item.contract.occupation] }}
           <span v-if="!item.contract.workerId" class="cs__pending">· convite pendente</span>
         </p>
+        <p class="cs__sched">{{ describeSchedule(item.contract.schedule) }}</p>
       </div>
       <p class="cs__today" :class="{ 'is-live': working }">
         <span class="cs__live" aria-hidden="true" />
@@ -35,9 +45,12 @@ const balance = computed(() => item.summary.balanceCents);
         <dd class="mono">{{ formatDuration(item.summary.totalMinutes) }}</dd>
       </div>
       <div>
-        <dt class="label">dias</dt>
+        <dt class="label">
+          {{ item.contract.schedule.kind === "per_month" ? "visitas" : "dias" }}
+        </dt>
         <dd class="mono">
-          {{ item.summary.daysWorked }}<span class="cs__of">/{{ item.summary.expectedDays }}</span>
+          {{ item.summary.daysWorked
+          }}<span v-if="showExpected" class="cs__of">/{{ item.summary.expectedDays }}</span>
         </dd>
       </div>
       <div class="cs__bal">
@@ -101,6 +114,13 @@ const balance = computed(() => item.summary.balanceCents);
 
 .cs__occ {
   font-size: var(--t-14);
+  color: var(--ink-2);
+}
+
+.cs__sched {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--t-12);
   color: var(--ink-2);
 }
 

@@ -14,7 +14,7 @@ const SAMPLE = [
     <aside class="auth__panel" aria-hidden="true">
       <Wordmark :size="36" />
       <p class="auth__pitch display">
-        bata o ponto de quem cuida da sua casa<span class="auth__dot">.</span>
+        a casa em dia com quem cuida dela<span class="auth__dot">.</span>
       </p>
       <div class="auth__sample">
         <div class="auth__perf" />

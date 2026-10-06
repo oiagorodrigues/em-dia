@@ -5,7 +5,7 @@ import {
   PAYMENT_METHOD_LABEL,
   RECEIPT_MIME_TYPES,
   type Payment,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { computed } from "vue";
 import { sanitizeFilename } from "@/api/client.ts";
 import Button from "@/components/ui/Button.vue";

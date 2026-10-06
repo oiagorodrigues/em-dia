@@ -5,8 +5,10 @@ import type {
   IsoDate,
   Occupation,
   PayType,
-} from "@ponto/shared";
-import { execute, queryAll, queryOne, type Db } from "../db/index.ts";
+  Schedule,
+  ScheduleKind,
+} from "@emdia/shared";
+import { execute, queryAll, queryOne, type Db, type Param } from "../db/index.ts";
 
 /** A contract plus the timezone of its household, which every "today" computation needs. */
 export interface LocatedContract {
@@ -19,7 +21,8 @@ export interface ContractFields {
   occupation: Occupation;
   payType: PayType;
   rateCents: number;
-  scheduleDays: number[];
+  schedule: Schedule;
+  deductAbsences: boolean;
   expectedStart: ClockTime | null;
   expectedEnd: ClockTime | null;
   startedOn: IsoDate;
@@ -39,7 +42,12 @@ interface Row {
   occupation: Occupation;
   pay_type: PayType;
   rate_cents: number;
-  schedule_days: string;
+  schedule_kind: ScheduleKind;
+  schedule_weekdays: string;
+  every_weeks: number;
+  month_days: string;
+  visits_per_month: number | null;
+  deduct_absences: number;
   expected_start: string | null;
   expected_end: string | null;
   started_on: string;
@@ -58,6 +66,17 @@ const SELECT = `
 
 const ORDER = "ORDER BY c.status = 'ended', c.created_at, c.id";
 
+function scheduleParams({ schedule, deductAbsences }: ContractFields): Param[] {
+  return [
+    schedule.kind,
+    JSON.stringify(schedule.weekdays),
+    schedule.everyWeeks,
+    JSON.stringify(schedule.monthDays),
+    schedule.visitsPerMonth,
+    deductAbsences ? 1 : 0,
+  ];
+}
+
 function toLocated(r: Row): LocatedContract {
   return {
     timezone: r.timezone,
@@ -74,7 +93,14 @@ function toLocated(r: Row): LocatedContract {
       occupation: r.occupation,
       payType: r.pay_type,
       rateCents: r.rate_cents,
-      scheduleDays: JSON.parse(r.schedule_days) as number[],
+      schedule: {
+        kind: r.schedule_kind,
+        weekdays: JSON.parse(r.schedule_weekdays) as number[],
+        everyWeeks: r.every_weeks,
+        monthDays: JSON.parse(r.month_days) as number[],
+        visitsPerMonth: r.visits_per_month,
+      },
+      deductAbsences: r.deduct_absences === 1,
       expectedStart: r.expected_start,
       expectedEnd: r.expected_end,
       startedOn: r.started_on,
@@ -103,16 +129,17 @@ export function contractsRepo(db: Db) {
     insert(c: { id: string; householdId: string; createdAt: string } & ContractFields): void {
       execute(
         db,
-        `INSERT INTO contracts (id, household_id, worker_name, occupation, pay_type, rate_cents, schedule_days,
-           expected_start, expected_end, started_on, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+        `INSERT INTO contracts (id, household_id, worker_name, occupation, pay_type, rate_cents, schedule_kind,
+           schedule_weekdays, every_weeks, month_days, visits_per_month, deduct_absences, expected_start,
+           expected_end, started_on, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
         c.id,
         c.householdId,
         c.workerName,
         c.occupation,
         c.payType,
         c.rateCents,
-        JSON.stringify(c.scheduleDays),
+        ...scheduleParams(c),
         c.expectedStart,
         c.expectedEnd,
         c.startedOn,
@@ -123,14 +150,15 @@ export function contractsRepo(db: Db) {
     update(id: string, f: ContractFields): void {
       execute(
         db,
-        `UPDATE contracts SET worker_name = ?, occupation = ?, pay_type = ?, rate_cents = ?, schedule_days = ?,
+        `UPDATE contracts SET worker_name = ?, occupation = ?, pay_type = ?, rate_cents = ?, schedule_kind = ?,
+           schedule_weekdays = ?, every_weeks = ?, month_days = ?, visits_per_month = ?, deduct_absences = ?,
            expected_start = ?, expected_end = ?, started_on = ?
          WHERE id = ?`,
         f.workerName,
         f.occupation,
         f.payType,
         f.rateCents,
-        JSON.stringify(f.scheduleDays),
+        ...scheduleParams(f),
         f.expectedStart,
         f.expectedEnd,
         f.startedOn,

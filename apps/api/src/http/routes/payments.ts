@@ -1,4 +1,4 @@
-import { createPaymentSchema, yearQuerySchema } from "@ponto/shared";
+import { createPaymentSchema, yearQuerySchema } from "@emdia/shared";
 import { Router } from "express";
 import { AppError } from "../../lib/errors.ts";
 import type { Services } from "../../services/index.ts";

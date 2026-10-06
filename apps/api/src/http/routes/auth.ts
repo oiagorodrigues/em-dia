@@ -4,7 +4,7 @@ import {
   loginSchema,
   registerSchema,
   resetPasswordSchema,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { Router, type RequestHandler, type Response } from "express";
 import type { Config } from "../../config/index.ts";
 import type { Services, Session } from "../../services/index.ts";

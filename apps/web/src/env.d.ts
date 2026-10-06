@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pwa/vue" />
 
-import type { Role } from "@ponto/shared";
+import type { Role } from "@emdia/shared";
 
 declare module "vue-router" {
   interface RouteMeta {

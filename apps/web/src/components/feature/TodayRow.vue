@@ -6,7 +6,7 @@ import {
   weekdayOf,
   type IsoDate,
   type WorkEntry,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { computed } from "vue";
 import Stamp from "@/components/ui/Stamp.vue";
 import { useNow } from "@/composables/now.ts";

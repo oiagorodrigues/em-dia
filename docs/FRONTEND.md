@@ -5,7 +5,7 @@ Visual rules are in [DESIGN](DESIGN.md). This file covers conventions and behavi
 ## Conventions
 
 - Vue 3.6 single-file components with `<script setup lang="ts">`.
-- Types and schemas come from `@ponto/shared`. Reuse the zod schemas for client-side form validation.
+- Types and schemas come from `@emdia/shared`. Reuse the zod schemas for client-side form validation.
 - Server state lives in Pinia stores; components hold only view state. Do not call `fetch` outside `src/api`.
 - Styling: scoped CSS using tokens from `src/styles/tokens.css`. No raw hex values, no CSS frameworks.
 - Copy is pt-BR, informal, "você". Lowercase headings in the app chrome. All user-visible strings in components or a single `copy` module, never built from API error codes alone; show the API's pt-BR `message`.
@@ -15,7 +15,7 @@ Visual rules are in [DESIGN](DESIGN.md). This file covers conventions and behavi
 ## State
 
 - The access token lives in the auth store (memory). On load, call `/auth/refresh` to restore the session.
-- The api client attaches `Authorization`, retries once after a refresh on `TOKEN_EXPIRED`, and sends `X-Requested-With: ponto` on `/auth/*` cookie endpoints.
+- The api client attaches `Authorization`, retries once after a refresh on `TOKEN_EXPIRED`, and sends `X-Requested-With: emdia` on `/auth/*` cookie endpoints.
 - Route guards read the auth store and the user role; role-specific routes redirect rather than render an error.
 
 ## PWA behavior

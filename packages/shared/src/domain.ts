@@ -1,3 +1,5 @@
+import type { Schedule } from "./schedule.ts";
+
 export const ROLES = ["employer", "worker"] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -133,8 +135,10 @@ export interface Contract {
   occupation: Occupation;
   payType: PayType;
   rateCents: number;
-  /** Weekdays the worker is expected to come. 0 = Sunday … 6 = Saturday. */
-  scheduleDays: number[];
+  /** When the worker is expected to come (see schedule.ts). */
+  schedule: Schedule;
+  /** monthly pay only: unjustified absences are deducted at rate / 30 each. */
+  deductAbsences: boolean;
   expectedStart: ClockTime | null;
   expectedEnd: ClockTime | null;
   startedOn: IsoDate;
@@ -214,21 +218,25 @@ export interface MonthSummary {
   excused: number;
   daysOff: number;
   holidays: number;
-  /** Scheduled weekdays in the month (within contract dates). */
+  /** Days the worker is expected this month (dates, or the visit count for per_month). */
   expectedDays: number;
-  /** Scheduled days up to `today` with no entry at all. */
+  /** Expected dates this month; empty for per_month and on_demand schedules. */
+  expectedDates: IsoDate[];
+  /** Expected dates up to `today` with no entry at all. */
   unrecordedDates: IsoDate[];
   /** Entries awaiting the other party's confirmation. */
   pendingConfirmation: number;
   grossCents: number;
+  /** Subtracted from monthly pay for unjustified absences when deductAbsences is on. */
+  absenceDeductionCents: number;
   adjustmentsCents: number;
   dueCents: number;
   paidCents: number;
   /** dueCents - paidCents. Positive = still owed to the worker. */
   balanceCents: number;
-  /** grossCents / daysWorked, 0 when no days. */
+  /** (grossCents - absenceDeductionCents) / daysWorked, 0 when no days. */
   avgPerDayCents: number;
-  /** grossCents per hour actually worked, 0 when no minutes. */
+  /** (grossCents - absenceDeductionCents) per hour actually worked, 0 when no minutes. */
   effectiveHourlyCents: number;
 }
 

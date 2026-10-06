@@ -1,5 +1,5 @@
 import { rateLimit } from "express-rate-limit";
-import type { ApiErrorBody } from "@ponto/shared";
+import type { ApiErrorBody } from "@emdia/shared";
 
 const WINDOW_MS = 15 * 60 * 1000;
 

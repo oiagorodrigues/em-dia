@@ -1,5 +1,5 @@
 {
-  "name": "ponto",
+  "name": "emdia",
   "version": "0.0.0",
   "private": true,
   "workspaces": [
@@ -10,14 +10,14 @@
   "type": "module",
   "scripts": {
     "ready": "vp check && vp run -r test && vp run -r build",
-    "dev": "vp run --parallel --filter @ponto/api --filter @ponto/web dev",
+    "dev": "vp run --parallel --filter @emdia/api --filter @emdia/web dev",
     "build": "vp run -r build",
     "start": "WEB_DIST_DIR=../web/dist bun run --cwd apps/api start",
     "prepare": "vp config",
-    "seed": "vp run --filter @ponto/api seed",
+    "seed": "vp run --filter @emdia/api seed",
     "test": "vp run -r test",
     "check": "vp check",
-    "docs:schema": "vp run --filter @ponto/harness docs:schema"
+    "docs:schema": "vp run --filter @emdia/harness docs:schema"
   },
   "devDependencies": {
     "vite": "catalog:",

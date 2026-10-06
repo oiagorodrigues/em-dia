@@ -1,4 +1,4 @@
-import { updateMeSchema } from "@ponto/shared";
+import { updateMeSchema } from "@emdia/shared";
 import { Router } from "express";
 import type { Services } from "../../services/index.ts";
 import { actorOf } from "../context.ts";

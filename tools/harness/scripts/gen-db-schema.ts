@@ -40,6 +40,17 @@ for (const file of sources) {
   for (const m of sql.matchAll(/alter\s+table\s+["`]?(\w+)["`]?\s+add\s+column\s+([^;]+);/gi)) {
     tables.get(m[1]!)?.push(m[2]!.trim().replace(/\s+/g, " "));
   }
+  for (const m of sql.matchAll(
+    /alter\s+table\s+["`]?(\w+)["`]?\s+drop\s+column\s+["`]?(\w+)["`]?\s*;/gi,
+  )) {
+    const cols = tables.get(m[1]!);
+    if (cols) {
+      tables.set(
+        m[1]!,
+        cols.filter((c) => c.split(" ")[0] !== m[2]),
+      );
+    }
+  }
   for (const m of sql.matchAll(/create\s+(?:unique\s+)?index\s+[^;]+;/gi)) {
     indexes.push(m[0].trim().replace(/\s+/g, " "));
   }

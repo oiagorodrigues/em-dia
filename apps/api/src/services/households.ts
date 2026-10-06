@@ -1,5 +1,5 @@
-import type { Household } from "@ponto/shared";
-import { DEFAULT_TIMEZONE } from "@ponto/shared";
+import type { Household } from "@emdia/shared";
+import { DEFAULT_TIMEZONE } from "@emdia/shared";
 import { fieldError, notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
 import { nowIso, requirePermission, type Actor, type ServiceDeps } from "./context.ts";

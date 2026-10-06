@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import Button from "@/components/ui/Button.vue";
+import { firstName } from "@/lib/format.ts";
 import { inviteLink } from "@/lib/invite.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
@@ -33,8 +34,8 @@ async function copy(text: string, what: string): Promise<void> {
 async function share(): Promise<void> {
   try {
     await navigator.share({
-      title: "ponto.",
-      text: `Oi, ${workerName.split(" ")[0]}! Crie sua conta no ponto. para bater o ponto pelo celular. Código: ${code}`,
+      title: "em dia",
+      text: `Oi, ${firstName(workerName)}! Crie sua conta no em dia para marcar seus dias pelo celular. Código: ${code}`,
       url: link.value,
     });
   } catch {

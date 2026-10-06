@@ -14,13 +14,13 @@
  +-------------------------+                            |
             ^                                 SQLite file + uploads dir
             |  both import types, schemas, RBAC, pay math
-            +------------------ @ponto/shared ------------------+
+            +------------------ @emdia/shared ------------------+
 ```
 
 ## Packages and dependency direction
 
-- `packages/shared` (`@ponto/shared`): domain types, zod schemas, RBAC, pay math, time helpers. Depends only on `zod`.
-- `apps/api` and `apps/web` depend on `@ponto/shared`. They never import each other.
+- `packages/shared` (`@emdia/shared`): domain types, zod schemas, RBAC, pay math, time helpers. Depends only on `zod`.
+- `apps/api` and `apps/web` depend on `@emdia/shared`. They never import each other.
 - `tools/harness` reads source files as text; it imports nothing from the apps.
 
 ```
@@ -49,7 +49,7 @@ Rules:
 - `config` and `lib` may be imported by any layer.
 - Nothing imports `http` except `server.ts`.
 - `repos`, `services`, `db` and `config` never import `express` or other HTTP libraries. Services take plain values and throw `AppError`; `http` maps errors to the `ApiErrorBody` shape.
-- Every route parses params, query and body with a schema from `@ponto/shared` before calling a service.
+- Every route parses params, query and body with a schema from `@emdia/shared` before calling a service.
 
 ## Web layering
 
@@ -69,8 +69,8 @@ A layer imports only from layers to its left.
 ## Auth design
 
 - Access token: JWT HS256 (`jose`), 15 minutes, claims `sub`, `role`, `tv`. Kept in memory only (Pinia). `tv` is the user's token version; bumping it invalidates all outstanding access tokens.
-- Refresh token: opaque 256-bit random, stored as SHA-256 hash, 30 days, in the `ponto_rt` cookie (`HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, `Secure` in production). Rotated on every use. Reusing a rotated token revokes its whole family.
-- CSRF: `/auth/refresh` and `/auth/logout` require `X-Requested-With: ponto` on top of `SameSite=Strict`.
+- Refresh token: opaque 256-bit random, stored as SHA-256 hash, 30 days, in the `emdia_rt` cookie (`HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, `Secure` in production). Rotated on every use. Reusing a rotated token revokes its whole family.
+- CSRF: `/auth/refresh` and `/auth/logout` require `X-Requested-With: emdia` on top of `SameSite=Strict`.
 - On page load the web app calls `/auth/refresh` to get an access token. On a 401 `TOKEN_EXPIRED` it refreshes once and retries.
 - Full endpoint behavior: [api-contract](product-specs/api-contract.md#auth). Controls checklist: [SECURITY](SECURITY.md).
 
@@ -80,7 +80,7 @@ Generated column detail: [generated/db-schema.md](generated/README.md).
 
 - `users`: email, password hash (scrypt), role, name, phone, Pix key, token version, lockout counters.
 - `households`: owned by an employer user; has a timezone.
-- `contracts`: household + worker (nullable until the invite is used), occupation, pay type, rate in cents, scheduled weekdays, expected times, start and end dates, status.
+- `contracts`: household + worker (nullable until the invite is used), occupation, pay type, rate in cents, expected times, start and end dates, status, and the agreed schedule: `schedule_kind` (`weekly`, `month_days`, `per_month`, `on_demand`), `schedule_weekdays` (JSON), `every_weeks` (1 to 4), `month_days` (JSON), `visits_per_month`, plus `deduct_absences` (monthly pay only). Schedule logic lives in `packages/shared/src/schedule.ts`; migration 003 converted the old weekday list.
 - `work_entries`: one per contract per date. Status, check-in/out, break, derived minutes, creator, confirmer.
 - `adjustments`: bonus, transport, advance, deduction per contract and month, in cents.
 - `payments`: contract, reference month, paid date, amount in cents, method, receipt metadata (stored filename, mime, size, display name), acknowledged-at.

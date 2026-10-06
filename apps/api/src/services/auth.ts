@@ -1,5 +1,5 @@
-import type { PublicUser } from "@ponto/shared";
-import { DEFAULT_TIMEZONE, type RegisterInput } from "@ponto/shared";
+import type { PublicUser } from "@emdia/shared";
+import { DEFAULT_TIMEZONE, type RegisterInput } from "@emdia/shared";
 import { hashPassword, randomToken, sha256, verifyPassword } from "../lib/crypto.ts";
 import { AppError, fieldError, formError } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
@@ -222,7 +222,7 @@ export function authService(deps: ServiceDeps) {
       try {
         await deps.mailer.send({
           to: user.email,
-          subject: "ponto. · redefinir senha",
+          subject: "em dia · redefinir senha",
           text: `Olá, ${user.name}.\n\nPara criar uma nova senha, abra o link abaixo (vale por 30 minutos):\n${link}\n\nSe não foi você, ignore este e-mail.`,
         });
       } catch (err) {

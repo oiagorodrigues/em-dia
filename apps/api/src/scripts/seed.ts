@@ -1,20 +1,22 @@
 import type {
+  AdjustmentKind,
   EntryStatus,
   IsoDate,
   PaymentMethod,
   Role,
+  Schedule,
   WorkEntry,
   YearMonth,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import {
   computeMonthSummary,
-  datesOfMonth,
   DEFAULT_TIMEZONE,
+  EMPTY_SCHEDULE,
+  expectedDatesInMonth,
   minutesToClock,
   nowInZone,
   shiftMinutes,
-  weekdayOf,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { loadConfig } from "../config/index.ts";
 import { openDatabase } from "../db/index.ts";
 import { hashPassword } from "../lib/crypto.ts";
@@ -24,9 +26,9 @@ import { solidPng } from "../lib/png.ts";
 import { createFileStore } from "../lib/storage.ts";
 import { createRepos, type ContractFields, type LocatedContract } from "../repos/index.ts";
 
-const PASSWORD = "ponto12345";
-const ANA = { email: "ana@ponto.dev", name: "Ana Souza" };
-const MARIA = { email: "maria@ponto.dev", name: "Maria Aparecida" };
+const PASSWORD = "emdia12345";
+const ANA = { email: "ana@emdia.dev", name: "Ana Souza" };
+const MARIA = { email: "maria@emdia.dev", name: "Maria Aparecida" };
 const MONTHS: YearMonth[] = ["2026-08", "2026-09", "2026-10"];
 
 const config = loadConfig();
@@ -58,38 +60,218 @@ interface DayPlan {
   note?: string;
 }
 
-interface ShiftPlan {
-  start: number;
-  end: number;
-  breakMinutes: number;
-  /** Exceptions to "worked" on a scheduled day. */
-  exceptions: Record<IsoDate, DayPlan>;
+interface SeedContract {
+  fields: ContractFields;
+  createdAt: string;
+  shift: { start: number; end: number; breakMinutes: number };
+  /** per_month and on_demand have no expected dates, so their visits are listed. */
+  visits?: IsoDate[];
+  /** Expected days that were not plain worked days. */
+  exceptions?: Record<IsoDate, DayPlan>;
+  adjustments?: {
+    month: YearMonth;
+    kind: AdjustmentKind;
+    amountCents: number;
+    description: string;
+  }[];
+  payments: {
+    month: YearMonth;
+    paidOn: IsoDate;
+    method: PaymentMethod;
+    receipt?: boolean;
+    acknowledgedAt?: string;
+  }[];
+}
+
+const weekly = (weekdays: number[], everyWeeks = 1): Schedule => ({
+  ...EMPTY_SCHEDULE,
+  kind: "weekly",
+  weekdays,
+  everyWeeks,
+});
+
+const MARIA_CONTRACT: SeedContract = {
+  fields: {
+    workerName: "Maria",
+    occupation: "diarista",
+    payType: "daily",
+    rateCents: 18000,
+    schedule: weekly([2, 5]),
+    deductAbsences: false,
+    expectedStart: "08:00",
+    expectedEnd: "16:00",
+    startedOn: "2026-08-01",
+  },
+  createdAt: "2026-07-28T12:00:00.000Z",
+  shift: { start: 8 * 60, end: 16 * 60, breakMinutes: 60 },
+  exceptions: {
+    "2026-08-18": { status: "absent", note: "Não avisou" },
+    "2026-09-22": { status: "excused", note: "Consulta médica" },
+  },
+  adjustments: [
+    {
+      month: "2026-08",
+      kind: "transport",
+      amountCents: 4000,
+      description: "Vale-transporte de agosto",
+    },
+    {
+      month: "2026-09",
+      kind: "bonus",
+      amountCents: 5000,
+      description: "Faxina pesada depois da festa",
+    },
+    { month: "2026-09", kind: "advance", amountCents: 10000, description: "Vale pedido no dia 15" },
+  ],
+  payments: [
+    {
+      month: "2026-08",
+      paidOn: "2026-09-04",
+      method: "pix",
+      receipt: true,
+      acknowledgedAt: "2026-09-04T19:30:00.000Z",
+    },
+    { month: "2026-09", paidOn: "2026-10-02", method: "pix" },
+  ],
+};
+
+/** Not linked to an account: Ana records these days herself. */
+const OTHER_CONTRACTS: SeedContract[] = [
+  {
+    fields: {
+      workerName: "Joana",
+      occupation: "baba",
+      payType: "monthly",
+      rateCents: 240000,
+      schedule: weekly([1, 2, 3, 4, 5]),
+      deductAbsences: true,
+      expectedStart: "07:30",
+      expectedEnd: "17:30",
+      startedOn: "2026-08-03",
+    },
+    createdAt: "2026-07-30T12:00:00.000Z",
+    shift: { start: 7 * 60 + 30, end: 17 * 60 + 30, breakMinutes: 60 },
+    exceptions: {
+      "2026-09-07": { status: "holiday", note: "Independência" },
+      "2026-09-16": { status: "absent", note: "Não veio e não avisou" },
+      "2026-10-02": { status: "excused", note: "Filho doente" },
+    },
+    adjustments: [
+      {
+        month: "2026-09",
+        kind: "transport",
+        amountCents: 22000,
+        description: "Vale-transporte de setembro",
+      },
+    ],
+    payments: [
+      { month: "2026-08", paidOn: "2026-09-04", method: "transfer" },
+      { month: "2026-09", paidOn: "2026-10-05", method: "transfer" },
+    ],
+  },
+  {
+    fields: {
+      workerName: "Seu Antônio",
+      occupation: "jardineiro",
+      payType: "daily",
+      rateCents: 25000,
+      schedule: { ...EMPTY_SCHEDULE, kind: "per_month", visitsPerMonth: 1 },
+      deductAbsences: false,
+      expectedStart: "07:00",
+      expectedEnd: "12:00",
+      startedOn: "2026-08-01",
+    },
+    createdAt: "2026-07-31T12:00:00.000Z",
+    shift: { start: 7 * 60, end: 12 * 60, breakMinutes: 0 },
+    visits: ["2026-08-15", "2026-09-12"],
+    payments: [
+      { month: "2026-08", paidOn: "2026-08-15", method: "cash" },
+      { month: "2026-09", paidOn: "2026-09-12", method: "cash" },
+    ],
+  },
+  {
+    fields: {
+      workerName: "Rosa",
+      occupation: "passadeira",
+      payType: "daily",
+      rateCents: 15000,
+      schedule: weekly([5], 2),
+      deductAbsences: false,
+      expectedStart: "13:00",
+      expectedEnd: "18:00",
+      startedOn: "2026-08-07",
+    },
+    createdAt: "2026-08-03T12:00:00.000Z",
+    shift: { start: 13 * 60, end: 18 * 60, breakMinutes: 0 },
+    exceptions: { "2026-09-18": { status: "day_off", note: "Trocou para a semana seguinte" } },
+    payments: [
+      { month: "2026-08", paidOn: "2026-09-04", method: "pix" },
+      { month: "2026-09", paidOn: "2026-10-02", method: "pix" },
+    ],
+  },
+  {
+    fields: {
+      workerName: "Dona Cida",
+      occupation: "cuidadora",
+      payType: "monthly",
+      rateCents: 320000,
+      schedule: weekly([0, 1, 2, 3, 4, 5, 6]),
+      deductAbsences: false,
+      expectedStart: "08:00",
+      expectedEnd: "20:00",
+      startedOn: "2026-08-01",
+    },
+    createdAt: "2026-07-25T12:00:00.000Z",
+    shift: { start: 8 * 60, end: 20 * 60, breakMinutes: 120 },
+    exceptions: {
+      "2026-08-16": { status: "day_off", note: "Folga combinada" },
+      "2026-09-07": { status: "holiday", note: "Independência" },
+      "2026-09-13": { status: "day_off", note: "Folga combinada" },
+    },
+    adjustments: [
+      {
+        month: "2026-08",
+        kind: "bonus",
+        amountCents: 15000,
+        description: "Noite extra no hospital",
+      },
+    ],
+    payments: [
+      { month: "2026-08", paidOn: "2026-09-05", method: "pix" },
+      { month: "2026-09", paidOn: "2026-10-05", method: "pix" },
+    ],
+  },
+];
+
+const FUTURE_HOLIDAY: { date: IsoDate; note: string } = {
+  date: "2026-10-12",
+  note: "Nossa Senhora Aparecida",
+};
+
+function scheduledDates(located: LocatedContract): IsoDate[] {
+  const { schedule, startedOn, endedOn } = located.contract;
+  return MONTHS.flatMap((m) => expectedDatesInMonth(schedule, m, { startedOn, endedOn }));
 }
 
 function plannedEntries(
+  seed: SeedContract,
   located: LocatedContract,
-  shift: ShiftPlan,
   until: IsoDate,
   author: { id: string; role: Role },
-  confirm: (date: IsoDate) => { by: string } | null,
+  confirmer: string | null,
 ): WorkEntry[] {
-  const { contract } = located;
-  const out: WorkEntry[] = [];
-  for (const date of MONTHS.flatMap(datesOfMonth)) {
-    if (
-      date < contract.startedOn ||
-      date > until ||
-      !contract.scheduleDays.includes(weekdayOf(date))
-    )
-      continue;
-    const plan = shift.exceptions[date] ?? { status: "worked" };
+  const { shift } = seed;
+  const dates = [...scheduledDates(located), ...(seed.visits ?? [])].filter((d) => d <= until);
+  return dates.map((date) => {
+    const plan = seed.exceptions?.[date] ?? { status: "worked" };
     const worked = plan.status === "worked";
     const checkIn = worked ? minutesToClock(shift.start + wobble(date, 5, 3)) : null;
     const checkOut = worked ? minutesToClock(shift.end + wobble(date, 10, 4)) : null;
-    const confirmation = confirm(date);
-    out.push({
+    // The linked worker's days are confirmed up to last month; this month's still wait for Ana.
+    const confirmed = confirmer !== null && date < "2026-10-01";
+    return {
       id: newId(),
-      contractId: contract.id,
+      contractId: located.contract.id,
       date,
       status: plan.status,
       checkIn,
@@ -99,12 +281,11 @@ function plannedEntries(
       note: plan.note ?? null,
       createdBy: author.id,
       createdByRole: author.role,
-      confirmedBy: confirmation?.by ?? null,
-      confirmedAt: confirmation ? `${date}T21:00:00.000Z` : null,
+      confirmedBy: confirmed ? confirmer : null,
+      confirmedAt: confirmed ? `${date}T21:00:00.000Z` : null,
       updatedAt: `${date}T20:00:00.000Z`,
-    });
-  }
-  return out;
+    };
+  });
 }
 
 function dueFor(located: LocatedContract, month: YearMonth, today: IsoDate): number {
@@ -131,8 +312,114 @@ async function seed(): Promise<void> {
   const anaId = newId();
   const mariaId = newId();
   const householdId = newId();
-  const diaristaId = newId();
-  const babaId = newId();
+
+  const audit = (
+    at: string,
+    actorId: string,
+    contractId: string,
+    action: string,
+    entity: string,
+    entityId: string,
+  ) =>
+    repos.audit.insert({
+      id: newId(),
+      actorId,
+      contractId,
+      action,
+      entity,
+      entityId,
+      meta: null,
+      at,
+    });
+
+  function insertContract(seed: SeedContract, worker: { id: string } | null): LocatedContract {
+    const id = newId();
+    repos.contracts.insert({ id, householdId, createdAt: seed.createdAt, ...seed.fields });
+    audit(seed.createdAt, anaId, id, "contract.create", "contract", id);
+    if (worker) {
+      repos.contracts.linkWorker(id, worker.id);
+      audit(seed.createdAt.replace("T12", "T18"), worker.id, id, "contract.join", "contract", id);
+    }
+    const located = repos.contracts.findById(id);
+    if (!located) throw new Error(`contract ${id} missing`);
+    return located;
+  }
+
+  function fillContract(
+    seed: SeedContract,
+    located: LocatedContract,
+    linkedWorkerId: string | null,
+  ) {
+    const contractId = located.contract.id;
+    const author = linkedWorkerId
+      ? { id: linkedWorkerId, role: "worker" as const }
+      : { id: anaId, role: "employer" as const };
+    for (const entry of plannedEntries(
+      seed,
+      located,
+      yesterday,
+      author,
+      linkedWorkerId ? anaId : null,
+    )) {
+      repos.entries.save(entry);
+    }
+    if (scheduledDates(located).includes(FUTURE_HOLIDAY.date)) {
+      repos.entries.save({
+        id: newId(),
+        contractId,
+        date: FUTURE_HOLIDAY.date,
+        status: "holiday",
+        checkIn: null,
+        checkOut: null,
+        breakMinutes: 0,
+        minutes: 0,
+        note: FUTURE_HOLIDAY.note,
+        createdBy: anaId,
+        createdByRole: "employer",
+        confirmedBy: null,
+        confirmedAt: null,
+        updatedAt: "2026-10-01T12:00:00.000Z",
+      });
+    }
+    for (const a of seed.adjustments ?? []) {
+      repos.adjustments.insert({
+        id: newId(),
+        contractId,
+        ...a,
+        createdBy: anaId,
+        createdAt: `${a.month}-15T12:00:00.000Z`,
+      });
+    }
+    for (const p of seed.payments) {
+      const id = newId();
+      const createdAt = `${p.paidOn}T15:00:00.000Z`;
+      repos.payments.insert({
+        id,
+        contractId,
+        referenceMonth: p.month,
+        paidOn: p.paidOn,
+        amountCents: dueFor(located, p.month, today),
+        method: p.method,
+        note: null,
+        receipt: p.receipt
+          ? {
+              mimeType: "image/png",
+              sizeBytes: receiptPng.length,
+              originalName: "comprovante-pix.png",
+              uploadedAt: createdAt,
+            }
+          : null,
+        receiptFile: p.receipt ? receiptFile : null,
+        acknowledgedAt: p.acknowledgedAt ?? null,
+        createdBy: anaId,
+        createdAt,
+      });
+      audit(createdAt, anaId, contractId, "payment.create", "payment", id);
+      if (p.acknowledgedAt && linkedWorkerId) {
+        audit(p.acknowledgedAt, linkedWorkerId, contractId, "payment.acknowledge", "payment", id);
+      }
+    }
+  }
 
   repos.tx(() => {
     repos.users.insert({
@@ -152,7 +439,7 @@ async function seed(): Promise<void> {
     repos.users.updateProfile(mariaId, {
       name: MARIA.name,
       phone: "(11) 98765-4321",
-      pixKey: "maria@ponto.dev",
+      pixKey: "maria@emdia.dev",
     });
     repos.households.insert({
       id: householdId,
@@ -162,208 +449,8 @@ async function seed(): Promise<void> {
       createdAt: "2026-07-20T12:00:00.000Z",
     });
 
-    const diarista: ContractFields = {
-      workerName: "Maria",
-      occupation: "diarista",
-      payType: "daily",
-      rateCents: 18000,
-      scheduleDays: [1, 3, 5],
-      expectedStart: "08:00",
-      expectedEnd: "16:00",
-      startedOn: "2026-08-01",
-    };
-    const baba: ContractFields = {
-      workerName: "Joana",
-      occupation: "baba",
-      payType: "hourly",
-      rateCents: 2500,
-      scheduleDays: [1, 2, 3, 4, 5],
-      expectedStart: "07:30",
-      expectedEnd: "17:30",
-      startedOn: "2026-08-03",
-    };
-    repos.contracts.insert({
-      id: diaristaId,
-      householdId,
-      createdAt: "2026-07-28T12:00:00.000Z",
-      ...diarista,
-    });
-    repos.contracts.insert({
-      id: babaId,
-      householdId,
-      createdAt: "2026-07-30T12:00:00.000Z",
-      ...baba,
-    });
-    repos.contracts.linkWorker(diaristaId, mariaId);
-
-    const auditAt = (
-      at: string,
-      actorId: string,
-      contractId: string,
-      action: string,
-      entity: string,
-      entityId: string,
-    ) =>
-      repos.audit.insert({
-        id: newId(),
-        actorId,
-        contractId,
-        action,
-        entity,
-        entityId,
-        meta: null,
-        at,
-      });
-    auditAt(
-      "2026-07-28T12:00:00.000Z",
-      anaId,
-      diaristaId,
-      "contract.create",
-      "contract",
-      diaristaId,
-    );
-    auditAt(
-      "2026-07-28T18:00:00.000Z",
-      mariaId,
-      diaristaId,
-      "contract.join",
-      "contract",
-      diaristaId,
-    );
-    auditAt("2026-07-30T12:00:00.000Z", anaId, babaId, "contract.create", "contract", babaId);
-
-    const located = (id: string) => {
-      const l = repos.contracts.findById(id);
-      if (!l) throw new Error(`contract ${id} missing`);
-      return l;
-    };
-    const mariaContract = located(diaristaId);
-    const joanaContract = located(babaId);
-
-    // Maria records her days and Ana confirms, except for this month's most recent ones.
-    const mariaEntries = plannedEntries(
-      mariaContract,
-      {
-        start: 8 * 60,
-        end: 16 * 60,
-        breakMinutes: 60,
-        exceptions: {
-          "2026-08-19": { status: "absent", note: "Não avisou" },
-          "2026-09-07": { status: "holiday", note: "Independência" },
-          "2026-09-23": { status: "excused", note: "Consulta médica" },
-        },
-      },
-      yesterday,
-      { id: mariaId, role: "worker" },
-      (date) => (date < "2026-10-01" ? { by: anaId } : null),
-    );
-    // Joana has no account yet, so nothing Ana records for her can be confirmed.
-    const joanaEntries = plannedEntries(
-      joanaContract,
-      {
-        start: 7 * 60 + 30,
-        end: 17 * 60 + 30,
-        breakMinutes: 60,
-        exceptions: {
-          "2026-08-28": { status: "absent" },
-          "2026-09-07": { status: "holiday", note: "Independência" },
-          "2026-10-02": { status: "excused", note: "Filho doente" },
-        },
-      },
-      yesterday,
-      { id: anaId, role: "employer" },
-      () => null,
-    );
-    for (const entry of [...mariaEntries, ...joanaEntries]) repos.entries.save(entry);
-    for (const contractId of [diaristaId, babaId]) {
-      repos.entries.save({
-        id: newId(),
-        contractId,
-        date: "2026-10-12",
-        status: "holiday",
-        checkIn: null,
-        checkOut: null,
-        breakMinutes: 0,
-        minutes: 0,
-        note: "Nossa Senhora Aparecida",
-        createdBy: anaId,
-        createdByRole: "employer",
-        confirmedBy: null,
-        confirmedAt: null,
-        updatedAt: "2026-10-01T12:00:00.000Z",
-      });
-    }
-
-    const adjustment = (
-      contractId: string,
-      month: YearMonth,
-      kind: "bonus" | "transport" | "advance",
-      amountCents: number,
-      description: string,
-    ) =>
-      repos.adjustments.insert({
-        id: newId(),
-        contractId,
-        month,
-        kind,
-        amountCents,
-        description,
-        createdBy: anaId,
-        createdAt: `${month}-15T12:00:00.000Z`,
-      });
-    adjustment(diaristaId, "2026-08", "transport", 6000, "Vale-transporte de agosto");
-    adjustment(diaristaId, "2026-09", "bonus", 5000, "Faxina pesada depois da festa");
-    adjustment(diaristaId, "2026-09", "advance", 10000, "Vale pedido no dia 15");
-    adjustment(babaId, "2026-09", "transport", 22000, "Vale-transporte de setembro");
-
-    const payment = (
-      contract: LocatedContract,
-      referenceMonth: YearMonth,
-      paidOn: IsoDate,
-      method: PaymentMethod,
-      opts: { acknowledgedAt?: string; withReceipt?: boolean } = {},
-    ) => {
-      const id = newId();
-      const createdAt = `${paidOn}T15:00:00.000Z`;
-      repos.payments.insert({
-        id,
-        contractId: contract.contract.id,
-        referenceMonth,
-        paidOn,
-        amountCents: dueFor(contract, referenceMonth, today),
-        method,
-        note: null,
-        receipt: opts.withReceipt
-          ? {
-              mimeType: "image/png",
-              sizeBytes: receiptPng.length,
-              originalName: "comprovante-pix.png",
-              uploadedAt: createdAt,
-            }
-          : null,
-        receiptFile: opts.withReceipt ? receiptFile : null,
-        acknowledgedAt: opts.acknowledgedAt ?? null,
-        createdBy: anaId,
-        createdAt,
-      });
-      auditAt(createdAt, anaId, contract.contract.id, "payment.create", "payment", id);
-      if (opts.acknowledgedAt)
-        auditAt(
-          opts.acknowledgedAt,
-          mariaId,
-          contract.contract.id,
-          "payment.acknowledge",
-          "payment",
-          id,
-        );
-    };
-    payment(mariaContract, "2026-08", "2026-09-04", "pix", {
-      withReceipt: true,
-      acknowledgedAt: "2026-09-04T19:30:00.000Z",
-    });
-    payment(mariaContract, "2026-09", "2026-10-05", "pix");
-    payment(joanaContract, "2026-08", "2026-09-05", "cash");
-    payment(joanaContract, "2026-09", "2026-10-05", "transfer");
+    fillContract(MARIA_CONTRACT, insertContract(MARIA_CONTRACT, { id: mariaId }), mariaId);
+    for (const seed of OTHER_CONTRACTS) fillContract(seed, insertContract(seed, null), null);
   });
 }
 

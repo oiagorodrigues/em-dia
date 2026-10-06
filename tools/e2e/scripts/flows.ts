@@ -17,6 +17,11 @@ import {
   type Locator,
   type Page,
 } from "playwright-core";
+import {
+  datesOfMonth,
+  expectedDatesInMonth,
+  type YearMonth,
+} from "../../../packages/shared/src/index.ts";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:5173";
 const API = process.env.API_URL ?? "http://localhost:3000/api/v1";
@@ -26,7 +31,7 @@ const VIEWPORT = { width: 390, height: 844 };
 const TIMEOUT = 8_000;
 
 const RUN = Date.now();
-const PASSWORD = "ponto12345";
+const PASSWORD = "emdia12345";
 const NEW_PASSWORD = "outrasenha987";
 const EMPLOYER_NAME = "Dona E2E";
 const WORKER_NAME = "Rosa E2E";
@@ -171,6 +176,66 @@ function todayRow(page: Page): Locator {
   return page.locator('button[aria-current="date"]');
 }
 
+interface ContractSpec {
+  workerName: string;
+  payType: "Por hora" | "Por diária" | "Mensal";
+  /** Digits as typed into the money field: "15000" is R$ 150,00. */
+  rate: string;
+  /** Default is weekly Monday, Wednesday and Friday. */
+  kind?: "Dias da semana" | "Datas do mês" | "Vezes por mês" | "Quando precisar";
+  /** 0 = Sunday. Weekly only. */
+  weekdays?: number[];
+  weekdayPreset?: string;
+  everyWeeks?: "toda semana" | "a cada 2" | "a cada 3" | "a cada 4";
+  visitsPerMonth?: number;
+  deductAbsences?: boolean;
+  startedOn: string;
+}
+
+const RATE_LABEL = {
+  "Por hora": "Valor da hora",
+  "Por diária": "Valor da diária",
+  Mensal: "Salário mensal",
+};
+
+/** Fills the new-contract form; the caller clicks the submit button. */
+async function fillContractForm(page: Page, spec: ContractSpec): Promise<void> {
+  await page.getByLabel("Nome de quem trabalha").fill(spec.workerName);
+  await choose(page, "Como paga", spec.payType);
+  await page.getByLabel(RATE_LABEL[spec.payType]).fill(spec.rate);
+  if (spec.deductAbsences) await page.getByText("Descontar faltas não justificadas").click();
+
+  await choose(page, "Frequência", spec.kind ?? "Dias da semana");
+  if (spec.weekdayPreset)
+    await action(page.getByRole("group", { name: "Atalhos" }), spec.weekdayPreset).click();
+  if (spec.weekdays) {
+    const toggles = page.getByRole("group", { name: "Dias da semana" }).getByRole("button");
+    for (let i = 0; i < 7; i++) {
+      const day = (i + 1) % 7;
+      const on = (await toggles.nth(i).getAttribute("aria-pressed")) === "true";
+      if (on !== spec.weekdays.includes(day)) await toggles.nth(i).click();
+    }
+  }
+  if (spec.everyWeeks) await choose(page, "Repete a cada quantas semanas", spec.everyWeeks);
+  if (spec.visitsPerMonth !== undefined) {
+    const stepper = page.getByRole("group", { name: "Vezes por mês" });
+    while (!(await textOf(stepper.locator("output"))).startsWith(`${spec.visitsPerMonth} `)) {
+      await stepper.getByRole("button", { name: /^Menos/ }).click();
+    }
+  }
+  await page.getByLabel("Começou em").fill(spec.startedOn);
+}
+
+/** Creates a contract as the signed-in employer and returns its id. */
+async function addContract(page: Page, spec: ContractSpec): Promise<string> {
+  await page.goto(`${BASE}/vinculos/novo`);
+  await fillContractForm(page, spec);
+  await action(page, /cadastrar e gerar convite/).click();
+  await action(page, /abrir o cartão/).click();
+  await page.waitForURL(/\/vinculos\/(?!novo)[^/]+$/);
+  return page.url().split("/").pop()!;
+}
+
 // Journeys
 
 async function employerSignup(state: State): Promise<void> {
@@ -184,20 +249,13 @@ async function employerSignup(state: State): Promise<void> {
   await action(page, /adicionar profissional/).click();
   await page.waitForURL("**/vinculos/novo");
 
-  await page.getByLabel("Nome de quem trabalha").fill(WORKER_NAME);
-  await choose(page, "Função", "Diarista");
-  await choose(page, "Como paga", "Por diária");
-  await page.getByLabel("Valor da diária").fill("15000");
-
-  // Monday, Wednesday, Friday regardless of the form default.
-  const days = page.getByRole("group", { name: "Dias que vem" }).getByRole("button");
-  for (const [i, wanted] of [true, false, true, false, true, false, false].entries()) {
-    const on = (await days.nth(i).getAttribute("aria-pressed")) === "true";
-    if (on !== wanted) await days.nth(i).click();
-  }
-
-  // Starts last month, so past scheduled days always exist for the absence journey.
-  await page.getByLabel("Começou em").fill(today().prevMonthStart);
+  await fillContractForm(page, {
+    workerName: WORKER_NAME,
+    payType: "Por diária",
+    rate: "15000",
+    weekdays: [1, 3, 5],
+    startedOn: today().prevMonthStart,
+  });
   await action(page, /cadastrar e gerar convite/).click();
 
   const invite = page.getByRole("region", { name: "Código de convite" });
@@ -406,6 +464,119 @@ async function downloadCsv(state: State): Promise<void> {
     throw new Error(`CSV has no ';' separator:\n${content.slice(0, 300)}`);
 }
 
+async function monthlyAllDays(state: State): Promise<void> {
+  const { page } = need(state.employer, 1);
+  const { prevMonth, prevMonthStart } = today();
+  const id = await addContract(page, {
+    workerName: "Mensalista E2E",
+    payType: "Mensal",
+    rate: "300000",
+    deductAbsences: true,
+    weekdayPreset: "todos os dias",
+    startedOn: prevMonthStart,
+  });
+  await page.goto(`${BASE}/vinculos/${id}?mes=${prevMonth}`);
+
+  const days = datesOfMonth(prevMonth as YearMonth).length;
+  const rows = page.locator("button.row");
+  const missing = page.getByRole("button", { name: /dia previsto sem registro/ });
+  await see("every day of last month as missing", missing);
+  if ((await missing.count()) !== days)
+    throw new Error(`expected ${days} missing days, found ${await missing.count()}`);
+
+  await action(page, /marcar como trabalhados/).click();
+  const dialog = page.getByRole("dialog");
+  await action(dialog, new RegExp(`^marcar ${days} dias$`)).click();
+  await absent("the bulk sheet", dialog);
+  await poll("no days left without a record", async () => (await missing.count()) === 0);
+  const worked = await rows.filter({ hasText: /\d{2}:\d{2}/ }).count();
+  if (worked !== days)
+    throw new Error(`expected ${days} worked days after the bulk fill, found ${worked}`);
+
+  await rows.first().click();
+  await choose(dialog, "O que aconteceu", "Faltou");
+  await action(dialog, /^salvar$/).click();
+  await absent("the day editor", dialog);
+
+  const deduction = page.locator(".ledger__line").filter({ hasText: "Faltas descontadas" });
+  await see("the 'Faltas descontadas' line", deduction);
+  const value = await textOf(deduction.locator("dd"));
+  if (parseCents(value) !== 10000) {
+    throw new Error(
+      `absence deduction is "${value}", expected R$ 100,00 (salary R$ 3.000,00 / 30)`,
+    );
+  }
+}
+
+async function oncePerMonth(state: State): Promise<void> {
+  const { page } = need(state.employer, 1);
+  const id = await addContract(page, {
+    workerName: "Visita E2E",
+    payType: "Por diária",
+    rate: "20000",
+    kind: "Vezes por mês",
+    visitsPerMonth: 1,
+    startedOn: today().prevMonthStart,
+  });
+  const placeholders = page.getByText("— registrar");
+
+  await page.goto(`${BASE}/vinculos/${id}`);
+  await see("'visitas: 0 de 1'", page.getByText("visitas: 0 de 1"));
+  if ((await placeholders.count()) !== 0)
+    throw new Error("per-month contract shows '— registrar' placeholders");
+
+  await todayRow(page).click();
+  await action(page.getByRole("dialog"), /^anotar$/).click();
+  await see("'visitas: 1 de 1'", page.getByText("visitas: 1 de 1"));
+  if ((await placeholders.count()) !== 0)
+    throw new Error("'— registrar' placeholders after recording the visit");
+}
+
+async function biweekly(state: State): Promise<void> {
+  const { page } = need(state.employer, 1);
+  const { date, prevMonth, prevMonthStart } = today();
+  const schedule = {
+    kind: "weekly" as const,
+    weekdays: [5],
+    everyWeeks: 2,
+    monthDays: [],
+    visitsPerMonth: null,
+  };
+  const id = await addContract(page, {
+    workerName: "Quinzenal E2E",
+    payType: "Por diária",
+    rate: "10000",
+    weekdays: [5],
+    everyWeeks: "a cada 2",
+    startedOn: prevMonthStart,
+  });
+
+  const currentMonth = date.slice(0, 7);
+  for (const month of [prevMonth, currentMonth]) {
+    const period = { startedOn: prevMonthStart, endedOn: null };
+    const expected = expectedDatesInMonth(schedule, month as YearMonth, period).filter(
+      (d) => d <= date,
+    );
+    const fridays = datesOfMonth(month as YearMonth).filter(
+      (d) => new Date(`${d}T12:00:00Z`).getUTCDay() === 5,
+    );
+    if (month === prevMonth && expected.length >= fridays.length)
+      throw new Error("test bug: biweekly equals weekly");
+
+    await page.goto(`${BASE}/vinculos/${id}?mes=${month}`);
+    await see("the time card", page.locator("button.row").first());
+    const missing = page.getByRole("button", { name: /dia previsto sem registro/ });
+    await poll("the card to settle", async () => (await missing.count()) === expected.length);
+    const shown = (await missing.locator(".row__num").allInnerTexts()).map(Number);
+    const wanted = expected.map((d) => Number(d.slice(8)));
+    if (JSON.stringify(shown) !== JSON.stringify(wanted)) {
+      throw new Error(
+        `${month}: card expects days ${shown.join(", ")}, shared expectedDatesInMonth says ${wanted.join(", ")}`,
+      );
+    }
+  }
+}
+
 async function securityChecks(state: State): Promise<void> {
   const id = need(state.contractId, 1);
   const worker = need(state.worker, 2).page;
@@ -487,6 +658,9 @@ const JOURNEYS: [string, (state: State) => Promise<void>][] = [
   ["6  payment with receipt, fake .png rejected", createPayment],
   ["7  worker acknowledges the payment", acknowledgePayment],
   ["10 CSV download", downloadCsv],
+  ["11 monthly, every day: bulk fill and absence deduction", monthlyAllDays],
+  ["12 once a month: visit counter, no placeholders", oncePerMonth],
+  ["13 every other Friday matches the shared schedule", biweekly],
   ["8  security and logout checks", securityChecks],
   ["9  forgot password and login with the new one", forgotPassword],
 ];
@@ -509,8 +683,8 @@ async function main(): Promise<void> {
   const browser = await chromium.launch({ channel: "chrome" });
   const state: State = {
     browser,
-    employerEmail: `e2e+${RUN}-employer@ponto.dev`,
-    workerEmail: `e2e+${RUN}-worker@ponto.dev`,
+    employerEmail: `e2e+${RUN}-employer@emdia.dev`,
+    workerEmail: `e2e+${RUN}-worker@emdia.dev`,
   };
 
   let failed = 0;

@@ -1,4 +1,4 @@
-import type { ApiErrorBody, PublicUser } from "@ponto/shared";
+import type { ApiErrorBody, PublicUser } from "@emdia/shared";
 
 export const API_BASE = "/api/v1";
 
@@ -92,7 +92,7 @@ async function toApiError(res: Response): Promise<ApiError> {
 
 type AuthMessage = { type: "session"; session: Session; at: number } | { type: "logout" };
 
-const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("ponto-auth");
+const channel = typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel("emdia-auth");
 /** Most recent session obtained by this tab or announced by another one. */
 let latest: { session: Session; at: number } | null = null;
 
@@ -118,7 +118,7 @@ export function announceLogout(): void {
 
 function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
   const locks = typeof navigator === "undefined" ? undefined : navigator.locks;
-  return locks ? locks.request("ponto-refresh", fn) : fn();
+  return locks ? locks.request("emdia-refresh", fn) : fn();
 }
 
 /**
@@ -130,7 +130,7 @@ function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
 export function refreshSession(): Promise<Session | null> {
   const requestedAt = Date.now();
   refreshing ??= withRefreshLock(async () => {
-    if (latest && latest.at >= requestedAt) {
+    if (latest && latest.at > requestedAt) {
       accessToken = latest.session.accessToken;
       return latest.session;
     }
@@ -138,7 +138,7 @@ export function refreshSession(): Promise<Session | null> {
       const res = await fetch(`${API_BASE}/auth/refresh`, {
         method: "POST",
         credentials: "include",
-        headers: { "X-Requested-With": "ponto" },
+        headers: { "X-Requested-With": "emdia" },
       });
       if (!res.ok) return null;
       const session = (await res.json()) as Session;

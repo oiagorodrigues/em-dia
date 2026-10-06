@@ -8,12 +8,12 @@ import {
   type WorkEntry,
   type YearMonth,
 } from "./domain.ts";
-import { datesOfMonth, weekdayOf } from "./time.ts";
+import { expectedCountInMonth, expectedDatesInMonth } from "./schedule.ts";
 
 export interface SummaryInput {
   contract: Pick<
     Contract,
-    "payType" | "rateCents" | "scheduleDays" | "startedOn" | "endedOn" | "workerId"
+    "payType" | "rateCents" | "schedule" | "deductAbsences" | "startedOn" | "endedOn" | "workerId"
   >;
   month: YearMonth;
   entries: Pick<WorkEntry, "date" | "status" | "minutes" | "confirmedAt">[];
@@ -24,14 +24,9 @@ export interface SummaryInput {
   today: IsoDate;
 }
 
-function inContract(date: IsoDate, startedOn: IsoDate, endedOn: IsoDate | null): boolean {
-  return date >= startedOn && (endedOn === null || date <= endedOn);
-}
-
 export function computeMonthSummary(input: SummaryInput): MonthSummary {
   const { contract, month, entries, adjustments, payments, today } = input;
   const byDate = new Map(entries.map((e) => [e.date, e]));
-  const schedule = new Set(contract.scheduleDays);
 
   let totalMinutes = 0;
   let daysWorked = 0;
@@ -65,14 +60,10 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
     }
   }
 
-  let expectedDays = 0;
-  const unrecordedDates: IsoDate[] = [];
-  for (const date of datesOfMonth(month)) {
-    if (!schedule.has(weekdayOf(date))) continue;
-    if (!inContract(date, contract.startedOn, contract.endedOn)) continue;
-    expectedDays++;
-    if (date <= today && !byDate.has(date)) unrecordedDates.push(date);
-  }
+  const period = { startedOn: contract.startedOn, endedOn: contract.endedOn };
+  const expectedDates = expectedDatesInMonth(contract.schedule, month, period);
+  const expectedDays = expectedCountInMonth(contract.schedule, month, period);
+  const unrecordedDates = expectedDates.filter((date) => date <= today && !byDate.has(date));
 
   let grossCents: number;
   switch (contract.payType) {
@@ -87,11 +78,17 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
       break;
   }
 
+  const absenceDeductionCents =
+    contract.payType === "monthly" && contract.deductAbsences
+      ? Math.min(grossCents, absences * Math.round(contract.rateCents / 30))
+      : 0;
+  const earnedCents = grossCents - absenceDeductionCents;
+
   const adjustmentsCents = adjustments.reduce(
     (sum, a) => sum + ADJUSTMENT_SIGN[a.kind] * a.amountCents,
     0,
   );
-  const dueCents = grossCents + adjustmentsCents;
+  const dueCents = earnedCents + adjustmentsCents;
   const paidCents = payments.reduce((sum, p) => sum + p.amountCents, 0);
 
   return {
@@ -105,14 +102,16 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
     daysOff,
     holidays,
     expectedDays,
+    expectedDates,
     unrecordedDates,
     pendingConfirmation,
     grossCents,
+    absenceDeductionCents,
     adjustmentsCents,
     dueCents,
     paidCents,
     balanceCents: dueCents - paidCents,
-    avgPerDayCents: daysWorked > 0 ? Math.round(grossCents / daysWorked) : 0,
-    effectiveHourlyCents: totalMinutes > 0 ? Math.round((grossCents * 60) / totalMinutes) : 0,
+    avgPerDayCents: daysWorked > 0 ? Math.round(earnedCents / daysWorked) : 0,
+    effectiveHourlyCents: totalMinutes > 0 ? Math.round((earnedCents * 60) / totalMinutes) : 0,
   };
 }

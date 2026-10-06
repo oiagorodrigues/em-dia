@@ -1,6 +1,6 @@
 # API contract (v1)
 
-Base path: `/api/v1`. JSON in and out unless noted. Types live in `@ponto/shared` (`packages/shared/src/domain.ts`), request validation in `packages/shared/src/schemas.ts`. Both apps import them; never redefine shapes locally.
+Base path: `/api/v1`. JSON in and out unless noted. Types live in `@emdia/shared` (`packages/shared/src/domain.ts`), request validation in `packages/shared/src/schemas.ts`. Both apps import them; never redefine shapes locally.
 
 Conventions:
 
@@ -15,7 +15,7 @@ Conventions:
 
 Access token: JWT (HS256 via `jose`), 15 min, claims `{ sub, role, tv }` where `tv` = user token version (bumped on password change / logout-all, invalidates outstanding access tokens). Sent as `Authorization: Bearer <token>`. The web app keeps it in memory only.
 
-Refresh token: opaque random 256-bit, stored hashed (SHA-256) server-side, 30 days, rotated on every use. Cookie `ponto_rt`: `HttpOnly; SameSite=Strict; Path=/api/v1/auth; Secure` (Secure off only when `NODE_ENV !== "production"`). Reuse of a rotated token revokes the whole token family. Every request to `/auth/refresh` and `/auth/logout` must carry header `X-Requested-With: ponto` (CSRF defence in addition to SameSite).
+Refresh token: opaque random 256-bit, stored hashed (SHA-256) server-side, 30 days, rotated on every use. Cookie `emdia_rt`: `HttpOnly; SameSite=Strict; Path=/api/v1/auth; Secure` (Secure off only when `NODE_ENV !== "production"`). Reuse of a rotated token revokes the whole token family. Every request to `/auth/refresh` and `/auth/logout` must carry header `X-Requested-With: emdia` (CSRF defence in addition to SameSite).
 
 | Method | Path                    | Body                   | Response                                                                                                                                                                                                   |
 | ------ | ----------------------- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -48,6 +48,17 @@ Refresh token: opaque random 256-bit, stored hashed (SHA-256) server-side, 30 da
 Employer sees contracts of households they own. Worker sees contracts where `workerId = me`.
 
 Every `Contract` carries `workerPhone` and `workerPixKey`, read live from the linked worker's profile (`PATCH /me`); both are `null` while no worker is linked.
+
+Schedule (`Contract.schedule`, validated by `scheduleSchema`, helpers in `packages/shared/src/schedule.ts`) covers every arrangement a household has:
+
+| `kind`       | Field used               | Examples                                                           |
+| ------------ | ------------------------ | ------------------------------------------------------------------ |
+| `weekly`     | `weekdays`, `everyWeeks` | 2x por semana, seg a sex, todos os dias (30 dias), quinzenal (2)   |
+| `month_days` | `monthDays`              | todo dia 5; dias 1 e 15 (31 falls on the last day of short months) |
+| `per_month`  | `visitsPerMonth`         | 1x por mês, 2x por mês, no fixed date                              |
+| `on_demand`  | –                        | quando precisar; nothing is expected                               |
+
+`everyWeeks` counts from the Monday-starting week that contains `startedOn`. The schema drops fields that don't belong to the kind. Expected dates feed `MonthSummary.expectedDates`/`unrecordedDates`; `per_month` only sets `expectedDays` (a count). `deductAbsences` (monthly pay only) subtracts `round(rateCents / 30)` per unjustified absence (`MonthSummary.absenceDeductionCents`). A PATCH replaces `schedule` as a whole.
 
 | Method | Path                    | Who      | Body                                                             | Response                                                                                                                                                                            |
 | ------ | ----------------------- | -------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

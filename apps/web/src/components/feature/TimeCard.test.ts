@@ -1,4 +1,4 @@
-import type { WorkEntry } from "@ponto/shared";
+import { expectedDatesInMonth, type Schedule, type WorkEntry } from "@emdia/shared";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vite-plus/test";
 import TimeCard from "./TimeCard.vue";
@@ -23,11 +23,25 @@ function entry(date: string, patch: Partial<WorkEntry> = {}): WorkEntry {
   };
 }
 
-// October 2026: the 1st is a Thursday. Schedule Mon/Wed/Fri.
-const contract = { scheduleDays: [1, 3, 5], startedOn: "2026-10-01", endedOn: null };
+// October 2026: the 1st is a Thursday. A Mon/Wed/Fri schedule expects these dates.
+const contract = { startedOn: "2026-10-01", endedOn: null };
+const schedule: Schedule = {
+  kind: "weekly",
+  weekdays: [1, 3, 5],
+  everyWeeks: 1,
+  monthDays: [],
+  visitsPerMonth: null,
+};
+const expectedDates = expectedDatesInMonth(schedule, "2026-10", contract);
 
-function render(entries: WorkEntry[], today = "2026-10-09") {
-  return mount(TimeCard, { props: { month: "2026-10", entries, contract, today } });
+function render(
+  entries: WorkEntry[],
+  today = "2026-10-09",
+  expected: readonly string[] = expectedDates,
+) {
+  return mount(TimeCard, {
+    props: { month: "2026-10", entries, contract, expectedDates: expected, today },
+  });
 }
 
 describe("TimeCard", () => {
@@ -74,6 +88,7 @@ describe("TimeCard", () => {
           entry("2026-10-09"),
         ],
         contract: { ...contract, startedOn: "2026-10-02" },
+        expectedDates,
         today: "2026-10-09",
       },
     });
@@ -83,6 +98,27 @@ describe("TimeCard", () => {
     expect(rows[8]!.classes()).toContain("is-today");
     expect(rows[8]!.attributes("aria-current")).toBe("date");
     expect(rows[8]!.find(".dot--open").exists()).toBe(true);
+  });
+
+  it("marks expected future days without asking to register them", () => {
+    const card = render([], "2026-10-09");
+    const expectedFuture = card.findAll(".row__expected");
+    // Mon 12 … Fri 30 after the 9th: 12,14,16,19,21,23,26,28,30.
+    expect(expectedFuture).toHaveLength(9);
+    expect(card.findAll(".row")[11]!.attributes("aria-label")).toContain("dia previsto");
+  });
+
+  it("uses only the given expected dates, not weekdays (quinzenal, datas do mês)", () => {
+    const card = render([], "2026-10-31", ["2026-10-05", "2026-10-20"]);
+    const missing = card.findAll(".row--missing").map((r) => r.attributes("aria-label"));
+    expect(missing).toHaveLength(2);
+    expect(missing[1]).toContain("20 de outubro");
+  });
+
+  it("shows no placeholders when nothing is expected (quando precisar)", () => {
+    const card = render([], "2026-10-31", []);
+    expect(card.findAll(".row--missing")).toHaveLength(0);
+    expect(card.findAll(".row__expected")).toHaveLength(0);
   });
 
   it("emits the date when a day is picked", async () => {

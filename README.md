@@ -1,4 +1,4 @@
-# ponto.
+# em dia
 
 PWA para famílias brasileiras acompanharem horas, presença, pagamentos e comprovantes de trabalhadoras e trabalhadores domésticos. Empregador e profissional veem o mesmo cartão de ponto e confirmam os registros um do outro.
 
@@ -28,8 +28,8 @@ bun run docs:schema  # gera docs/generated/db-schema.md
 ```bash
 bun run build
 bun run start        # serve a API e o build do web na mesma porta
-docker build -t ponto .
-docker run -p 3000:3000 -v ponto-data:/data -e JWT_SECRET=<32+ caracteres> ponto
+docker build -t emdia .
+docker run -p 3000:3000 -v emdia-data:/data -e JWT_SECRET=<32+ caracteres> emdia
 ```
 
 O banco SQLite e os comprovantes ficam em `/data`; faça backup dos dois juntos (veja [docs/RELIABILITY.md](docs/RELIABILITY.md)). `JWT_SECRET` é obrigatório em produção. A imagem tem healthcheck em `/api/health`.

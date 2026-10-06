@@ -9,7 +9,7 @@ import {
   toYearMonth,
   YEAR_MONTH_RE,
   type PaymentMethod,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { contractsApi, paymentsApi } from "@/api";

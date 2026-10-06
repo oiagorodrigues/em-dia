@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { OCCUPATION_LABEL, type Contract } from "@ponto/shared";
+import { OCCUPATION_LABEL, type Contract } from "@emdia/shared";
 import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { contractsApi, errorMessage, ApiError } from "@/api";
 import CodeBoxes from "@/components/feature/CodeBoxes.vue";
 import Button from "@/components/ui/Button.vue";
 import Stamp from "@/components/ui/Stamp.vue";
+import { firstName } from "@/lib/format.ts";
 import { INVITE_ALPHABET, INVITE_LENGTH, normalizeInviteCode } from "@/lib/invite.ts";
 
 const route = useRoute();
@@ -50,7 +51,7 @@ async function join(): Promise<void> {
   <div class="join">
     <template v-if="joined">
       <Stamp text="vínculo ok" label="Vínculo confirmado" tone="green" size="lg" />
-      <h1 class="page-title">pronto, {{ joined.employerName.split(" ")[0] }} já te vê aqui.</h1>
+      <h1 class="page-title">pronto, {{ firstName(joined.employerName) }} já te vê aqui.</h1>
       <p class="muted">
         {{ OCCUPATION_LABEL[joined.occupation] }} em {{ joined.householdName }}. A partir de agora
         você bate o ponto pelo celular e acompanha seus pagamentos.

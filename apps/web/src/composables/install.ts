@@ -5,7 +5,7 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const HINT_KEY = "ponto:install-hint-seen";
+const HINT_KEY = "emdia:install-hint-seen";
 
 const deferred = ref<BeforeInstallPromptEvent | null>(null);
 const installed = ref(false);

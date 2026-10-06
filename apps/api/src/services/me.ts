@@ -1,4 +1,4 @@
-import type { PublicUser, UpdateMeInput } from "@ponto/shared";
+import type { PublicUser, UpdateMeInput } from "@emdia/shared";
 import { notFound } from "../lib/errors.ts";
 import { toPublicUser } from "../repos/index.ts";
 import type { Actor, ServiceDeps } from "./context.ts";

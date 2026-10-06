@@ -5,7 +5,7 @@ import {
   type EntryStatus,
   type IsoDate,
   type YearMonth,
-} from "@ponto/shared";
+} from "@emdia/shared";
 
 export const WEEKDAY_LETTER = ["D", "S", "T", "Q", "Q", "S", "S"] as const;
 export const WEEKDAY_SHORT = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"] as const;
@@ -79,6 +79,11 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
 }
 
+const HONORIFICS = new Set(["dona", "seu", "sr", "sr.", "sra", "sra.", "dr", "dr.", "dra", "dra."]);
+
+/** "Maria Aparecida" → "Maria"; households say "Dona Cida", so an honorific keeps the next word. */
 export function firstName(name: string): string {
-  return name.trim().split(/\s+/)[0] ?? name;
+  const words = name.trim().split(/\s+/);
+  if (words.length > 1 && HONORIFICS.has(words[0]!.toLowerCase())) return `${words[0]} ${words[1]}`;
+  return words[0] ?? name;
 }

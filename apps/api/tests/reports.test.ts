@@ -11,7 +11,7 @@ const as = { type: "bearer" } as const;
 beforeEach(async () => {
   t = setup();
   // Daily R$ 180 on Mon/Wed/Fri.
-  const pair = await t.linkedPair({ scheduleDays: [1, 3, 5] });
+  const pair = await t.linkedPair({ schedule: { kind: "weekly", weekdays: [1, 3, 5] } });
   ({ employer, worker, contractId } = pair);
   base = `/api/v1/contracts/${contractId}`;
 });
@@ -113,10 +113,14 @@ describe("statement.csv", () => {
     const lines = text.slice(1).split("\r\n");
     expect(lines[0]).toBe("Extrato;outubro 2026");
     expect(lines).toContain(
-      `05/10/2026;seg;Trabalhou;08:00;16:00;60;7h;Não;"'=HYPERLINK(""http://evil"";""x"")"`,
+      `05/10/2026;seg;Sim;Trabalhou;08:00;16:00;60;7h;Não;"'=HYPERLINK(""http://evil"";""x"")"`,
     );
-    expect(lines).toContain("02/10/2026;sex;Faltou;;;;;Não;'@SUM(1)");
+    expect(lines).toContain("02/10/2026;sex;Sim;Faltou;;;;;Não;'@SUM(1)");
     expect(lines).toContain("Valor bruto (R$);180,00");
+    expect(lines).toContain("Combinado;seg, qua e sex");
+    expect(lines).toContain("Desconto por faltas (R$);0,00");
+    expect(lines).toContain("06/10/2026;ter;;;;;;;;");
+    expect(lines).toContain("Dias previstos;13");
     expect(lines.filter((l) => /^\d{2}\/10\/2026;/.test(l))).toHaveLength(31);
   });
 });

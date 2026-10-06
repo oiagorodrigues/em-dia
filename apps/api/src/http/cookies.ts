@@ -1,7 +1,7 @@
 import type { CookieOptions, Request, Response } from "express";
 import type { Config } from "../config/index.ts";
 
-export const REFRESH_COOKIE = "ponto_rt";
+export const REFRESH_COOKIE = "emdia_rt";
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 const options = (config: Config): CookieOptions => ({

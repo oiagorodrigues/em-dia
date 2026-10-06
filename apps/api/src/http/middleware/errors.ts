@@ -1,4 +1,4 @@
-import type { ApiErrorBody } from "@ponto/shared";
+import type { ApiErrorBody } from "@emdia/shared";
 import type { ErrorRequestHandler, RequestHandler } from "express";
 import multer from "multer";
 import { AppError } from "../../lib/errors.ts";

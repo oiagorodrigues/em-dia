@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { forgotPasswordSchema } from "@ponto/shared";
+import { forgotPasswordSchema } from "@emdia/shared";
 import { ref } from "vue";
 import { RouterLink } from "vue-router";
 import { authApi } from "@/api";

@@ -18,7 +18,7 @@ export function authenticate(services: Services): RequestHandler {
  * simple request cannot set it, which backs up SameSite=Strict.
  */
 export const requireCsrfHeader: RequestHandler = (req, _res, next) => {
-  if (req.get("x-requested-with") !== "ponto")
+  if (req.get("x-requested-with") !== "emdia")
     throw new AppError("FORBIDDEN", "Requisição inválida");
   next();
 };

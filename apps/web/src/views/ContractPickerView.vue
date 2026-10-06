@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { OCCUPATION_LABEL } from "@ponto/shared";
+import { OCCUPATION_LABEL } from "@emdia/shared";
 import { computed, watch } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { contractsApi } from "@/api";

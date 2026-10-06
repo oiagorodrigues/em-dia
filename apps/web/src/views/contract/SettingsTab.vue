@@ -4,7 +4,7 @@ import {
   endContractSchema,
   nowInZone,
   type CreateContractInput,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { ref } from "vue";
 import { contractsApi, errorMessage } from "@/api";
 import ContractForm from "@/components/feature/ContractForm.vue";
@@ -95,7 +95,8 @@ function onEnd(): void {
           occupation: contract.occupation,
           payType: contract.payType,
           rateCents: contract.rateCents,
-          scheduleDays: contract.scheduleDays,
+          schedule: contract.schedule,
+          deductAbsences: contract.deductAbsences,
           expectedStart: contract.expectedStart,
           expectedEnd: contract.expectedEnd,
           startedOn: contract.startedOn,

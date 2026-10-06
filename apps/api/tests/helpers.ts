@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { CreateContractInput, PublicUser, Role } from "@ponto/shared";
+import type { CreateContractInput, PublicUser, Role, ScheduleInput } from "@emdia/shared";
 import request from "supertest";
 import { loadConfig } from "../src/config/index.ts";
 import { openDatabase } from "../src/db/index.ts";
@@ -22,15 +22,20 @@ export interface TestUser {
 
 export function refreshCookie(res: request.Response): string {
   const raw = res.headers["set-cookie"] as unknown as string[] | undefined;
-  const cookie = raw?.find((c) => c.startsWith("ponto_rt="));
+  const cookie = raw?.find((c) => c.startsWith("emdia_rt="));
   if (!cookie) throw new Error("no refresh cookie in response");
   return cookie.split(";")[0] ?? "";
 }
 
+/** API input, so the schedule may omit fields the schema defaults. */
+export type ContractOverrides = Partial<Omit<CreateContractInput, "schedule">> & {
+  schedule?: ScheduleInput;
+};
+
 let seq = 0;
 
 export function setup(env: Record<string, string> = {}) {
-  const uploadDir = mkdtempSync(join(tmpdir(), "ponto-api-test-"));
+  const uploadDir = mkdtempSync(join(tmpdir(), "emdia-api-test-"));
   const config = loadConfig({
     NODE_ENV: "test",
     DATABASE_PATH: ":memory:",
@@ -67,7 +72,7 @@ export function setup(env: Record<string, string> = {}) {
     return { token: res.body.accessToken, user: res.body.user, cookie: refreshCookie(res) };
   }
 
-  async function createContract(employer: TestUser, overrides: Partial<CreateContractInput> = {}) {
+  async function createContract(employer: TestUser, overrides: ContractOverrides = {}) {
     const res = await http()
       .post("/api/v1/contracts")
       .auth(employer.token, { type: "bearer" })
@@ -76,7 +81,7 @@ export function setup(env: Record<string, string> = {}) {
         occupation: "diarista",
         payType: "daily",
         rateCents: 18000,
-        scheduleDays: [1, 2, 3, 4, 5],
+        schedule: { kind: "weekly", weekdays: [1, 2, 3, 4, 5] },
         expectedStart: "08:00",
         expectedEnd: "16:00",
         startedOn: "2026-08-01",
@@ -88,7 +93,7 @@ export function setup(env: Record<string, string> = {}) {
   }
 
   /** Employer with one contract and a worker linked to it through an invite code. */
-  async function linkedPair(overrides: Partial<CreateContractInput> = {}) {
+  async function linkedPair(overrides: ContractOverrides = {}) {
     const employer = await register("employer");
     const contract = await createContract(employer, overrides);
     const invite = await http()
@@ -102,7 +107,7 @@ export function setup(env: Record<string, string> = {}) {
   async function reauth(user: TestUser): Promise<void> {
     const res = await http()
       .post("/api/v1/auth/refresh")
-      .set("X-Requested-With", "ponto")
+      .set("X-Requested-With", "emdia")
       .set("Cookie", user.cookie);
     if (res.status !== 200) throw new Error(`refresh failed: ${res.status}`);
     user.token = res.body.accessToken;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { RECEIPT_MIME_TYPES } from "@ponto/shared";
+import { RECEIPT_MIME_TYPES } from "@emdia/shared";
 import { computed, ref, useId } from "vue";
 import { sanitizeFilename } from "@/api/client.ts";
 import Icon from "@/components/ui/Icon.vue";

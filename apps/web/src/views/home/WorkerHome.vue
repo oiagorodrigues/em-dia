@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import {
+  describeSchedule,
   formatCents,
   formatDuration,
   monthName,
   parseYearMonth,
   type DashboardItem,
   type Payment,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import { dashboardApi, entriesApi, errorMessage, paymentsApi } from "@/api";
 import ClockButton from "@/components/feature/ClockButton.vue";
 import InstallHint from "@/components/feature/InstallHint.vue";
-import Ledger from "@/components/feature/Ledger.vue";
+import Ledger, { type LedgerLine } from "@/components/feature/Ledger.vue";
 import ReceiptStub from "@/components/feature/ReceiptStub.vue";
 import ReceiptViewer from "@/components/feature/ReceiptViewer.vue";
 import TodayRow from "@/components/feature/TodayRow.vue";
@@ -22,6 +23,7 @@ import Segmented from "@/components/ui/Segmented.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import { useResource } from "@/composables/resource.ts";
 import { clockStateOf } from "@/lib/entry.ts";
+import { attendanceLabel, attendanceText } from "@/lib/schedule.ts";
 import { firstName } from "@/lib/format.ts";
 import { greeting } from "@/lib/greeting.ts";
 import { useAuthStore } from "@/stores/auth.ts";
@@ -57,6 +59,36 @@ const options = computed(
 const clockState = computed(() =>
   item.value ? clockStateOf(item.value.today, item.value.contract.status === "active") : "off",
 );
+const ledgerLines = computed<LedgerLine[]>(() => {
+  if (!item.value) return [];
+  const { summary, contract } = item.value;
+  return [
+    {
+      label: attendanceLabel(contract.schedule.kind),
+      value: attendanceText(summary, contract.schedule.kind),
+    },
+    { label: "Ganho no mês", value: formatCents(summary.grossCents) },
+    ...(summary.absenceDeductionCents > 0
+      ? [
+          {
+            label: "Faltas descontadas",
+            value: `− ${formatCents(summary.absenceDeductionCents)}`,
+            tone: "red" as const,
+          },
+        ]
+      : []),
+    {
+      label: "Extras e descontos",
+      value: formatCents(summary.adjustmentsCents),
+      tone: summary.adjustmentsCents < 0 ? "red" : "neutral",
+    },
+    {
+      label: "Já recebido",
+      value: formatCents(summary.paidCents),
+      tone: summary.paidCents > 0 ? "green" : "neutral",
+    },
+  ];
+});
 const month = computed(() => (data.value ? monthName(parseYearMonth(data.value.month).month) : ""));
 
 const clocking = ref(false);
@@ -171,6 +203,7 @@ const stopShortcut = watch(
           <span class="label">em</span>
           {{ item.contract.householdName }} · {{ item.contract.employerName }}
         </p>
+        <p class="wh__sched mono">{{ describeSchedule(item.contract.schedule) }}</p>
       </section>
 
       <TodayRow :entry="item.today" :date="data.today" :fresh="freshDate === data.today" />
@@ -192,25 +225,7 @@ const stopShortcut = watch(
             <p class="wh__num mono">{{ formatCents(Math.max(0, item.summary.balanceCents)) }}</p>
           </div>
         </div>
-        <Ledger
-          :lines="[
-            {
-              label: 'Dias trabalhados',
-              value: `${item.summary.daysWorked} de ${item.summary.expectedDays}`,
-            },
-            { label: 'Ganho no mês', value: formatCents(item.summary.grossCents) },
-            {
-              label: 'Extras e descontos',
-              value: formatCents(item.summary.adjustmentsCents),
-              tone: item.summary.adjustmentsCents < 0 ? 'red' : 'neutral',
-            },
-            {
-              label: 'Já recebido',
-              value: formatCents(item.summary.paidCents),
-              tone: item.summary.paidCents > 0 ? 'green' : 'neutral',
-            },
-          ]"
-        />
+        <Ledger :lines="ledgerLines" />
         <p v-if="item.summary.pendingConfirmation > 0" class="wh__pending">
           {{ item.summary.pendingConfirmation }}
           {{
@@ -255,6 +270,12 @@ const stopShortcut = watch(
 
 .wh__clock :deep(.round) {
   border-radius: 50%;
+}
+
+.wh__sched {
+  margin-top: calc(var(--s-3) * -1);
+  font-size: var(--t-12);
+  color: var(--ink-2);
 }
 
 .wh__where {

@@ -6,7 +6,7 @@ import {
   type ActivityItem,
   type AdjustmentKind,
   type EntryStatus,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { formatDayMonth } from "./format.ts";
 
 export interface ActivityLine {
@@ -22,7 +22,8 @@ const CONTRACT_FIELDS: Record<string, string> = {
   occupation: "função",
   payType: "forma de pagamento",
   rateCents: "valor",
-  scheduleDays: "dias de trabalho",
+  schedule: "frequência",
+  deductAbsences: "desconto de faltas",
   expectedStart: "horário",
   expectedEnd: "horário",
   startedOn: "data de início",

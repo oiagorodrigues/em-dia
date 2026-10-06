@@ -1,5 +1,5 @@
-import type { EntryStatus, IsoDate, UpsertEntryInput, WorkEntry, YearMonth } from "@ponto/shared";
-import { nowInZone, shiftMinutes } from "@ponto/shared";
+import type { EntryStatus, IsoDate, UpsertEntryInput, WorkEntry, YearMonth } from "@emdia/shared";
+import { nowInZone, shiftMinutes } from "@emdia/shared";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
 import type { LocatedContract } from "../repos/index.ts";

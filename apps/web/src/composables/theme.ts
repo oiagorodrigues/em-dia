@@ -2,7 +2,7 @@ import { ref, watch } from "vue";
 
 export type ThemeMode = "system" | "light" | "dark";
 
-const STORAGE_KEY = "ponto:theme";
+const STORAGE_KEY = "emdia:theme";
 /** index.html ships one theme-color per OS scheme; remember them so "sistema" can restore them. */
 const originalMetaColor = new WeakMap<HTMLMetaElement, string>();
 

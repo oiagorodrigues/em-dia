@@ -88,7 +88,7 @@ describe.skipIf(!exists(API_SRC))("api taste", () => {
     expect(bad, bad.join("\n")).toEqual([]);
   });
 
-  it("every route file validates input through @ponto/shared or zod", () => {
+  it("every route file validates input through @emdia/shared or zod", () => {
     const routeFiles = files(`${API_SRC}/http/routes`, [".ts"]).filter(
       (f) => !f.endsWith(".test.ts") && !f.endsWith("/index.ts"),
     );
@@ -96,12 +96,12 @@ describe.skipIf(!exists(API_SRC))("api taste", () => {
     for (const f of routeFiles) {
       const src = read(f);
       const hasHandlers = /\.(get|post|put|patch|delete)\(/.test(src);
-      const validates = /from\s+["'](@ponto\/shared|zod)["']/.test(src);
+      const validates = /from\s+["'](@emdia\/shared|zod)["']/.test(src);
       if (hasHandlers && !validates) {
         bad.push(
           `${rel(f)} ${violation(
-            "route file defines handlers but imports no schema from @ponto/shared or zod",
-            "parse params/query/body with a schema from @ponto/shared before calling a service",
+            "route file defines handlers but imports no schema from @emdia/shared or zod",
+            "parse params/query/body with a schema from @emdia/shared before calling a service",
             "docs/SECURITY.md#controls",
           )}`,
         );

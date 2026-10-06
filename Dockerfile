@@ -16,15 +16,15 @@ COPY tools/harness/package.json tools/harness/
 FROM base AS build
 RUN bun install --frozen-lockfile --ignore-scripts
 COPY . .
-RUN bunx vp run --filter @ponto/api build && bunx vp run --filter @ponto/web build
+RUN bunx vp run --filter @emdia/api build && bunx vp run --filter @emdia/web build
 
 FROM base AS prod-deps
-RUN bun install --frozen-lockfile --ignore-scripts --production --filter @ponto/api
+RUN bun install --frozen-lockfile --ignore-scripts --production --filter @emdia/api
 
 FROM node:24-slim AS runtime
 ENV NODE_ENV=production \
     PORT=3000 \
-    DATABASE_PATH=/data/ponto.db \
+    DATABASE_PATH=/data/emdia.db \
     UPLOAD_DIR=/data/uploads \
     WEB_DIST_DIR=/app/apps/web/dist
 WORKDIR /app

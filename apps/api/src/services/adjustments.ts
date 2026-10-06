@@ -1,4 +1,4 @@
-import type { Adjustment, CreateAdjustmentInput, YearMonth } from "@ponto/shared";
+import type { Adjustment, CreateAdjustmentInput, YearMonth } from "@emdia/shared";
 import { notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
 import { loadContract } from "./access.ts";

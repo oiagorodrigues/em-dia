@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCents, formatYearMonth, type Payment } from "@ponto/shared";
+import { formatCents, formatYearMonth, type Payment } from "@emdia/shared";
 import { computed, ref, watch } from "vue";
 import { errorMessage, paymentsApi } from "@/api";
 import { sanitizeFilename } from "@/api/client.ts";

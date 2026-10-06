@@ -1,6 +1,6 @@
 import type { ReadStream } from "node:fs";
-import type { CreatePaymentInput, Payment, Receipt, ReceiptMimeType } from "@ponto/shared";
-import { RECEIPT_MAX_BYTES, RECEIPT_MIME_TYPES } from "@ponto/shared";
+import type { CreatePaymentInput, Payment, Receipt, ReceiptMimeType } from "@emdia/shared";
+import { RECEIPT_MAX_BYTES, RECEIPT_MIME_TYPES } from "@emdia/shared";
 import { fileTypeFromBuffer } from "file-type";
 import { AppError, notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";

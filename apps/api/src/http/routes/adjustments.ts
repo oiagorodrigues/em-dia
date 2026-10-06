@@ -1,4 +1,4 @@
-import { createAdjustmentSchema, monthQuerySchema } from "@ponto/shared";
+import { createAdjustmentSchema, monthQuerySchema } from "@emdia/shared";
 import { Router } from "express";
 import type { Services } from "../../services/index.ts";
 import { actorOf } from "../context.ts";

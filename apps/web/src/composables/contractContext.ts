@@ -5,7 +5,7 @@ import {
   YEAR_MONTH_RE,
   type Contract,
   type YearMonth,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { computed, inject, provide, type ComputedRef, type InjectionKey, type Ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 

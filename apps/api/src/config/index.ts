@@ -8,7 +8,7 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  DATABASE_PATH: z.string().min(1).default("./data/ponto.db"),
+  DATABASE_PATH: z.string().min(1).default("./data/emdia.db"),
   UPLOAD_DIR: z.string().min(1).default("./data/uploads"),
   JWT_SECRET: z.string().optional(),
   WEB_ORIGIN: z.url().default("http://localhost:5173"),
