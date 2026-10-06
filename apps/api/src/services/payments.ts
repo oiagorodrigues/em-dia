@@ -1,8 +1,8 @@
 import type { ReadStream } from "node:fs";
 import type { CreatePaymentInput, Payment, Receipt, ReceiptMimeType } from "@emdia/shared";
-import { RECEIPT_MAX_BYTES, RECEIPT_MIME_TYPES } from "@emdia/shared";
+import { formatCents, RECEIPT_MAX_BYTES, RECEIPT_MIME_TYPES } from "@emdia/shared";
 import { fileTypeFromBuffer } from "file-type";
-import { AppError, notFound } from "../lib/errors.ts";
+import { AppError, fieldError, notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
 import { toPayment, type PaymentRecord } from "../repos/index.ts";
 import { loadContract, loadWritableContract } from "./access.ts";
@@ -68,6 +68,19 @@ export function paymentsService(deps: ServiceDeps) {
     };
   }
 
+  /** Runs before the file is stored and again inside the insert transaction, so concurrent installments can't overpay. */
+  function assertAgreementRoom(contractId: string, agreementId: string, amountCents: number): void {
+    const agreement = repos.agreements.find(contractId, agreementId);
+    if (!agreement) throw fieldError("agreementId", "Acordo não encontrado");
+    if (agreement.cancelledAt) throw fieldError("agreementId", "Este acordo foi cancelado");
+    if (amountCents > agreement.remainingCents) {
+      throw fieldError(
+        "amountCents",
+        `O valor passa do que falta no acordo (${formatCents(agreement.remainingCents)})`,
+      );
+    }
+  }
+
   function findPayment(contractId: string, paymentId: string): PaymentRecord {
     const payment = repos.payments.find(contractId, paymentId);
     if (!payment) throw notFound("Pagamento não encontrado");
@@ -97,6 +110,8 @@ export function paymentsService(deps: ServiceDeps) {
     ): Promise<Payment> {
       loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "payment:write");
+      const agreementId = input.agreementId ?? null;
+      if (agreementId) assertAgreementRoom(contractId, agreementId, input.amountCents);
       const stored = file ? await storeReceipt(file) : undefined;
       const payment: PaymentRecord = {
         id: newId(),
@@ -109,11 +124,13 @@ export function paymentsService(deps: ServiceDeps) {
         receipt: stored?.receipt ?? null,
         receiptFile: stored?.name ?? null,
         acknowledgedAt: null,
+        agreementId,
         createdBy: actor.id,
         createdAt: nowIso(deps),
       };
       try {
         repos.tx(() => {
+          if (agreementId) assertAgreementRoom(contractId, agreementId, payment.amountCents);
           repos.payments.insert(payment);
           audit(deps, {
             actorId: actor.id,
@@ -125,6 +142,7 @@ export function paymentsService(deps: ServiceDeps) {
               referenceMonth: payment.referenceMonth,
               amountCents: payment.amountCents,
               receipt: !!stored,
+              method: payment.method,
             },
           });
         });

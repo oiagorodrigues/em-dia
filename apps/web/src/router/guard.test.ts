@@ -76,6 +76,24 @@ describe("route guard", () => {
   });
 });
 
+describe("invite links while signed in", () => {
+  it("shows the signup screen to a signed-in employer instead of redirecting", async () => {
+    const route = await go("/criar-conta?convite=ABCD2345", as("employer"));
+    expect(route.path).toBe("/criar-conta");
+    expect(route.query.convite).toBe("ABCD2345");
+  });
+
+  it("sends an employer who opens the join link to the signup screen", async () => {
+    const route = await go("/entrar-no-vinculo?convite=ABCD2345", as("employer"));
+    expect(route.path).toBe("/criar-conta");
+    expect(route.query.convite).toBe("ABCD2345");
+  });
+
+  it("still bounces a signed-in employer from /criar-conta without an invite", async () => {
+    expect((await go("/criar-conta", as("employer"))).path).toBe("/");
+  });
+});
+
 describe("safeNext", () => {
   it("accepts only same-origin paths", () => {
     expect(safeNext("/vinculos/1?mes=2026-10")).toBe("/vinculos/1?mes=2026-10");

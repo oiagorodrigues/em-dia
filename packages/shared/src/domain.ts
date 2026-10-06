@@ -1,3 +1,4 @@
+import type { MonthEstimate } from "./estimate.ts";
 import type { Schedule } from "./schedule.ts";
 
 export const ROLES = ["employer", "worker"] as const;
@@ -72,13 +73,15 @@ export const ADJUSTMENT_SIGN: Record<AdjustmentKind, 1 | -1> = {
   deduction: -1,
 };
 
-export const PAYMENT_METHODS = ["pix", "cash", "transfer", "other"] as const;
+/** compensation: settled with something other than money (see Agreement). */
+export const PAYMENT_METHODS = ["pix", "cash", "transfer", "compensation", "other"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
   pix: "Pix",
   cash: "Dinheiro",
   transfer: "Transferência",
+  compensation: "Compensação",
   other: "Outro",
 };
 
@@ -197,7 +200,33 @@ export interface Payment {
   method: PaymentMethod;
   note: string | null;
   receipt: Receipt | null;
+  /** Set when the payment pays down an agreement (method = compensation). */
+  agreementId: string | null;
   acknowledgedAt: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+/**
+ * Something the worker owes the household and pays back in work, e.g. a dining
+ * table bought from the employer and settled in installments of R$ 200 a month.
+ * Each installment is a Payment with method "compensation" and this agreementId.
+ */
+export interface Agreement {
+  id: string;
+  contractId: string;
+  description: string;
+  totalCents: number;
+  /** Suggested amount per month; null when settled ad hoc. */
+  installmentCents: number | null;
+  startMonth: YearMonth;
+  /** Derived: sum of compensation payments linked to this agreement. */
+  settledCents: number;
+  /** Derived: max(0, totalCents - settledCents). */
+  remainingCents: number;
+  /** When the worker confirmed they agree. */
+  acceptedAt: string | null;
+  cancelledAt: string | null;
   createdBy: string;
   createdAt: string;
 }
@@ -259,6 +288,8 @@ export interface InviteDelivery {
 export interface DashboardItem {
   contract: Contract;
   summary: MonthSummary;
+  /** What the month should cost if every expected day happens; drives future-month projections. */
+  estimate: MonthEstimate;
   today: WorkEntry | null;
   lastPayment: Payment | null;
 }

@@ -2,6 +2,7 @@
 import type { RouteLocationRaw } from "vue-router";
 import { RouterLink } from "vue-router";
 import Icon from "@/components/ui/Icon.vue";
+import { useBack } from "@/composables/back.ts";
 
 const {
   title,
@@ -11,14 +12,17 @@ const {
 } = defineProps<{
   title: string;
   subtitle?: string;
+  /** Where "voltar" goes when the page was opened directly; otherwise it returns to the previous screen. */
   back?: RouteLocationRaw;
   backLabel?: string;
 }>();
+
+const backNav = useBack(back ?? "/");
 </script>
 
 <template>
   <header class="ph">
-    <RouterLink v-if="back" :to="back" class="ph__back">
+    <RouterLink v-if="back" :to="backNav.to.value" class="ph__back" @click.prevent="backNav.go">
       <Icon name="arrow-left" :size="18" />
       <span>{{ backLabel }}</span>
     </RouterLink>
@@ -87,5 +91,9 @@ const {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s-2);
+}
+
+.ph__title::first-letter {
+  text-transform: uppercase;
 }
 </style>

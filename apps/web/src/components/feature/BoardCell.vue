@@ -41,18 +41,18 @@ const {
 }
 
 .bcell.is-worked {
-  background: color-mix(in srgb, var(--tint-mint-ink) 38%, var(--tint-mint));
-  border-color: color-mix(in srgb, var(--tint-mint-ink) 45%, transparent);
+  background: color-mix(in srgb, var(--brand-ink) 38%, var(--brand-wash));
+  border-color: color-mix(in srgb, var(--brand-ink) 45%, transparent);
 }
 
 .bcell.is-absent {
-  background: var(--red);
-  border-color: var(--red);
+  background: var(--coral);
+  border-color: var(--coral);
 }
 
 .bcell.is-soft {
-  background: color-mix(in srgb, var(--tint-butter-ink) 22%, var(--tint-butter));
-  border-color: color-mix(in srgb, var(--tint-butter-ink) 40%, transparent);
+  background: color-mix(in srgb, var(--amber-ink) 22%, var(--amber-wash));
+  border-color: color-mix(in srgb, var(--amber-ink) 40%, transparent);
 }
 
 .bcell.is-missing {
@@ -76,11 +76,11 @@ const {
 }
 
 .bcell.is-today {
-  box-shadow: 0 0 0 2px var(--blue);
+  box-shadow: 0 0 0 2px var(--brand);
 }
 
 .bcell:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
   transform: scale(1.12);
   z-index: 2;

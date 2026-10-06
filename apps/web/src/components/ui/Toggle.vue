@@ -57,8 +57,8 @@ const id = useId();
 }
 
 .tg input:checked + .tg__track {
-  background: var(--blue);
-  border-color: var(--blue);
+  background: var(--brand);
+  border-color: var(--brand);
 }
 
 .tg input:checked + .tg__track .tg__knob {
@@ -67,7 +67,7 @@ const id = useId();
 }
 
 .tg input:focus-visible + .tg__track {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 

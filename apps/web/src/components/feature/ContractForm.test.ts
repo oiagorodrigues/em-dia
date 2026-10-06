@@ -54,7 +54,7 @@ describe("ContractForm", () => {
 
   it("shows the estimated cost in the resumo panel", () => {
     const { wrapper } = setup({ summary: true });
-    expect(wrapper.get(".ep__cost").text()).toMatch(/custo estimado/);
+    expect(wrapper.get(".ep__cost").text()).toMatch(/custo estimado/i);
     expect(wrapper.get(".ep__breakdown").text()).toMatch(/diárias? × R\$/);
     wrapper.unmount();
   });

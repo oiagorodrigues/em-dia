@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import Icon from "@/components/ui/Icon.vue";
+import type { IconName } from "@/components/ui/icons.ts";
 import { computed, onBeforeUnmount, ref } from "vue";
 import { useNow } from "@/composables/now.ts";
 import type { ClockState } from "@/lib/entry.ts";
@@ -41,15 +43,19 @@ const secondDot = computed(() => {
 const label = computed(() => {
   switch (state) {
     case "in":
-      return "bater entrada";
+      return "Bater entrada";
     case "out":
-      return "bater saída";
+      return "Bater saída";
     case "done":
-      return "dia fechado";
+      return "Dia fechado";
     default:
-      return "sem expediente";
+      return "Sem expediente";
   }
 });
+
+const icon = computed<IconName | null>(() =>
+  state === "in" ? "clock-in" : state === "out" ? "clock-out" : null,
+);
 
 const disabled = computed(() => loading || state === "done" || state === "off");
 
@@ -77,6 +83,7 @@ function press(): void {
     @click="press"
   >
     <svg class="clock__ring" viewBox="0 0 200 200" aria-hidden="true">
+      <circle class="clock__rim" cx="100" cy="100" r="97" />
       <line
         v-for="(t, i) in TICKS"
         :key="i"
@@ -90,7 +97,10 @@ function press(): void {
     </svg>
     <span class="clock__face">
       <span class="clock__time mono">{{ zoned.time }}</span>
-      <span class="clock__label">{{ loading ? "carimbando…" : label }}</span>
+      <span class="clock__label">
+        <Icon v-if="!loading && icon" :name="icon" :size="16" />
+        {{ loading ? "Carimbando…" : label }}
+      </span>
     </span>
     <span class="clock__splash" aria-hidden="true" />
   </button>
@@ -108,8 +118,8 @@ function press(): void {
   border-radius: 50%;
   background: var(--surface);
   color: var(--ink);
-  border: 2px solid var(--ink);
-  box-shadow: 3px 3px 0 var(--ink);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-2);
   transition:
     transform var(--d-fast) var(--ease),
     box-shadow var(--d-fast) var(--ease),
@@ -120,21 +130,19 @@ function press(): void {
 }
 
 .clock:hover:not(:disabled) {
-  transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 var(--ink);
+  transform: translateY(-1px);
+  box-shadow:
+    0 8px 20px rgb(16 24 20 / 0.12),
+    0 20px 48px rgb(16 24 20 / 0.08);
 }
 
 .clock:active:not(:disabled) {
-  transform: translate(3px, 3px);
-  box-shadow: 0 0 0 var(--ink);
+  transform: scale(0.98);
+  box-shadow: var(--shadow-1);
 }
 
 .clock:focus-visible {
   outline-offset: 6px;
-}
-
-.clock--out {
-  background: var(--blue-wash);
 }
 
 .clock--done,
@@ -172,7 +180,7 @@ function press(): void {
 }
 
 .clock__sec {
-  fill: var(--red);
+  fill: var(--coral);
 }
 
 .clock__face {
@@ -190,10 +198,29 @@ function press(): void {
 }
 
 .clock__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: var(--t-14);
   font-weight: 700;
-  color: var(--blue);
+  color: var(--brand);
   letter-spacing: -0.01em;
+}
+
+.clock--out .clock__label {
+  color: var(--amber-ink);
+}
+
+.clock__rim {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 3;
+  opacity: 0.85;
+}
+
+.clock--done .clock__rim,
+.clock--off .clock__rim {
+  stroke: var(--rule);
 }
 
 .clock--done .clock__label,
@@ -215,7 +242,7 @@ function press(): void {
   position: absolute;
   inset: -2px;
   border-radius: 50%;
-  border: 6px solid var(--red);
+  border: 6px solid var(--brand);
   opacity: 0;
   pointer-events: none;
 }
@@ -230,7 +257,7 @@ function press(): void {
 
 @keyframes stamp {
   0% {
-    transform: translate(3px, 3px) scale(0.96);
+    transform: scale(0.96);
   }
   100% {
     transform: none;

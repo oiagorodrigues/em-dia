@@ -81,11 +81,11 @@ const toast = useToastStore();
 }
 
 .toast--error {
-  border-left: 4px solid var(--red);
+  border-left: 4px solid var(--coral);
 }
 
 .toast--success {
-  border-left: 4px solid var(--green);
+  border-left: 4px solid var(--brand);
 }
 
 .toast__msg {

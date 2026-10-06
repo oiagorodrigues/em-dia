@@ -10,6 +10,9 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   attendanceShort,
   inTab,
+  isFutureMonth,
+  projectionTotals,
+  teamRowActions,
   pendencies,
   tabCounts,
   teamStatus,
@@ -26,6 +29,7 @@ function item(
     summary?: Partial<MonthSummary>;
     today?: Partial<WorkEntry> | null;
     lastPayment?: Partial<Payment> | null;
+    estimate?: Partial<DashboardItem["estimate"]>;
   } = {},
 ): DashboardItem {
   return {
@@ -58,6 +62,7 @@ function item(
     } as MonthSummary,
     today: opts.today === undefined ? null : (opts.today as WorkEntry | null),
     lastPayment: opts.lastPayment ? (opts.lastPayment as Payment) : null,
+    estimate: { month: "2026-11", days: 9, minutesPerDay: 480, cents: 162000, ...opts.estimate },
   };
 }
 
@@ -167,5 +172,50 @@ describe("pendencies", () => {
         }),
       ),
     ).toBe("2");
+  });
+});
+
+describe("projections", () => {
+  it("knows a future month from the current one", () => {
+    expect(isFutureMonth("2026-11", TODAY)).toBe(true);
+    expect(isFutureMonth("2026-10", TODAY)).toBe(false);
+    expect(isFutureMonth("2026-09", TODAY)).toBe(false);
+  });
+
+  it("adds up the estimates of people still working here, counting what can't be priced", () => {
+    const p = projectionTotals([
+      item("Ana"),
+      item("Bia", { estimate: { cents: null, minutesPerDay: null, days: 4 } }),
+      item("Cida", { contract: { archivedAt: "x" } }),
+    ]);
+    expect(p).toEqual({ people: 2, days: 13, minutes: 9 * 480, cents: 162000, unpriced: 1 });
+  });
+});
+
+describe("teamRowActions", () => {
+  const ctx = { currentMonth: true, projected: false, clock: "in" as const, writable: true };
+
+  it("puts bater entrada/saída first, then registrar pagamento", () => {
+    expect(teamRowActions(item("Ana"), ctx)).toEqual(["clock-in", "pay"]);
+    expect(teamRowActions(item("Ana"), { ...ctx, clock: "out" })).toEqual(["clock-out", "pay"]);
+  });
+
+  it("drops the clock outside today's month, in projections and once the day is closed", () => {
+    expect(teamRowActions(item("Ana"), { ...ctx, currentMonth: false })).toEqual(["pay"]);
+    expect(teamRowActions(item("Ana"), { ...ctx, projected: true })).toEqual(["pay"]);
+    expect(teamRowActions(item("Ana"), { ...ctx, clock: "done" })).toEqual(["pay"]);
+  });
+
+  it("offers only restore for removed people and nothing writable for ended ones", () => {
+    expect(teamRowActions(item("Ana", { contract: { archivedAt: "x" } }), ctx)).toEqual([
+      "restore",
+    ]);
+    expect(
+      teamRowActions(item("Ana", { contract: { status: "ended" } }), {
+        ...ctx,
+        clock: "off",
+        writable: false,
+      }),
+    ).toEqual([]);
   });
 });

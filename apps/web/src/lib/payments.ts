@@ -3,6 +3,8 @@ import type { Contract, Payment } from "@emdia/shared";
 export interface PaymentRow {
   payment: Payment;
   contract: Contract;
+  /** Description of the agreement a compensation pays down, e.g. "Mesa de jantar". */
+  agreement?: string | null;
 }
 
 /** Filters of the Pagamentos page; "" means "todos". */

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { Contract, InviteDelivery } from "@emdia/shared";
 import { computed } from "vue";
-import Avatar from "@/components/ui/Avatar.vue";
 import Button from "@/components/ui/Button.vue";
 import Icon from "@/components/ui/Icon.vue";
 import { firstName } from "@/lib/format.ts";
@@ -45,16 +44,16 @@ async function share(): Promise<void> {
 <template>
   <div class="isx">
     <section class="isx__card" aria-label="Código de convite">
-      <div class="isx__who">
-        <Avatar :name="contract.workerName" :size="56" />
-        <div>
-          <p class="label">convite para</p>
-          <p class="isx__name">{{ contract.workerName }}</p>
-        </div>
+      <div class="isx__intro">
+        <h2 class="isx__title">Convite para o app</h2>
+        <p class="isx__explain">
+          Com ele, {{ name }} cria a conta no celular para bater o ponto e confirmar os dias. É
+          opcional: você já pode registrar tudo por aqui.
+        </p>
       </div>
 
       <div class="isx__codebox">
-        <p class="label">código</p>
+        <p class="label">Código</p>
         <p class="inv__code mono" :aria-label="invite.code.split('').join(' ')">
           <span>{{ invite.code.slice(0, 4) }}</span
           ><span>{{ invite.code.slice(4) }}</span>
@@ -64,7 +63,7 @@ async function share(): Promise<void> {
       </div>
 
       <div class="isx__link">
-        <p class="label">link de cadastro</p>
+        <p class="label">Link de cadastro</p>
         <div class="isx__url">
           <span class="mono">{{ invite.signupUrl }}</span>
           <button
@@ -112,7 +111,7 @@ async function share(): Promise<void> {
     </section>
 
     <aside class="isx__aside">
-      <h2 class="label">e agora</h2>
+      <h2 class="label">Como funciona</h2>
       <ol class="isx__steps">
         <li>
           <span class="isx__n mono">1</span>
@@ -124,7 +123,7 @@ async function share(): Promise<void> {
         </li>
         <li>
           <span class="isx__n mono">3</span>
-          <span>Pronto: vocês veem o mesmo cartão. Até lá, você já pode anotar os dias.</span>
+          <span>Pronto: vocês passam a ver o mesmo cartão e confirmam os dias pelo app.</span>
         </li>
       </ol>
       <div v-if="$slots.default" class="isx__next"><slot /></div>
@@ -150,17 +149,20 @@ async function share(): Promise<void> {
   box-shadow: var(--shadow-1);
 }
 
-.isx__who {
-  display: flex;
-  align-items: center;
-  gap: var(--s-4);
+.isx__intro {
+  display: grid;
+  gap: var(--s-2);
 }
 
-.isx__name {
-  font-size: var(--t-28);
+.isx__title {
+  font-size: var(--t-20);
   font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.isx__explain {
+  color: var(--ink-2);
+  max-width: 60ch;
 }
 
 .isx__codebox {
@@ -169,8 +171,8 @@ async function share(): Promise<void> {
   gap: var(--s-2);
   padding: var(--s-6);
   border-radius: var(--r-2);
-  background: var(--tint-mint);
-  color: var(--tint-mint-ink);
+  background: var(--brand-wash);
+  color: var(--brand-ink);
 }
 
 .isx__codebox .label {
@@ -228,11 +230,11 @@ async function share(): Promise<void> {
   border-radius: var(--r-1);
   font-size: var(--t-14);
   font-weight: 600;
-  color: var(--blue);
+  color: var(--brand);
 }
 
 .isx__copy:hover {
-  background: var(--blue-wash);
+  background: var(--brand-wash);
 }
 
 .isx__sent {
@@ -241,8 +243,8 @@ async function share(): Promise<void> {
   gap: var(--s-2);
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-1);
-  background: var(--green-wash);
-  color: var(--tint-mint-ink);
+  background: var(--brand-wash);
+  color: var(--brand-ink);
   font-size: var(--t-14);
   overflow-wrap: anywhere;
 }

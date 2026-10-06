@@ -2,6 +2,8 @@
 import { nextTick, onBeforeUnmount, ref, useId, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
 import type { IconName } from "./icons.ts";
+import { layerFor } from "@/lib/layer.ts";
+import { placeFloating } from "@/lib/position.ts";
 import type { MenuItem } from "./menu.ts";
 
 const {
@@ -19,6 +21,8 @@ const {
 
 const open = ref(false);
 const up = ref(false);
+const pos = ref({ top: -9999, left: -9999 });
+const layer = ref<HTMLElement | "body">("body");
 const active = ref(0);
 const id = useId();
 const root = useTemplateRef<HTMLElement>("root");
@@ -36,12 +40,29 @@ function focusItem(index: number): void {
   els[active.value]?.focus();
 }
 
+/** The list lives on <body> so table scroll containers never clip it; place it by the trigger. */
+function place(): void {
+  const a = trigger.value?.getBoundingClientRect();
+  const b = list.value?.getBoundingClientRect();
+  if (!a || !b) return;
+  const p = placeFloating(
+    a,
+    b,
+    { width: window.innerWidth, height: window.innerHeight },
+    "bottom",
+    4,
+    8,
+    align,
+  );
+  up.value = p.side === "top";
+  pos.value = { top: p.top, left: p.left };
+}
+
 async function show(focusIndex = 0): Promise<void> {
-  // Open upwards when the trigger sits near the bottom of the viewport (last table rows).
-  const rect = trigger.value?.getBoundingClientRect();
-  up.value = !!rect && window.innerHeight - rect.bottom < 48 * items.length + 24;
+  layer.value = layerFor(trigger.value);
   open.value = true;
   await nextTick();
+  place();
   focusItem(focusIndex);
 }
 
@@ -84,18 +105,31 @@ function onMenuKey(e: KeyboardEvent): void {
   const run = keys[e.key];
   if (!run) return;
   if (e.key !== "Tab") e.preventDefault();
+  if (e.key === "Escape") e.stopPropagation();
   run();
 }
 
-function onDocPointer(e: PointerEvent): void {
-  if (root.value && !root.value.contains(e.target as Node)) close(false);
+function onDocPointer(e: Event): void {
+  const target = e.target as Node;
+  if (root.value?.contains(target) || list.value?.contains(target)) return;
+  close(false);
+}
+
+function onViewportChange(): void {
+  close(false);
 }
 
 watch(open, (isOpen) => {
-  if (isOpen) document.addEventListener("pointerdown", onDocPointer, true);
-  else document.removeEventListener("pointerdown", onDocPointer, true);
+  const method = isOpen ? "addEventListener" : "removeEventListener";
+  document[method]("pointerdown", onDocPointer, true);
+  window[method]("scroll", onViewportChange, true);
+  window[method]("resize", onViewportChange);
 });
-onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointer, true));
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", onDocPointer, true);
+  window.removeEventListener("scroll", onViewportChange, true);
+  window.removeEventListener("resize", onViewportChange);
+});
 </script>
 
 <template>
@@ -113,34 +147,37 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointer, 
     >
       <Icon :name="icon" :size="18" />
     </button>
-    <Transition name="menu">
-      <ul
-        v-if="open"
-        :id="id"
-        ref="list"
-        class="menu__list"
-        :class="[`menu__list--${align}`, { 'is-up': up }]"
-        role="menu"
-        :aria-label="label"
-        @keydown="onMenuKey"
-        @click.stop
-      >
-        <li v-for="(item, i) in items" :key="item.label" role="none">
-          <button
-            type="button"
-            role="menuitem"
-            class="menu__item"
-            :class="{ 'is-danger': item.danger }"
-            :tabindex="i === active ? 0 : -1"
-            :aria-disabled="item.disabled || undefined"
-            @click="select(item)"
-          >
-            <Icon v-if="item.icon" :name="item.icon" :size="16" />
-            <span>{{ item.label }}</span>
-          </button>
-        </li>
-      </ul>
-    </Transition>
+    <Teleport :to="layer">
+      <Transition name="menu">
+        <ul
+          v-if="open"
+          :id="id"
+          ref="list"
+          class="menu__list"
+          :class="{ 'is-up': up }"
+          :style="{ top: `${pos.top}px`, left: `${pos.left}px` }"
+          role="menu"
+          :aria-label="label"
+          @keydown="onMenuKey"
+          @click.stop
+        >
+          <li v-for="(item, i) in items" :key="item.label" role="none">
+            <button
+              type="button"
+              role="menuitem"
+              class="menu__item"
+              :class="{ 'is-danger': item.danger }"
+              :tabindex="i === active ? 0 : -1"
+              :aria-disabled="item.disabled || undefined"
+              @click="select(item)"
+            >
+              <Icon v-if="item.icon" :name="item.icon" :size="16" />
+              <span>{{ item.label }}</span>
+            </button>
+          </li>
+        </ul>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -166,9 +203,8 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointer, 
 }
 
 .menu__list {
-  position: absolute;
-  top: calc(100% + 4px);
-  z-index: 30;
+  position: fixed;
+  z-index: 90;
   min-width: 200px;
   padding: var(--s-1);
   list-style: none;
@@ -176,19 +212,6 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointer, 
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
   box-shadow: var(--shadow-2);
-}
-
-.menu__list--end {
-  right: 0;
-}
-
-.menu__list--start {
-  left: 0;
-}
-
-.menu__list.is-up {
-  top: auto;
-  bottom: calc(100% + 4px);
 }
 
 .menu__item {
@@ -213,11 +236,11 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointer, 
 }
 
 .menu__item:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--blue);
+  box-shadow: inset 0 0 0 2px var(--brand);
 }
 
 .menu__item.is-danger {
-  color: var(--red-text);
+  color: var(--coral-ink);
 }
 
 .menu__item[aria-disabled="true"] {
@@ -236,6 +259,11 @@ onBeforeUnmount(() => document.removeEventListener("pointerdown", onDocPointer, 
 .menu-leave-to {
   opacity: 0;
   transform: translateY(-4px);
+}
+
+.menu-enter-from.is-up,
+.menu-leave-to.is-up {
+  transform: translateY(4px);
 }
 
 @media (prefers-reduced-motion: reduce) {

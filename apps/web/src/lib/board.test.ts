@@ -1,6 +1,7 @@
 import type { EntryStatus, WorkEntry } from "@emdia/shared";
 import { describe, expect, it } from "vite-plus/test";
-import { boardCells, cellKind, matchesBoardStatus, stripDates } from "./board.ts";
+import type { DashboardItem } from "@emdia/shared";
+import { boardCells, cellKind, matchesBoardStatus, rowTotals, stripDates } from "./board.ts";
 
 function entry(date: string, status: EntryStatus, minutes = 0): WorkEntry {
   return {
@@ -84,9 +85,9 @@ describe("stripDates", () => {
     ]);
   });
 
-  it("uses the month's last week for a past month and its first week for a future one", () => {
+  it("uses the month's last week for a past month and its first full week for a future one", () => {
     expect(stripDates("2026-09", "2026-10-07")[0]).toBe("2026-09-28");
-    expect(stripDates("2026-11", "2026-10-07")[0]).toBe("2026-10-26");
+    expect(stripDates("2026-11", "2026-10-07")[0]).toBe("2026-11-02");
   });
 });
 
@@ -97,5 +98,39 @@ describe("matchesBoardStatus", () => {
     expect(matchesBoardStatus({ status: "ended" }, "encerrados")).toBe(true);
     expect(matchesBoardStatus({ status: "active" }, "encerrados")).toBe(false);
     expect(matchesBoardStatus({ status: "ended" }, "todos")).toBe(true);
+  });
+});
+
+describe("rowTotals", () => {
+  const item = {
+    contract: { schedule: { kind: "weekly" } },
+    summary: { totalMinutes: 500, balanceCents: 18000, daysWorked: 2, expectedDays: 9 },
+    estimate: { month: "2026-11", days: 9, minutesPerDay: 480, cents: 162000 },
+  } as unknown as DashboardItem;
+  const n = (s: string) => s.replace(/\s/g, " ");
+
+  it("uses the month's actuals", () => {
+    const t = rowTotals(item, false);
+    expect(t.hours).toBe("8h20");
+    expect(t.days).toBe("2 de 9");
+    expect(n(t.due)).toBe("R$ 180,00");
+  });
+
+  it("uses the estimate for a future month", () => {
+    const t = rowTotals(item, true);
+    expect(t.minutes).toBe(9 * 480);
+    expect(t.hours).toBe("72h");
+    expect(t.days).toBe("9 dias");
+    expect(n(t.due)).toBe("R$ 1.620,00");
+  });
+
+  it("shows a dash when the estimate has no price or times", () => {
+    const t = rowTotals(
+      { ...item, estimate: { month: "2026-11", days: 0, minutesPerDay: null, cents: null } },
+      true,
+    );
+    expect(t.hours).toBe("—");
+    expect(t.due).toBe("—");
+    expect(t.dueCents).toBeNull();
   });
 });

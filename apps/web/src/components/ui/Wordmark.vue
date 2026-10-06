@@ -27,6 +27,6 @@ const { size = 28 } = defineProps<{ size?: number }>();
   height: 0.24em;
   margin-left: 0.07em;
   border-radius: 50%;
-  background: var(--red);
+  background: var(--coral);
 }
 </style>

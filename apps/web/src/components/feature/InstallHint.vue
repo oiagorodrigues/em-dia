@@ -52,13 +52,13 @@ async function onInstall(): Promise<void> {
   display: inline-flex;
   align-items: center;
   font-weight: 700;
-  color: var(--blue);
+  color: var(--brand);
   text-decoration: none;
   border-radius: var(--r-1);
 }
 
 .hint__go:hover {
-  background: var(--blue-wash);
+  background: var(--brand-wash);
 }
 
 .hint__x {

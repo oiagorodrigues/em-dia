@@ -77,13 +77,19 @@ async function setup(
         rowLink: opts.link ? (p: Person) => `/equipe/${p.id}` : undefined,
       });
   });
-  const wrapper = mount(Host, { global: { plugins: [router] } });
+  const wrapper = mount(Host, {
+    global: { plugins: [router], stubs: { transition: false, "transition-group": false } },
+  });
   await flushPromises();
   return { wrapper, router };
 }
 
 const names = (w: Awaited<ReturnType<typeof setup>>["wrapper"]) =>
-  w.findAll("tbody tr").map((tr) => tr.findAll("td")[0]!.text());
+  w
+    .findAll("tbody tr")
+    // Rows on their way out (leave transition) are still in the DOM for a frame.
+    .filter((tr) => !tr.classes().some((c) => c.startsWith("dt-row-leave")))
+    .map((tr) => tr.findAll("td")[0]!.text());
 
 afterEach(() => {
   vi.unstubAllGlobals();

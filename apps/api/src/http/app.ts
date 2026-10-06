@@ -10,6 +10,7 @@ import { createRateLimiter } from "./middleware/rate-limit.ts";
 import { requestContext } from "./middleware/request-context.ts";
 import { createSecurityHeaders } from "./middleware/security-headers.ts";
 import { adjustmentRoutes } from "./routes/adjustments.ts";
+import { agreementRoutes } from "./routes/agreements.ts";
 import { authRoutes } from "./routes/auth.ts";
 import { contractRoutes } from "./routes/contracts.ts";
 import { entryRoutes } from "./routes/entries.ts";
@@ -68,6 +69,7 @@ export function createApp({ config, logger, services }: AppDeps): Express {
   v1.use(entryRoutes(services));
   v1.use(adjustmentRoutes(services));
   v1.use(paymentRoutes(services));
+  v1.use(agreementRoutes(services));
   v1.use(reportRoutes(services));
   api.use("/v1", v1);
   if (config.webDistDir) app.use(webRoutes(config.webDistDir));

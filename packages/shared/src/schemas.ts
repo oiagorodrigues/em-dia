@@ -75,7 +75,7 @@ export const scheduleSchema = z
   .object({
     kind: z.enum(SCHEDULE_KINDS),
     weekdays: z.array(z.number().int().min(0).max(6)).max(7).default([]),
-    everyWeeks: z.number().int().min(1).max(4).default(1),
+    everyWeeks: z.number().int().min(1).max(12).default(1),
     monthDays: z.array(z.number().int().min(1).max(31)).max(31).default([]),
     visitsPerMonth: z.number().int().min(1).max(31).nullable().default(null),
   })
@@ -174,14 +174,47 @@ export const createAdjustmentSchema = z.object({
 export type CreateAdjustmentInput = z.infer<typeof createAdjustmentSchema>;
 
 /** Multipart form fields arrive as strings; amountCents is coerced. */
-export const createPaymentSchema = z.object({
-  referenceMonth: yearMonth,
-  paidOn: isoDate,
-  amountCents: z.coerce.number().int().min(1).max(100_000_000),
-  method: z.enum(PAYMENT_METHODS),
-  note: shortText.nullable().optional(),
-});
+export const createPaymentSchema = z
+  .object({
+    referenceMonth: yearMonth,
+    paidOn: isoDate,
+    amountCents: z.coerce.number().int().min(1).max(100_000_000),
+    method: z.enum(PAYMENT_METHODS),
+    note: shortText.nullable().optional(),
+    agreementId: z.string().min(1).nullable().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.agreementId && v.method !== "compensation") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["method"],
+        message: "Acordos são abatidos como compensação",
+      });
+    }
+    if (v.method === "compensation" && !v.agreementId && !v.note) {
+      ctx.addIssue({ code: "custom", path: ["note"], message: "Diga com o que foi compensado" });
+    }
+  });
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
+
+export const createAgreementSchema = z
+  .object({
+    description: z.string().trim().min(2, "Descreva o acordo").max(200),
+    totalCents: cents.min(1, "Informe o valor"),
+    installmentCents: cents.min(1).nullable().default(null),
+    startMonth: yearMonth,
+  })
+  .refine((v) => v.installmentCents === null || v.installmentCents <= v.totalCents, {
+    path: ["installmentCents"],
+    message: "A parcela não pode passar do total",
+  });
+export type CreateAgreementInput = z.infer<typeof createAgreementSchema>;
+
+/** Typing the word protects against a stray click; the password proves it's the owner. */
+export const deleteAccountSchema = z.object({
+  password: z.string().min(1).max(128),
+  confirm: z.literal("EXCLUIR", { error: "Digite EXCLUIR para confirmar" }),
+});
 
 export const monthQuerySchema = z.object({ month: yearMonth });
 export const yearQuerySchema = z.object({ year: z.coerce.number().int().min(2000).max(2100) });

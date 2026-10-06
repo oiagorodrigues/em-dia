@@ -11,6 +11,8 @@ import {
   type SortState,
   type TableState,
 } from "@/lib/table.ts";
+import { staggerDelay } from "@/lib/motion.ts";
+import FilterDrawer from "./FilterDrawer.vue";
 import Icon from "./Icon.vue";
 import Skeleton from "./Skeleton.vue";
 
@@ -30,6 +32,7 @@ const {
   emptyTitle = "Nada por aqui ainda.",
   filtersActive = false,
   cardActions = "side",
+  filterCount,
 } = defineProps<{
   rows: readonly T[];
   columns: readonly Column<T>[];
@@ -52,6 +55,8 @@ const {
   filtersActive?: boolean;
   /** Where row actions sit on mobile cards: beside the content, or in a row below it (many actions). */
   cardActions?: "side" | "below";
+  /** Active page filters, shown on the mobile "Filtros (n)" button. */
+  filterCount?: number;
 }>();
 
 const emit = defineEmits<{ "row-click": [row: T]; "clear-filters": [] }>();
@@ -78,12 +83,15 @@ const id = useId();
 const wide = useMediaQuery(MQ.md);
 const lg = useMediaQuery(MQ.lg);
 const xl = useMediaQuery(MQ.xl);
+const xxl = useMediaQuery(MQ["2xl"]);
 
 const internal = reactive<TableState>({ q: "", sort: defaultSort, filters: {} });
 const state = computed(() => externalState ?? internal);
 
 const visibleColumns = computed(() =>
-  columns.filter((c) => !c.hideBelow || (c.hideBelow === "lg" ? lg.value : xl.value)),
+  columns.filter(
+    (c) => !c.hideBelow || { lg: lg.value, xl: xl.value, "2xl": xxl.value }[c.hideBelow],
+  ),
 );
 
 const filtered = computed(() => (filter ? rows.filter(filter) : [...rows]));
@@ -153,7 +161,14 @@ function clearAll(): void {
           :aria-controls="id"
         />
       </label>
-      <div v-if="hasSlot('filters')" class="dt__filters"><slot name="filters" /></div>
+      <FilterDrawer
+        v-if="hasSlot('filters')"
+        class="dt__filters"
+        :count="filterCount ?? (filtersActive ? 1 : 0)"
+        :result-label="`ver ${countLabel(shown.length)}`"
+        @clear="clearAll"
+        ><slot name="filters"
+      /></FilterDrawer>
       <p class="dt__count" aria-live="polite">
         {{ loading ? "carregando…" : countLabel(shown.length) }}
       </p>
@@ -216,10 +231,11 @@ function clearAll(): void {
             </th>
           </tr>
         </thead>
-        <tbody>
+        <TransitionGroup tag="tbody" name="dt-row" appear>
           <tr
-            v-for="row in shown"
+            v-for="(row, index) in shown"
             :key="rowKey(row)"
+            :style="{ '--stagger': `${staggerDelay(index)}ms` }"
             :class="{ 'is-link': !!rowLink }"
             :tabindex="rowLink ? 0 : undefined"
             @click="rowLink ? activate(row, $event) : emit('row-click', row)"
@@ -238,7 +254,7 @@ function clearAll(): void {
               <div class="dt__row-actions-inner"><slot name="row-actions" :row="row" /></div>
             </td>
           </tr>
-        </tbody>
+        </TransitionGroup>
         <tfoot v-if="hasSlot('footer')">
           <slot name="footer" :rows="shown" />
         </tfoot>
@@ -246,10 +262,11 @@ function clearAll(): void {
     </div>
 
     <template v-else>
-      <ul :id="id" class="dt__cards">
+      <TransitionGroup :id="id" tag="ul" name="dt-row" class="dt__cards" appear>
         <li
-          v-for="row in shown"
+          v-for="(row, index) in shown"
           :key="rowKey(row)"
+          :style="{ '--stagger': `${staggerDelay(index)}ms` }"
           class="dt__card"
           :class="{ 'is-link': !!rowLink, 'has-actions-below': cardActions === 'below' }"
           :tabindex="rowLink ? 0 : undefined"
@@ -272,7 +289,7 @@ function clearAll(): void {
             <slot name="row-actions" :row="row" />
           </div>
         </li>
-      </ul>
+      </TransitionGroup>
       <div v-if="hasSlot('footer')" class="dt__card-footer">
         <slot name="footer" :rows="shown" />
       </div>
@@ -329,8 +346,8 @@ function clearAll(): void {
 
 .dt__search-input:focus {
   outline: none;
-  border-color: var(--blue);
-  box-shadow: 0 0 0 3px var(--blue-wash);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-wash);
 }
 
 .dt__filters {
@@ -412,7 +429,7 @@ function clearAll(): void {
 
 .dt__sort-icon.is-on {
   opacity: 1;
-  color: var(--blue);
+  color: var(--brand);
 }
 
 .dt__table td {
@@ -439,7 +456,7 @@ function clearAll(): void {
 }
 
 .dt__table tr:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--brand);
   outline-offset: -2px;
 }
 
@@ -520,7 +537,7 @@ td.mono {
 }
 
 .dt__card:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
@@ -581,9 +598,55 @@ td.mono {
 
 .dt__clear {
   min-height: 44px;
-  color: var(--blue);
+  color: var(--brand);
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* Rows fade in with a short stagger on load and when filters change; removed rows fade out. */
+.dt-row-enter-active {
+  transition:
+    opacity var(--d-base) var(--ease-out),
+    transform var(--d-base) var(--ease-out);
+  transition-delay: var(--stagger, 0ms);
+}
+
+.dt-row-leave-active {
+  transition: opacity var(--d-fast) var(--ease-in);
+}
+
+.dt-row-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.dt-row-leave-to {
+  opacity: 0;
+}
+
+.dt-row-move {
+  transition: transform var(--d-base) var(--ease-out);
+}
+
+.dt__card.is-link:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+
+.dt__card {
+  transition:
+    transform var(--d-base) var(--ease-out),
+    box-shadow var(--d-base) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-row-enter-from,
+  .dt__card.is-link:hover {
+    transform: none;
+  }
+  .dt-row-move {
+    transition: none;
+  }
 }
 </style>

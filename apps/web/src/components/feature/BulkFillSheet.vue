@@ -12,6 +12,7 @@ import Button from "@/components/ui/Button.vue";
 import Field from "@/components/ui/Field.vue";
 import Sheet from "@/components/ui/Sheet.vue";
 import Stepper from "@/components/ui/Stepper.vue";
+import TimeField from "@/components/ui/TimeField.vue";
 import { formatDayMonth } from "@/lib/format.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
@@ -97,7 +98,7 @@ function stop(): void {
 <template>
   <Sheet
     v-model:open="open"
-    title="marcar dias previstos"
+    title="Marcar dias previstos"
     :subtitle="`${dates.length} ${dates.length === 1 ? 'dia' : 'dias'} sem registro ${span}`"
   >
     <div class="bf">
@@ -107,20 +108,13 @@ function stop(): void {
       </p>
       <div class="bf__times">
         <Field v-slot="{ id }" label="Entrada">
-          <input
-            :id="id"
-            v-model="checkIn"
-            class="input"
-            type="time"
-            required
-            :disabled="running"
-          />
+          <TimeField :id="id" v-model="checkIn" label="Entrada" :step="15" :disabled="running" />
         </Field>
         <Field v-slot="{ id }" label="Saída">
-          <input :id="id" v-model="checkOut" class="input" type="time" :disabled="running" />
+          <TimeField :id="id" v-model="checkOut" label="Saída" :step="15" :disabled="running" />
         </Field>
       </div>
-      <Field v-slot="{ id }" label="Pausa">
+      <Field v-slot="{ id }" label="Pausa (minutos)">
         <Stepper :id="id" v-model="breakMinutes" label="Pausa" />
       </Field>
       <p class="bf__total">
@@ -133,8 +127,8 @@ function stop(): void {
       </div>
     </div>
     <template #footer>
-      <Button v-if="running" @click="stop">parar</Button>
-      <Button v-else @click="open = false">cancelar</Button>
+      <Button v-if="running" @click="stop">Parar</Button>
+      <Button v-else @click="open = false">Cancelar</Button>
       <Button
         variant="primary"
         icon="check"
@@ -142,7 +136,7 @@ function stop(): void {
         :disabled="!checkIn || dates.length === 0"
         @click="run"
       >
-        marcar {{ dates.length }} {{ dates.length === 1 ? "dia" : "dias" }}
+        Marcar {{ dates.length }} {{ dates.length === 1 ? "dia" : "dias" }}
       </Button>
     </template>
   </Sheet>
@@ -192,7 +186,7 @@ function stop(): void {
 .bf__bar span {
   display: block;
   height: 100%;
-  background: var(--blue);
+  background: var(--brand);
   transition: width var(--d-base) var(--ease);
 }
 </style>

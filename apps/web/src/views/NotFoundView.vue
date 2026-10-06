@@ -20,7 +20,7 @@ const auth = useAuthStore();
         :tilt="-8"
       />
     </div>
-    <h1 class="page-title">essa página faltou.</h1>
+    <h1 class="page-title">Essa página faltou.</h1>
     <p class="muted">O endereço pode estar errado, ou a página saiu daqui.</p>
     <Button :to="auth.user ? '/' : '/entrar'" variant="primary" icon="arrow-left">
       {{ auth.user ? "voltar ao início" : "ir para entrar" }}

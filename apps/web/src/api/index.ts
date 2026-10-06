@@ -1,8 +1,10 @@
 import type {
   ActivityItem,
   Adjustment,
+  Agreement,
   Contract,
   CreateAdjustmentInput,
+  CreateAgreementInput,
   CreateContractInput,
   DashboardItem,
   Household,
@@ -50,6 +52,9 @@ export const meApi = {
       method: "POST",
       body: { currentPassword, newPassword },
     }),
+  /** Anonymises the account (the other party keeps the shared history); 204, session ends. */
+  deleteAccount: (password: string, confirm: string) =>
+    request<void>("/me", { method: "DELETE", body: { password, confirm } }),
 };
 
 export const householdsApi = {
@@ -129,6 +134,26 @@ export const adjustmentsApi = {
     request<void>(`/contracts/${enc(contractId)}/adjustments/${enc(id)}`, { method: "DELETE" }),
 };
 
+export const agreementsApi = {
+  list: (contractId: string) =>
+    request<{ agreements: Agreement[] }>(`/contracts/${enc(contractId)}/agreements`),
+  create: (contractId: string, body: CreateAgreementInput) =>
+    request<{ agreement: Agreement }>(`/contracts/${enc(contractId)}/agreements`, {
+      method: "POST",
+      body,
+    }),
+  accept: (contractId: string, id: string) =>
+    request<{ agreement: Agreement }>(
+      `/contracts/${enc(contractId)}/agreements/${enc(id)}/accept`,
+      { method: "POST" },
+    ),
+  cancel: (contractId: string, id: string) =>
+    request<{ agreement: Agreement }>(
+      `/contracts/${enc(contractId)}/agreements/${enc(id)}/cancel`,
+      { method: "POST" },
+    ),
+};
+
 export const paymentsApi = {
   list: (contractId: string, year: number) =>
     request<{ payments: Payment[] }>(`/contracts/${enc(contractId)}/payments`, { query: { year } }),
@@ -167,7 +192,11 @@ export const teamApi = {
 };
 
 export const dashboardApi = {
-  get: () => request<{ items: DashboardItem[]; month: YearMonth; today: IsoDate }>("/dashboard"),
+  /** Current month by default; any month (future ones carry only the estimate). */
+  get: (month?: YearMonth) =>
+    request<{ items: DashboardItem[]; month: YearMonth; today: IsoDate }>("/dashboard", {
+      query: { month },
+    }),
 };
 
 function enc(id: string): string {

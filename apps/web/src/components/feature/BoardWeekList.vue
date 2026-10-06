@@ -1,27 +1,26 @@
 <script setup lang="ts">
-import {
-  formatCents,
-  formatDuration,
-  OCCUPATION_LABEL,
-  weekdayOf,
-  type IsoDate,
-  type YearMonth,
-} from "@emdia/shared";
+import { OCCUPATION_LABEL, weekdayOf, type IsoDate, type YearMonth } from "@emdia/shared";
 import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import Avatar from "@/components/ui/Avatar.vue";
-import Icon from "@/components/ui/Icon.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
-import { stripDates, type BoardRow } from "@/lib/board.ts";
+import { rowTotals, stripDates, type BoardRow } from "@/lib/board.ts";
 import { formatDayMonth, WEEKDAY_LETTER, WEEKDAY_SHORT } from "@/lib/format.ts";
-import { attendanceText } from "@/lib/schedule.ts";
 import BoardCell from "./BoardCell.vue";
 
-const { rows, month, today, currentMonth } = defineProps<{
+const {
+  rows,
+  month,
+  today,
+  currentMonth,
+  projected = false,
+} = defineProps<{
   rows: readonly BoardRow[];
   month: YearMonth;
   today: IsoDate;
   currentMonth: YearMonth;
+  /** A future month: totals are the estimate. */
+  projected?: boolean;
 }>();
 
 const week = computed(() => stripDates(month, today));
@@ -67,7 +66,6 @@ function link(row: BoardRow) {
               >
             </span>
           </span>
-          <Icon name="chevron-right" class="bw__chev" />
         </span>
         <span class="bw__strip">
           <span
@@ -81,22 +79,18 @@ function link(row: BoardRow) {
             <span class="bw__dn mono" aria-hidden="true">{{ c.day }}</span>
           </span>
         </span>
-        <span class="bw__totals">
+        <span class="bw__totals" :class="{ 'is-projected': projected }">
           <span
-            ><span class="label">horas</span
-            ><span class="mono">{{ formatDuration(row.item.summary.totalMinutes) }}</span></span
+            ><span class="label">Horas</span
+            ><span class="mono">{{ rowTotals(row.item, projected).hours }}</span></span
           >
           <span
-            ><span class="label">dias</span
-            ><span class="mono">{{
-              attendanceText(row.item.summary, row.item.contract.schedule.kind)
-            }}</span></span
+            ><span class="label">Dias</span
+            ><span class="mono">{{ rowTotals(row.item, projected).days }}</span></span
           >
           <span
-            ><span class="label">a pagar</span
-            ><span class="mono bw__due">{{
-              formatCents(Math.max(0, row.item.summary.balanceCents))
-            }}</span></span
+            ><span class="label">{{ projected ? "Previsto" : "A pagar" }}</span
+            ><span class="mono bw__due">{{ rowTotals(row.item, projected).due }}</span></span
           >
         </span>
       </RouterLink>
@@ -129,7 +123,7 @@ function link(row: BoardRow) {
 }
 
 .bw__card:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
@@ -183,7 +177,7 @@ function link(row: BoardRow) {
 }
 
 .bw__day.is-today {
-  background: var(--blue-wash);
+  background: var(--brand-wash);
 }
 
 .bw__wd {
@@ -194,7 +188,7 @@ function link(row: BoardRow) {
 
 .bw__day.is-today .bw__wd,
 .bw__day.is-today .bw__dn {
-  color: var(--blue);
+  color: var(--brand);
   font-weight: 700;
 }
 
@@ -210,6 +204,14 @@ function link(row: BoardRow) {
   gap: var(--s-2);
   padding-top: var(--s-3);
   border-top: 1px dashed var(--rule);
+}
+
+.bw__totals.is-projected {
+  border-top-color: var(--ink-3);
+}
+
+.bw__totals.is-projected .mono {
+  color: var(--ink-2);
 }
 
 .bw__totals > span {

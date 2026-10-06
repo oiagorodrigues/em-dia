@@ -5,7 +5,7 @@ import {
   type MonthEstimate,
   type PayType,
 } from "@emdia/shared";
-import type { Tint } from "./tint.ts";
+import type { Tone } from "./tone.ts";
 
 /** Ended or removed contracts are history: the API answers 409 to any write. */
 export function isWritable(contract: Pick<Contract, "status" | "archivedAt">): boolean {
@@ -17,17 +17,17 @@ export type ContractState = "active" | "pending" | "ended" | "archived";
 export interface ContractStatusView {
   state: ContractState;
   label: string;
-  tone: Tint | "neutral" | "green" | "red" | "blue";
+  tone: Tone;
 }
 
 /** Removal wins over ending, and a missing worker only matters while the contract runs. */
 export function contractStatus(
   contract: Pick<Contract, "status" | "archivedAt" | "workerId">,
 ): ContractStatusView {
-  if (contract.archivedAt) return { state: "archived", label: "removido", tone: "rose" };
+  if (contract.archivedAt) return { state: "archived", label: "removido", tone: "coral" };
   if (contract.status === "ended") return { state: "ended", label: "encerrado", tone: "neutral" };
-  if (!contract.workerId) return { state: "pending", label: "convite pendente", tone: "butter" };
-  return { state: "active", label: "ativo", tone: "mint" };
+  if (!contract.workerId) return { state: "pending", label: "convite pendente", tone: "amber" };
+  return { state: "active", label: "ativo", tone: "brand" };
 }
 
 export interface ContactChannels {

@@ -27,7 +27,7 @@ describe("ScheduleField", () => {
     const preset = wrapper.findAll(".sf__preset").find((b) => b.text() === "seg a sex")!;
     await preset.trigger("click");
     expect(state.value.weekdays).toEqual([1, 2, 3, 4, 5]);
-    expect(wrapper.get(".sf__summary").text()).toBe("seg a sex · 22 dias em outubro");
+    expect(wrapper.get(".sf__summary").text()).toBe("seg a sex · 22 dias previstos em outubro");
     expect(preset.attributes("aria-pressed")).toBe("true");
   });
 
@@ -43,14 +43,33 @@ describe("ScheduleField", () => {
       .find((b) => b.text() === "20")!
       .trigger("click");
     expect(state.value.monthDays).toEqual([5, 20]);
-    expect(wrapper.get(".sf__summary").text()).toBe("dias 5 e 20 de cada mês · 2 dias em outubro");
+    expect(wrapper.get(".sf__summary").text()).toBe(
+      "dias 5 e 20 de cada mês · 2 dias previstos em outubro",
+    );
   });
 
   it("steps visits per month", async () => {
     const { wrapper, state } = setup({ ...DEFAULT_SCHEDULE, kind: "per_month", visitsPerMonth: 2 });
     await wrapper.get('button[aria-label="Mais 1 vez"]').trigger("click");
     expect(state.value.visitsPerMonth).toBe(3);
-    expect(wrapper.get(".stp__val").text()).toBe("3 vezes por mês");
+    expect(wrapper.get(".stp__val").text()).toBe("3");
+  });
+
+  it("offers a custom repetition of up to 12 weeks", async () => {
+    const { wrapper, state } = setup();
+    await wrapper
+      .findAll('input[type="radio"]')
+      .find((r) => (r.element as HTMLInputElement).value === "custom")!
+      .setValue();
+    expect(state.value.everyWeeks).toBe(4);
+    const weeks = wrapper.get('input[type="number"]');
+    await weeks.setValue("6");
+    await weeks.trigger("change");
+    expect(state.value.everyWeeks).toBe(6);
+    await weeks.setValue("20");
+    await weeks.trigger("change");
+    expect(state.value.everyWeeks).toBe(12);
+    expect(wrapper.get(".sf__summary").text()).not.toContain("~");
   });
 
   it("shows the field error", () => {

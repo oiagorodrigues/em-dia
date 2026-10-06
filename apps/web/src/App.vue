@@ -9,6 +9,11 @@ import { useServiceWorker } from "@/composables/sw.ts";
 
 const route = useRoute();
 const layout = computed(() => route.meta.layout ?? "app");
+/*
+ * Animate between pages, not between tabs of one page: keyed by the top-level route record,
+ * so /equipe/:id → /equipe/:id/pagamentos keeps the page (its tabs cross-fade on their own).
+ */
+const pageKey = computed(() => route.matched[0]?.path ?? route.path);
 
 useServiceWorker();
 
@@ -24,10 +29,20 @@ watch(
 <template>
   <OfflineBanner />
   <AuthLayout v-if="layout === 'auth'">
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <Transition name="route" mode="out-in">
+        <!-- The wrapper gives <Transition> one element even when a view renders a fragment. -->
+        <div :key="pageKey" class="route-page"><component :is="Component" /></div>
+      </Transition>
+    </RouterView>
   </AuthLayout>
   <AppShell v-else-if="layout === 'app'">
-    <RouterView />
+    <RouterView v-slot="{ Component }">
+      <Transition name="route" mode="out-in">
+        <!-- The wrapper gives <Transition> one element even when a view renders a fragment. -->
+        <div :key="pageKey" class="route-page"><component :is="Component" /></div>
+      </Transition>
+    </RouterView>
   </AppShell>
   <main v-else id="conteudo"><RouterView /></main>
   <ToastHost />

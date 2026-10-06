@@ -98,7 +98,7 @@ const SAMPLE = [
   }
 
   .auth__dot {
-    color: var(--red);
+    color: var(--coral);
   }
 
   .auth__sample {
@@ -148,7 +148,7 @@ const SAMPLE = [
   }
 
   .auth__ink {
-    color: var(--blue);
+    color: var(--brand);
   }
 
   .auth__total {

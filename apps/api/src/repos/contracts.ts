@@ -193,6 +193,10 @@ export function contractsRepo(db: Db) {
       execute(db, "UPDATE contracts SET archived_at = ? WHERE id = ?", archivedAt, id);
     },
 
+    unlinkWorker(workerId: string): void {
+      execute(db, "UPDATE contracts SET worker_id = NULL WHERE worker_id = ?", workerId);
+    },
+
     linkWorker(id: string, workerId: string): void {
       execute(db, "UPDATE contracts SET worker_id = ? WHERE id = ?", workerId, id);
     },

@@ -24,7 +24,7 @@ function onSubmit(): void {
 
 <template>
   <template v-if="sent">
-    <AuthHeader title="confira seu e-mail" />
+    <AuthHeader title="Confira seu e-mail" />
     <div class="stack">
       <p>
         Se existir uma conta com <strong class="mono sent-email">{{ values.email }}</strong
@@ -36,7 +36,7 @@ function onSubmit(): void {
   </template>
   <template v-else>
     <AuthHeader
-      title="esqueci a senha"
+      title="Esqueci a senha"
       lede="Diga seu e-mail e mandamos um link para criar uma senha nova."
     />
     <form class="stack" novalidate @submit.prevent="onSubmit">
@@ -65,7 +65,7 @@ function onSubmit(): void {
 <style scoped>
 .sent-email {
   font-size: 0.9em;
-  color: var(--blue);
+  color: var(--brand);
   word-break: break-all;
 }
 

@@ -101,23 +101,23 @@ function clear(): void {
 
 .rd__zone:hover,
 .rd__zone.is-over {
-  border-color: var(--blue);
-  background: var(--blue-wash);
+  border-color: var(--brand);
+  background: var(--brand-wash);
   color: var(--ink);
 }
 
 .rd__zone:has(:focus-visible) {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
 .rd__zone.is-error {
-  border-color: var(--red);
+  border-color: var(--coral);
 }
 
 .rd__cta {
   font-weight: 700;
-  color: var(--blue);
+  color: var(--brand);
 }
 
 .rd__hint {
@@ -150,7 +150,7 @@ function clear(): void {
   justify-items: center;
   font-size: 10px;
   font-weight: 700;
-  color: var(--red-text);
+  color: var(--coral-ink);
   background: var(--bg);
 }
 
@@ -188,6 +188,6 @@ function clear(): void {
 .rd__err {
   margin-top: var(--s-2);
   font-size: var(--t-14);
-  color: var(--red-text);
+  color: var(--coral-ink);
 }
 </style>

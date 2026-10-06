@@ -39,7 +39,11 @@ const monthLabel = computed(() => {
 const lines = computed<LedgerLine[]>(() => {
   if (!summary) return [];
   const out: LedgerLine[] = [{ label: "a receber no mês", value: formatCents(summary.dueCents) }];
-  out.push({ label: "já pago", value: formatCents(summary.paidCents), tone: "green" });
+  out.push({
+    label: "já pago",
+    value: formatCents(summary.paidCents),
+    tone: summary.paidCents > 0 ? "green" : "neutral",
+  });
   return out;
 });
 const total = computed<LedgerLine | undefined>(() =>
@@ -47,7 +51,7 @@ const total = computed<LedgerLine | undefined>(() =>
     ? {
         label: summary.balanceCents > 0 ? "falta pagar" : "em dia",
         value: formatCents(Math.max(0, summary.balanceCents)),
-        tone: summary.balanceCents > 0 ? "red" : "green",
+        tone: summary.balanceCents > 0 ? "neutral" : "green",
       }
     : undefined,
 );
@@ -151,8 +155,8 @@ async function copyPix(): Promise<void> {
 }
 
 .psp__pix.is-on {
-  background: var(--tint-sky);
-  color: var(--tint-sky-ink);
+  background: var(--brand-wash);
+  color: var(--brand-ink);
 }
 
 .psp__pix.is-on .label {

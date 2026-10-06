@@ -1,5 +1,6 @@
 import { queryOne, transaction, type Db } from "../db/index.ts";
 import { adjustmentsRepo } from "./adjustments.ts";
+import { agreementsRepo } from "./agreements.ts";
 import { auditRepo } from "./audit.ts";
 import { contractsRepo } from "./contracts.ts";
 import { entriesRepo } from "./entries.ts";
@@ -21,6 +22,7 @@ export function createRepos(db: Db) {
     entries: entriesRepo(db),
     adjustments: adjustmentsRepo(db),
     payments: paymentsRepo(db),
+    agreements: agreementsRepo(db),
     refreshTokens: refreshTokensRepo(db),
     passwordResets: passwordResetsRepo(db),
     audit: auditRepo(db),

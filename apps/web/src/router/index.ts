@@ -12,38 +12,38 @@ export const routes: RouteRecordRaw[] = [
   {
     path: "/entrar",
     component: () => import("@/views/auth/LoginView.vue"),
-    meta: { public: true, guestOnly: true, layout: "auth", title: "entrar" },
+    meta: { public: true, guestOnly: true, layout: "auth", title: "Entrar" },
   },
   {
     path: "/criar-conta",
     component: () => import("@/views/auth/RegisterView.vue"),
-    meta: { public: true, guestOnly: true, layout: "auth", title: "criar conta" },
+    meta: { public: true, guestOnly: true, layout: "auth", title: "Criar conta" },
   },
   {
     path: "/esqueci-senha",
     component: () => import("@/views/auth/ForgotPasswordView.vue"),
-    meta: { public: true, layout: "auth", title: "esqueci a senha" },
+    meta: { public: true, layout: "auth", title: "Esqueci a senha" },
   },
   {
     path: "/redefinir-senha",
     component: () => import("@/views/auth/ResetPasswordView.vue"),
-    meta: { public: true, layout: "auth", title: "nova senha" },
+    meta: { public: true, layout: "auth", title: "Nova senha" },
   },
-  { path: "/", component: () => import("@/views/HomeView.vue"), meta: { title: "início" } },
+  { path: "/", component: () => import("@/views/HomeView.vue"), meta: { title: "Início" } },
   {
     path: "/entrar-no-vinculo",
     component: () => import("@/views/JoinContractView.vue"),
-    meta: { roles: ["worker"], title: "entrar no vínculo" },
+    meta: { roles: ["worker"], title: "Entrar no vínculo" },
   },
   {
     path: "/equipe",
     component: () => import("@/views/TeamView.vue"),
-    meta: { roles: ["employer"], title: "equipe" },
+    meta: { roles: ["employer"], title: "Equipe" },
   },
   {
     path: "/equipe/novo",
     component: () => import("@/views/NewContractView.vue"),
-    meta: { roles: ["employer"], title: "adicionar profissional" },
+    meta: { roles: ["employer"], title: "Adicionar profissional" },
   },
   // v1 links (e-mails, bookmarks, the e2e suite) keep working.
   { path: "/vinculos/novo", redirect: (to) => ({ path: "/equipe/novo", query: to.query }) },
@@ -80,6 +80,11 @@ export const routes: RouteRecordRaw[] = [
         component: () => import("@/views/contract/ExtrasTab.vue"),
       },
       {
+        path: "acordos",
+        name: "contract-agreements",
+        component: () => import("@/views/contract/AgreementsTab.vue"),
+      },
+      {
         path: "historico",
         name: "contract-history",
         component: () => import("@/views/contract/HistoryTab.vue"),
@@ -95,27 +100,27 @@ export const routes: RouteRecordRaw[] = [
   {
     path: "/pagamentos/novo",
     component: () => import("@/views/NewPaymentView.vue"),
-    meta: { roles: ["employer"], title: "novo pagamento" },
+    meta: { roles: ["employer"], title: "Novo pagamento" },
   },
   {
     path: "/cartao",
     component: () => import("@/views/BoardView.vue"),
-    meta: { title: "cartão" },
+    meta: { title: "Cartão" },
   },
   {
     path: "/pagamentos",
     component: () => import("@/views/PaymentsView.vue"),
-    meta: { title: "pagamentos" },
+    meta: { title: "Pagamentos" },
   },
   {
     path: "/perfil",
     component: () => import("@/views/ProfileView.vue"),
-    meta: { title: "perfil" },
+    meta: { title: "Perfil" },
   },
   {
     path: "/:pathMatch(.*)*",
     component: () => import("@/views/NotFoundView.vue"),
-    meta: { public: true, layout: "bare", title: "não encontrado" },
+    meta: { public: true, layout: "bare", title: "Não encontrado" },
   },
 ];
 

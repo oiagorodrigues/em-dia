@@ -2,6 +2,7 @@
 import {
   describeSchedule,
   ENTRY_STATUS_LABEL,
+  estimateAverageMonthlyCost,
   estimateMonthCost,
   formatCents,
   formatDuration,
@@ -19,7 +20,6 @@ import { RouterLink, useRoute } from "vue-router";
 import { contractsApi, entriesApi, paymentsApi } from "@/api";
 import ContactActions from "@/components/feature/ContactActions.vue";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
-import Icon from "@/components/ui/Icon.vue";
 import KpiCard from "@/components/ui/KpiCard.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
@@ -38,8 +38,10 @@ const { contract, month, currentMonth, setMonth } = useContract();
 const monthModel = computed({ get: () => month.value, set: setMonth });
 const minMonth = computed(() => toYearMonth(contract.value.startedOn));
 const maxMonth = computed(() =>
-  contract.value.endedOn ? toYearMonth(contract.value.endedOn) : shiftMonth(currentMonth, 1),
+  contract.value.endedOn ? toYearMonth(contract.value.endedOn) : shiftMonth(currentMonth, 12),
 );
+/** Months ahead have no records yet: everything shown is the estimate, labelled "previsto". */
+const future = computed(() => month.value > currentMonth);
 const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 const year = computed(() => parseYearMonth(month.value).year);
 
@@ -58,20 +60,68 @@ const payments = useResource(
 const s = computed(() => summary.data.value);
 const kind = computed(() => contract.value.schedule.kind);
 
+const projectedKpis = computed(() => {
+  const e = estimate.value;
+  const unit = kind.value === "per_month" ? "visitas" : "dias";
+  return [
+    {
+      tone: "brand" as const,
+      icon: "clock" as const,
+      label: "Horas previstas",
+      value: e.minutesPerDay === null ? "—" : formatDuration(e.days * e.minutesPerDay),
+      amount: e.minutesPerDay === null ? null : e.days * e.minutesPerDay,
+      format: formatDuration,
+      caption:
+        e.minutesPerDay === null
+          ? "sem horário combinado"
+          : `${formatDuration(e.minutesPerDay)} por dia`,
+    },
+    {
+      tone: "brand" as const,
+      icon: "calendar" as const,
+      label: `${unit[0]!.toUpperCase()}${unit.slice(1)} previstos`,
+      value: String(e.days),
+      amount: e.days,
+      format: (n: number) => String(Math.round(n)),
+      caption: describeSchedule(contract.value.schedule),
+    },
+    {
+      tone: "amber" as const,
+      icon: "coins" as const,
+      label: auth.isEmployer ? "A pagar previsto" : "A receber previsto",
+      value: e.cents === null ? "—" : formatCents(e.cents),
+      amount: e.cents,
+      format: (n: number) => formatCents(Math.round(n)),
+      caption: estimateText.value ?? estimateGap(contract.value),
+    },
+    {
+      tone: "neutral" as const,
+      icon: "wallet" as const,
+      label: "Média por mês",
+      value: average.value === null ? "—" : formatCents(average.value),
+      amount: average.value,
+      format: (n: number) => formatCents(Math.round(n)),
+      caption: "nos próximos 12 meses",
+    },
+  ];
+});
+
+const average = computed(() => estimateAverageMonthlyCost(contract.value, month.value));
+
 const kpis = computed(() => {
   const sum = s.value;
   const owed = sum ? Math.max(0, sum.balanceCents) : 0;
   const paidThisMonth = payments.data.value?.filter((p) => p.referenceMonth === month.value) ?? [];
   return [
     {
-      tint: "mint" as const,
+      tone: "brand" as const,
       icon: "clock" as const,
       label: "horas",
       value: sum ? formatDuration(sum.totalMinutes) : "",
       caption: `em ${monthLabel.value}`,
     },
     {
-      tint: "butter" as const,
+      tone: "amber" as const,
       icon: "calendar" as const,
       label: kind.value === "per_month" ? "visitas" : "dias",
       value: sum ? attendanceText(sum, kind.value) : "",
@@ -86,14 +136,14 @@ const kpis = computed(() => {
         : undefined,
     },
     {
-      tint: "peach" as const,
+      tone: "amber" as const,
       icon: "coins" as const,
       label: auth.isEmployer ? "a pagar" : "a receber",
       value: formatCents(owed),
       caption: sum ? `de ${formatCents(sum.dueCents)}` : undefined,
     },
     {
-      tint: "sky" as const,
+      tone: "brand" as const,
       icon: "wallet" as const,
       label: "pago",
       value: sum ? formatCents(sum.paidCents) : "",
@@ -181,11 +231,25 @@ function tabLink(name: string) {
   <div class="ov">
     <MonthSwitcher v-model="monthModel" :min="minMonth" :max="maxMonth" prefix="resumo de" />
 
-    <div class="ov__kpis">
+    <div v-if="future" class="kpi-grid" aria-label="Previsão do mês">
+      <KpiCard
+        v-for="k in projectedKpis"
+        :key="k.label"
+        :tone="k.tone"
+        :icon="k.icon"
+        :label="k.label"
+        :value="k.value"
+        :amount="k.amount"
+        :format="k.format"
+        :caption="k.caption"
+        projected
+      />
+    </div>
+    <div v-else class="kpi-grid">
       <KpiCard
         v-for="k in kpis"
         :key="k.label"
-        :tint="k.tint"
+        :tone="k.tone"
         :icon="k.icon"
         :label="k.label"
         :value="k.value"
@@ -193,15 +257,30 @@ function tabLink(name: string) {
         :loading="summary.loading.value && !s"
       />
     </div>
-    <p v-if="summary.error.value" class="form-error" role="alert">
+    <p v-if="!future && summary.error.value" class="form-error" role="alert">
       {{ summary.error.value.message }}
     </p>
 
     <div class="page-grid">
       <div class="span-8 ov__col">
-        <section class="sheet ov__box" aria-labelledby="ov-cost">
+        <section v-if="future" class="sheet ov__box is-projected" aria-labelledby="ov-cost">
           <div class="ov__boxhead">
-            <h2 id="ov-cost" class="ov__title">custo de {{ monthLabel }}</h2>
+            <h2 id="ov-cost" class="ov__title">Custo previsto de {{ monthLabel }}</h2>
+            <span class="ov__tag">previsto</span>
+          </div>
+          <p class="ov__proj mono">
+            {{ estimate.cents === null ? "—" : formatCents(estimate.cents) }}
+          </p>
+          <p class="ov__why">{{ estimateText ?? estimateGap(contract) }}</p>
+          <p class="ov__diff">
+            Conta feita com os dias previstos no combinado. Faltas, extras e acordos mudam o valor
+            quando o mês chegar.
+          </p>
+        </section>
+
+        <section v-else class="sheet ov__box" aria-labelledby="ov-cost">
+          <div class="ov__boxhead">
+            <h2 id="ov-cost" class="ov__title">Custo de {{ monthLabel }}</h2>
             <span v-if="partial" class="ov__hint">realizado até hoje</span>
           </div>
           <div v-if="!cost" aria-busy="true">
@@ -239,12 +318,10 @@ function tabLink(name: string) {
           </p>
         </section>
 
-        <section class="sheet ov__box" aria-labelledby="ov-recent">
+        <section v-if="!future" class="sheet ov__box" aria-labelledby="ov-recent">
           <div class="ov__boxhead">
-            <h2 id="ov-recent" class="ov__title">últimos registros</h2>
-            <RouterLink :to="tabLink('contract-card')" class="ov__more"
-              >ver cartão <Icon name="chevron-right" :size="16"
-            /></RouterLink>
+            <h2 id="ov-recent" class="ov__title">Últimos registros</h2>
+            <RouterLink :to="tabLink('contract-card')" class="ov__more">Ver cartão</RouterLink>
           </div>
           <div v-if="entries.loading.value && !entries.data.value" aria-busy="true">
             <Skeleton v-for="i in 3" :key="i" h="36px" :gap="i === 1 ? '0' : '8px'" />
@@ -282,10 +359,8 @@ function tabLink(name: string) {
 
         <section class="sheet ov__box" aria-labelledby="ov-pay">
           <div class="ov__boxhead">
-            <h2 id="ov-pay" class="ov__title">últimos pagamentos</h2>
-            <RouterLink :to="tabLink('contract-payments')" class="ov__more"
-              >ver todos <Icon name="chevron-right" :size="16"
-            /></RouterLink>
+            <h2 id="ov-pay" class="ov__title">Últimos pagamentos</h2>
+            <RouterLink :to="tabLink('contract-payments')" class="ov__more">Ver todos</RouterLink>
           </div>
           <div v-if="payments.loading.value && !payments.data.value" aria-busy="true">
             <Skeleton v-for="i in 2" :key="i" h="36px" :gap="i === 1 ? '0' : '8px'" />
@@ -300,7 +375,7 @@ function tabLink(name: string) {
               <span class="ov__paid mono">{{ formatDateShort(p.paidOn) }}</span>
               <span class="ov__method">{{ PAYMENT_METHOD_LABEL[p.method] }}</span>
               <span class="ov__amount mono">{{ formatCents(p.amountCents) }}</span>
-              <StatusChip :tone="p.acknowledgedAt ? 'green' : 'neutral'">{{
+              <StatusChip :tone="p.acknowledgedAt ? 'brand' : 'amber'">{{
                 p.acknowledgedAt ? "recebido" : "sem confirmação"
               }}</StatusChip>
             </li>
@@ -311,13 +386,13 @@ function tabLink(name: string) {
       <aside class="span-4 ov__col">
         <section class="sheet ov__box" aria-labelledby="ov-terms">
           <div class="ov__boxhead">
-            <h2 id="ov-terms" class="ov__title">combinado</h2>
+            <h2 id="ov-terms" class="ov__title">Combinado</h2>
             <RouterLink
               v-if="auth.isEmployer && isWritable(contract)"
               :to="tabLink('contract-settings')"
               class="ov__more"
-              >editar <Icon name="chevron-right" :size="16"
-            /></RouterLink>
+              >Editar</RouterLink
+            >
           </div>
           <dl class="ov__terms">
             <div v-for="t in terms" :key="t.label">
@@ -329,7 +404,7 @@ function tabLink(name: string) {
 
         <section v-if="auth.isEmployer" class="sheet ov__box" aria-labelledby="ov-contact">
           <div class="ov__boxhead">
-            <h2 id="ov-contact" class="ov__title">contato</h2>
+            <h2 id="ov-contact" class="ov__title">Contato</h2>
             <ContactActions v-if="hasContact" :channels="channels" />
           </div>
           <dl v-if="hasContact" class="ov__terms">
@@ -369,10 +444,23 @@ function tabLink(name: string) {
   gap: var(--s-5);
 }
 
-.ov__kpis {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-3);
+.ov__box.is-projected {
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.ov__tag {
+  padding: 2px 8px;
+  border: 1px dashed var(--ink-3);
+  border-radius: 999px;
+  font-size: var(--t-12);
+  color: var(--ink-2);
+}
+
+.ov__proj {
+  font-size: var(--t-28);
+  font-weight: 600;
+  letter-spacing: -0.03em;
 }
 
 .ov__col {
@@ -414,7 +502,7 @@ function tabLink(name: string) {
   min-height: 32px;
   font-size: var(--t-14);
   font-weight: 600;
-  color: var(--blue);
+  color: var(--brand);
   text-decoration: none;
 }
 
@@ -471,12 +559,12 @@ function tabLink(name: string) {
 }
 
 .ov__fill.is-est {
-  background: var(--tint-sky-ink);
+  background: var(--brand-ink);
   opacity: 0.45;
 }
 
 .ov__fill.is-due {
-  background: var(--tint-mint-ink);
+  background: var(--brand-ink);
 }
 
 .ov__diff {
@@ -537,7 +625,7 @@ function tabLink(name: string) {
 }
 
 .ov__times {
-  color: var(--blue);
+  color: var(--brand);
   white-space: nowrap;
 }
 
@@ -554,8 +642,8 @@ function tabLink(name: string) {
 }
 
 .ov__conf.is-ok {
-  border-color: var(--green);
-  background: var(--green);
+  border-color: var(--brand);
+  background: var(--brand);
 }
 
 .ov__ref {
@@ -615,13 +703,6 @@ function tabLink(name: string) {
   .ov__method {
     display: block;
     color: var(--ink-2);
-  }
-}
-
-@media (min-width: 960px) {
-  .ov__kpis {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: var(--s-4);
   }
 }
 

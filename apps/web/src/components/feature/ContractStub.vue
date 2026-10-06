@@ -90,7 +90,7 @@ const showExpected = computed(
 
 .cs:hover {
   border-color: var(--ink-3);
-  border-left-color: var(--blue);
+  border-left-color: var(--brand);
 }
 
 .cs:active {
@@ -125,7 +125,7 @@ const showExpected = computed(
 }
 
 .cs__pending {
-  color: var(--blue);
+  color: var(--brand);
 }
 
 .cs__today {
@@ -150,8 +150,8 @@ const showExpected = computed(
 
 .is-live .cs__live {
   border: 0;
-  background: var(--green);
-  box-shadow: 0 0 0 3px var(--green-wash);
+  background: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-wash);
 }
 
 .cs__nums {
@@ -183,7 +183,7 @@ const showExpected = computed(
   display: flex;
   align-items: center;
   gap: var(--s-2);
-  color: var(--red-text);
+  color: var(--coral-ink);
   font-size: var(--t-14);
   font-weight: 600;
 }

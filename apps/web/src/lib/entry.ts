@@ -19,10 +19,10 @@ export function todayStatusText(today: WorkEntry | null): string {
 }
 
 /** Same colors as the month board: worked mint, falta coral, the excused kinds butter. */
-export const ENTRY_TONE: Record<EntryStatus, "mint" | "rose" | "butter"> = {
-  worked: "mint",
-  absent: "rose",
-  excused: "butter",
-  day_off: "butter",
-  holiday: "butter",
+export const ENTRY_TONE: Record<EntryStatus, "brand" | "coral" | "amber"> = {
+  worked: "brand",
+  absent: "coral",
+  excused: "amber",
+  day_off: "amber",
+  holiday: "amber",
 };

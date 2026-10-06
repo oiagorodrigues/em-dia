@@ -8,16 +8,17 @@ import {
   type Payment,
 } from "@emdia/shared";
 import { computed, ref, useTemplateRef } from "vue";
-import { errorMessage, paymentsApi } from "@/api";
+import { agreementsApi, errorMessage, paymentsApi } from "@/api";
 import ReceiptStub from "@/components/feature/ReceiptStub.vue";
 import ReceiptViewer from "@/components/feature/ReceiptViewer.vue";
 import Button from "@/components/ui/Button.vue";
 import DataTable from "@/components/ui/DataTable.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
-import IconButton from "@/components/ui/IconButton.vue";
-import Menu from "@/components/ui/Menu.vue";
-import type { MenuItem } from "@/components/ui/menu.ts";
+import Icon from "@/components/ui/Icon.vue";
+import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
+import Select from "@/components/ui/Select.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
+import TableActions from "@/components/ui/TableActions.vue";
 import { useContract } from "@/composables/contractContext.ts";
 import { useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
@@ -60,6 +61,19 @@ const yearModel = computed({
   set: (v: string) => (state.filters.ano = v === String(fallbackYear) ? "" : v),
 });
 
+const yearOptions = computed(() =>
+  years.value.map((y) => ({ value: String(y), label: String(y) })),
+);
+const RECEIVED_OPTIONS = [
+  { value: "", label: "Recebido ou não" },
+  { value: "sim", label: "Recebidos" },
+  { value: "nao", label: "Aguardando “recebi”" },
+];
+const recebido = computed({
+  get: () => state.filters.recebido ?? "",
+  set: (v: string) => (state.filters.recebido = v),
+});
+
 const payments = useResource(
   () => `${contract.value.id}|${year.value}`,
   () => paymentsApi.list(contract.value.id, year.value).then((r) => r.payments),
@@ -100,6 +114,7 @@ const columns: Column<Payment>[] = [
     key: "forma",
     label: "Forma",
     value: (p) => PAYMENT_METHOD_LABEL[p.method],
+    search: (p) => agreementName(p) ?? "",
     sortable: true,
     searchable: true,
   },
@@ -200,15 +215,40 @@ function onPicked(e: Event): void {
   attaching.value = null;
 }
 
+function inlineFor(p: Payment): InlineAction[] {
+  return p.receipt
+    ? [
+        {
+          label: `Ver comprovante de ${formatYearMonth(p.referenceMonth)}`,
+          icon: "eye",
+          onClick: () => view(p),
+        },
+      ]
+    : [];
+}
+
 function menuFor(p: Payment): MenuItem[] {
+  if (!canManage.value) return [];
   return [
     {
-      label: p.receipt ? "trocar comprovante" : "anexar comprovante",
-      icon: "upload",
+      label: p.receipt ? "Trocar comprovante" : "Anexar comprovante",
+      icon: "paperclip",
       onSelect: () => pickFor(p),
     },
-    { label: "excluir pagamento", icon: "trash", danger: true, onSelect: () => void remove(p) },
+    { label: "Remover pagamento", icon: "trash", danger: true, onSelect: () => void remove(p) },
   ];
+}
+
+const agreements = useResource(
+  () => contract.value.id,
+  (id) => agreementsApi.list(id).then((r) => r.agreements),
+);
+const agreementById = computed(
+  () => new Map((agreements.data.value ?? []).map((a) => [a.id, a.description])),
+);
+/** Compensation payments say what they paid down. */
+function agreementName(p: Payment): string | null {
+  return p.agreementId ? (agreementById.value.get(p.agreementId) ?? null) : null;
 }
 
 const viewerOpen = ref(false);
@@ -231,7 +271,7 @@ function onClear(): void {
       title="Não deu para carregar os pagamentos."
     >
       {{ payments.error.value.message }}
-      <template #actions><Button @click="payments.reload">tentar de novo</Button></template>
+      <template #actions><Button @click="payments.reload">Tentar de novo</Button></template>
     </EmptyState>
 
     <DataTable
@@ -243,6 +283,7 @@ function onClear(): void {
       :default-sort="{ key: 'pago', dir: 'desc' }"
       :filter="filter"
       :filters-active="!!state.filters.recebido"
+      :filter-count="state.filters.recebido ? 1 : 0"
       :loading="payments.loading.value && !payments.data.value"
       label="Pagamentos"
       search-placeholder="Buscar mês, forma, observação"
@@ -250,20 +291,13 @@ function onClear(): void {
       @clear-filters="onClear"
     >
       <template #filters>
-        <label class="pt__select">
-          <span class="visually-hidden">Ano</span>
-          <select v-model="yearModel" class="input">
-            <option v-for="y in years" :key="y" :value="String(y)">{{ y }}</option>
-          </select>
-        </label>
-        <label class="pt__select">
-          <span class="visually-hidden">Recebido</span>
-          <select v-model="state.filters.recebido" class="input">
-            <option value="">recebido ou não</option>
-            <option value="sim">recebidos</option>
-            <option value="nao">aguardando “recebi”</option>
-          </select>
-        </label>
+        <Select v-model="yearModel" :options="yearOptions" label="Ano" class="pt__filter" />
+        <Select
+          v-model="recebido"
+          :options="RECEIVED_OPTIONS"
+          label="Recebido"
+          class="pt__filter"
+        />
       </template>
 
       <template v-if="canManage" #actions>
@@ -271,7 +305,7 @@ function onClear(): void {
           :to="{ path: '/pagamentos/novo', query: { vinculo: contract.id, mes: month } }"
           variant="primary"
           icon="plus"
-          >novo pagamento</Button
+          >Novo pagamento</Button
         >
       </template>
 
@@ -294,39 +328,43 @@ function onClear(): void {
         <span class="pt__note">{{ row.note ?? "" }}</span>
       </template>
 
+      <template #cell-forma="{ row }">
+        <span class="pt__method">{{ PAYMENT_METHOD_LABEL[row.method] }}</span>
+        <span v-if="agreementName(row)" class="pt__agr">acordo: {{ agreementName(row) }}</span>
+      </template>
+
       <template #cell-comprovante="{ row }">
-        <IconButton
-          v-if="row.receipt"
-          icon="receipt"
-          :label="`Ver comprovante de ${formatYearMonth(row.referenceMonth)}`"
-          @click="view(row)"
-        />
+        <span v-if="row.receipt" class="pt__clip"
+          ><Icon name="paperclip" :size="14" /> anexado</span
+        >
         <span v-else class="pt__none">—</span>
       </template>
 
       <template #cell-recebido="{ row }">
-        <StatusChip v-if="row.acknowledgedAt" tone="green">recebido</StatusChip>
+        <StatusChip v-if="row.acknowledgedAt" tone="brand">recebido</StatusChip>
         <Button
           v-else-if="auth.isWorker"
           variant="primary"
           icon="check"
           :loading="busyId === row.id"
           @click="acknowledge(row)"
-          >recebi</Button
+          >Recebi</Button
         >
-        <StatusChip v-else tone="butter">aguardando</StatusChip>
+        <StatusChip v-else tone="amber">aguardando</StatusChip>
       </template>
 
-      <template v-if="canManage && wide" #row-actions="{ row }">
-        <Menu
-          :items="menuFor(row)"
-          :label="`Mais ações do pagamento de ${formatCents(row.amountCents)}`"
+      <template v-if="wide" #row-actions="{ row }">
+        <TableActions
+          :actions="inlineFor(row)"
+          :menu="menuFor(row)"
+          :menu-label="`Mais ações do pagamento de ${formatCents(row.amountCents)}`"
         />
       </template>
 
       <template #card="{ row }">
         <ReceiptStub
           :payment="row"
+          :agreement="agreementName(row)"
           :can-acknowledge="auth.isWorker"
           :can-manage="canManage"
           :busy="busyId === row.id"
@@ -372,11 +410,26 @@ function onClear(): void {
   gap: var(--s-5);
 }
 
-.pt__select .input {
-  color: var(--ink);
-  min-height: 44px;
-  width: auto;
-  padding-right: var(--s-6);
+.pt__filter {
+  min-width: 9rem;
+}
+
+.pt__method {
+  display: block;
+}
+
+.pt__agr {
+  display: block;
+  font-size: var(--t-12);
+  color: var(--ink-2);
+}
+
+.pt__clip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--t-12);
+  color: var(--ink-2);
 }
 
 .pt__tot {

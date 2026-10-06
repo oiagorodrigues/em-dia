@@ -84,7 +84,7 @@ const name = useId();
 }
 
 .seg__opt:has(:focus-visible) {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--brand);
   outline-offset: -2px;
 }
 
@@ -111,9 +111,9 @@ const name = useId();
 }
 
 .seg--wrap .seg__opt.is-on {
-  background: var(--blue-wash);
-  color: var(--blue);
-  border-color: var(--blue);
+  background: var(--brand-wash);
+  color: var(--brand);
+  border-color: var(--brand);
   box-shadow: none;
 }
 
@@ -122,6 +122,6 @@ const name = useId();
 }
 
 .is-invalid {
-  border-color: var(--red);
+  border-color: var(--coral);
 }
 </style>

@@ -18,10 +18,11 @@ import Button from "@/components/ui/Button.vue";
 import DataTable from "@/components/ui/DataTable.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import Field from "@/components/ui/Field.vue";
-import IconButton from "@/components/ui/IconButton.vue";
 import MoneyInput from "@/components/ui/MoneyInput.vue";
 import Segmented from "@/components/ui/Segmented.vue";
+import Select from "@/components/ui/Select.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
+import TableActions from "@/components/ui/TableActions.vue";
 import { useContract } from "@/composables/contractContext.ts";
 import { useForm } from "@/composables/form.ts";
 import { useResource } from "@/composables/resource.ts";
@@ -99,6 +100,16 @@ const columns: Column<Adjustment>[] = [
   },
 ];
 
+const KIND_FILTER = [
+  { value: "", label: "Todos os tipos" },
+  { value: "mais", label: "Somam (extras, vale-transporte)" },
+  { value: "menos", label: "Descontam (vales, descontos)" },
+];
+const tipo = computed({
+  get: () => state.filters.tipo ?? "",
+  set: (v: string) => (state.filters.tipo = v),
+});
+
 function filter(a: Adjustment): boolean {
   if (state.filters.tipo === "mais") return ADJUSTMENT_SIGN[a.kind] > 0;
   if (state.filters.tipo === "menos") return ADJUSTMENT_SIGN[a.kind] < 0;
@@ -157,7 +168,7 @@ async function remove(a: Adjustment): Promise<void> {
         title="Não deu para carregar os extras."
       >
         {{ list.error.value.message }}
-        <template #actions><Button @click="list.reload">tentar de novo</Button></template>
+        <template #actions><Button @click="list.reload">Tentar de novo</Button></template>
       </EmptyState>
 
       <DataTable
@@ -169,6 +180,7 @@ async function remove(a: Adjustment): Promise<void> {
         :default-sort="{ key: 'lancado', dir: 'desc' }"
         :filter="filter"
         :filters-active="!!state.filters.tipo"
+        :filter-count="state.filters.tipo ? 1 : 0"
         :loading="list.loading.value && !list.data.value"
         label="Lançamentos do mês"
         search-placeholder="Buscar tipo ou descrição"
@@ -176,14 +188,7 @@ async function remove(a: Adjustment): Promise<void> {
         @clear-filters="clear"
       >
         <template #filters>
-          <label class="ex__select">
-            <span class="visually-hidden">Tipo</span>
-            <select v-model="state.filters.tipo" class="input">
-              <option value="">todos os tipos</option>
-              <option value="mais">somam (extras, vale-transporte)</option>
-              <option value="menos">descontam (vales, descontos)</option>
-            </select>
-          </label>
+          <Select v-model="tipo" :options="KIND_FILTER" label="Tipo" class="ex__filter" />
         </template>
 
         <template #empty>
@@ -193,7 +198,7 @@ async function remove(a: Adjustment): Promise<void> {
         </template>
 
         <template #cell-tipo="{ row }">
-          <StatusChip :tone="ADJUSTMENT_SIGN[row.kind] < 0 ? 'rose' : 'mint'">{{
+          <StatusChip :tone="ADJUSTMENT_SIGN[row.kind] < 0 ? 'coral' : 'brand'">{{
             ADJUSTMENT_KIND_LABEL[row.kind]
           }}</StatusChip>
         </template>
@@ -221,12 +226,16 @@ async function remove(a: Adjustment): Promise<void> {
         </template>
 
         <template v-if="canWrite" #row-actions="{ row }">
-          <IconButton
-            icon="trash"
-            tone="danger"
-            :label="`Remover ${ADJUSTMENT_KIND_LABEL[row.kind]} de ${formatCents(row.amountCents)}`"
-            :loading="removing === row.id"
-            @click="remove(row)"
+          <TableActions
+            :actions="[
+              {
+                label: `Remover ${ADJUSTMENT_KIND_LABEL[row.kind]} de ${formatCents(row.amountCents)}`,
+                icon: 'trash',
+                tone: 'coral',
+                loading: removing === row.id,
+                onClick: () => void remove(row),
+              },
+            ]"
           />
         </template>
       </DataTable>
@@ -241,7 +250,7 @@ async function remove(a: Adjustment): Promise<void> {
 
     <aside class="ex__aside">
       <form v-if="canWrite" class="ex__form sheet" novalidate @submit.prevent="onAdd">
-        <h2 class="section-title">lançar</h2>
+        <h2 class="section-title">Lançar</h2>
         <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
         <fieldset class="ex__set">
           <legend class="label">Tipo</legend>
@@ -278,7 +287,7 @@ async function remove(a: Adjustment): Promise<void> {
           />
         </Field>
         <Button type="submit" variant="primary" icon="plus" :loading="submitting"
-          >lançar em {{ month.slice(5) }}/{{ month.slice(0, 4) }}</Button
+          >Lançar em {{ month.slice(5) }}/{{ month.slice(0, 4) }}</Button
         >
       </form>
       <p v-else-if="auth.isWorker" class="ex__ro">
@@ -303,10 +312,8 @@ async function remove(a: Adjustment): Promise<void> {
   align-content: start;
 }
 
-.ex__select .input {
-  color: var(--ink);
-  min-height: 44px;
-  width: auto;
+.ex__filter {
+  min-width: 14rem;
 }
 
 .ex__what {
@@ -319,7 +326,7 @@ async function remove(a: Adjustment): Promise<void> {
 
 .ex__desc {
   font-size: var(--t-14);
-  color: var(--blue);
+  color: var(--brand);
   overflow-wrap: anywhere;
 }
 
@@ -335,7 +342,7 @@ async function remove(a: Adjustment): Promise<void> {
 }
 
 .is-minus {
-  color: var(--red-text);
+  color: var(--coral-ink);
 }
 
 .ex__net {

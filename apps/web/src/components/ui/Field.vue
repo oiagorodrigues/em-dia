@@ -44,7 +44,7 @@ const describedBy = computed(() => (error ? `${id}-err` : hint ? `${id}-hint` : 
 }
 
 .field__error {
-  color: var(--red-text);
+  color: var(--coral-ink);
   font-size: var(--t-14);
   line-height: 1.3;
 }

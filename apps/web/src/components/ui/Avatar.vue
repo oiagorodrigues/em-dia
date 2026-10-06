@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { initialsOf, tintFor } from "@/lib/tint.ts";
+import { initialsOf } from "@/lib/initials.ts";
 
 const { name, size = 40 } = defineProps<{ name: string; size?: number }>();
 
-const tint = computed(() => tintFor(name));
 const initials = computed(() => initialsOf(name));
 </script>
 
 <template>
   <span
     class="avatar"
-    :class="`tint-${tint}`"
     :style="{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.38)}px` }"
     aria-hidden="true"
     >{{ initials }}</span
@@ -24,6 +22,8 @@ const initials = computed(() => initialsOf(name));
   place-items: center;
   flex: none;
   border-radius: 50%;
+  background: var(--brand-wash);
+  color: var(--brand-ink);
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1;

@@ -289,7 +289,7 @@ function describe(
 }
 
 .row:not(:disabled):hover {
-  background: color-mix(in srgb, var(--blue-wash) 55%, transparent);
+  background: color-mix(in srgb, var(--brand-wash) 55%, transparent);
 }
 
 .row:focus-visible {
@@ -307,7 +307,7 @@ function describe(
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--blue);
+  background: var(--brand);
 }
 
 .row.is-weekend,
@@ -355,7 +355,7 @@ function describe(
 }
 
 .is-ink {
-  color: var(--blue);
+  color: var(--ink);
 }
 
 .is-open {
@@ -389,7 +389,7 @@ function describe(
 
 .row__missing {
   grid-column: 2 / span 4;
-  color: var(--blue);
+  color: var(--brand);
   font-size: var(--t-14);
   border-bottom: 1px dotted currentColor;
   justify-self: start;
@@ -421,7 +421,7 @@ function describe(
 }
 
 .dot--ok {
-  background: var(--green);
+  background: var(--brand);
 }
 
 .dot--open {
