@@ -54,13 +54,13 @@ function toggle(day: number): void {
 }
 
 .mdg__day.is-on {
-  background: var(--blue-wash);
-  border-color: var(--blue);
-  color: var(--blue);
+  background: var(--brand-wash);
+  border-color: var(--brand);
+  color: var(--brand);
   font-weight: 700;
 }
 
 .is-invalid .mdg__day:not(.is-on) {
-  border-color: var(--red);
+  border-color: var(--coral);
 }
 </style>

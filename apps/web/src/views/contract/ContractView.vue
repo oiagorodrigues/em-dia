@@ -19,6 +19,8 @@ import { useResource } from "@/composables/resource.ts";
 import { contactChannels, contractStatus, isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
+import { useBack } from "@/composables/back.ts";
+import { useSlidingIndicator } from "@/lib/motion.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 
 const { id } = defineProps<{ id: string }>();
@@ -57,6 +59,7 @@ const tabs = computed(() => {
     { name: "contract-card", label: "Cartão" },
     { name: "contract-payments", label: "Pagamentos" },
     { name: "contract-extras", label: "Extras" },
+    { name: "contract-agreements", label: "Acordos" },
     { name: "contract-history", label: "Histórico" },
   ];
   if (auth.isEmployer) base.push({ name: "contract-settings", label: "Ajustes" });
@@ -76,11 +79,13 @@ const title = computed(() =>
 const menuItems = computed<MenuItem[]>(() => {
   if (!data.value) return [];
   if (data.value.archivedAt)
-    return [{ label: "restaurar", icon: "undo", onSelect: () => void restore() }];
-  return [{ label: "remover da equipe", icon: "archive", danger: true, onSelect: askRemove }];
+    return [{ label: "Restaurar", icon: "undo", onSelect: () => void restore() }];
+  return [{ label: "Remover da equipe", icon: "archive", danger: true, onSelect: askRemove }];
 });
 
+const backNav = useBack(auth.isEmployer ? "/equipe" : "/");
 const tabsEl = useTemplateRef<HTMLElement>("tabsEl");
+const tabIndicator = useSlidingIndicator(tabsEl, ".is-active", "x", () => route.name);
 const fade = reactive({ left: false, right: false });
 
 function measureTabs(): void {
@@ -139,18 +144,17 @@ onBeforeUnmount(() => resize.disconnect());
           : error.message
       }}
       <template #actions>
-        <Button to="/" icon="arrow-left">voltar ao início</Button>
+        <Button to="/" icon="arrow-left">Voltar ao início</Button>
         <Button v-if="error.code !== 'NOT_FOUND'" variant="ghost" @click="reload"
-          >tentar de novo</Button
+          >Tentar de novo</Button
         >
       </template>
     </EmptyState>
 
     <template v-else-if="data">
       <header class="pf">
-        <RouterLink :to="auth.isEmployer ? '/equipe' : '/'" class="cv__back"
-          ><Icon name="arrow-left" :size="18" />
-          {{ auth.isEmployer ? "equipe" : "início" }}</RouterLink
+        <RouterLink :to="backNav.to.value" class="cv__back" @click.prevent="backNav.go"
+          ><Icon name="arrow-left" :size="18" /> voltar</RouterLink
         >
         <div class="pf__row">
           <Avatar :name="title" :size="wide ? 64 : 48" />
@@ -176,14 +180,14 @@ onBeforeUnmount(() => resize.disconnect());
               :to="{ path: '/pagamentos/novo', query: { vinculo: data.id, mes: month } }"
               variant="primary"
               icon="plus"
-              >registrar pagamento</Button
+              >Registrar pagamento</Button
             >
             <Button
               v-if="writable"
               :to="{ name: 'contract-settings', params: { id }, query: route.query }"
               icon="pencil"
               class="pf__edit"
-              >editar</Button
+              >Editar</Button
             >
             <Menu :items="menuItems" label="Mais ações" />
           </div>
@@ -200,7 +204,7 @@ onBeforeUnmount(() => resize.disconnect());
           }}
         </p>
         <Button v-if="auth.isEmployer" icon="undo" :loading="restoring" @click="restore"
-          >restaurar</Button
+          >Restaurar</Button
         >
       </div>
 
@@ -212,6 +216,7 @@ onBeforeUnmount(() => resize.disconnect());
           aria-label="Seções do vínculo"
           @scroll.passive="measureTabs"
         >
+          <span class="tabs__indicator" aria-hidden="true" :style="tabIndicator" />
           <RouterLink
             v-for="tab in tabs"
             :key="tab.name"
@@ -225,15 +230,17 @@ onBeforeUnmount(() => resize.disconnect());
         </nav>
       </div>
 
-      <RouterView v-slot="{ Component }">
-        <component :is="Component" :key="id" />
+      <RouterView v-slot="{ Component, route: tabRoute }">
+        <Transition name="tab-fade" mode="out-in">
+          <component :is="Component" :key="`${id}:${String(tabRoute.name)}`" />
+        </Transition>
       </RouterView>
 
       <ConfirmDialog
         v-model:open="confirmOpen"
-        :title="`remover ${data.workerName} da equipe?`"
+        :title="`Remover ${data.workerName} da equipe?`"
         message="O histórico fica guardado e você pode restaurar em Equipe → removidos."
-        confirm-label="remover"
+        confirm-label="Remover"
         :loading="removing"
         @confirm="confirmRemove"
       />
@@ -329,8 +336,8 @@ onBeforeUnmount(() => resize.disconnect());
   gap: var(--s-3);
   padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
   border-radius: var(--r-2);
-  background: var(--tint-rose);
-  color: var(--tint-rose-ink);
+  background: var(--coral-wash);
+  color: var(--coral-ink);
   font-size: var(--t-14);
 }
 
@@ -396,14 +403,18 @@ onBeforeUnmount(() => resize.disconnect());
   color: var(--ink);
 }
 
-.tabs__item.is-active::after {
-  content: "";
+/* One underline that slides to the active tab. */
+.tabs__indicator {
   position: absolute;
-  left: var(--s-3);
-  right: var(--s-3);
+  left: 0;
   bottom: 0;
   height: 3px;
-  background: var(--blue);
+  border-radius: 3px 3px 0 0;
+  background: var(--brand);
+  pointer-events: none;
+  transition:
+    transform var(--d-sheet) var(--ease-out),
+    width var(--d-sheet) var(--ease-out);
 }
 
 .tabs__item:focus-visible {
@@ -419,9 +430,6 @@ onBeforeUnmount(() => resize.disconnect());
   }
   .tabs__item:first-child {
     padding-left: 0;
-  }
-  .tabs__item:first-child.is-active::after {
-    left: 0;
   }
 }
 </style>

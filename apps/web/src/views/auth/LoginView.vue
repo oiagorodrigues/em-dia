@@ -29,7 +29,7 @@ function onSubmit(): void {
 </script>
 
 <template>
-  <AuthHeader title="entrar" lede="Que bom te ver de novo." />
+  <AuthHeader title="Entrar" lede="Que bom te ver de novo." />
   <form class="stack" novalidate @submit.prevent="onSubmit">
     <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
     <Field v-slot="{ id, invalid, describedBy }" label="E-mail" :error="errors.email">

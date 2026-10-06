@@ -19,11 +19,14 @@ const {
   canAcknowledge = false,
   canManage = false,
   busy = false,
+  agreement = null,
 } = defineProps<{
   payment: Payment;
   canAcknowledge?: boolean;
   canManage?: boolean;
   busy?: boolean;
+  /** Description of the agreement a compensation payment pays down. */
+  agreement?: string | null;
 }>();
 
 const emit = defineEmits<{ view: []; acknowledge: []; remove: []; attach: [file: File] }>();
@@ -53,6 +56,7 @@ const fileName = computed(() =>
         <span aria-hidden="true">·</span>
         <span class="mono">pago em {{ formatDateShort(payment.paidOn) }}</span>
       </p>
+      <p v-if="agreement" class="stub__note">acordo: {{ agreement }}</p>
       <p v-if="payment.note" class="stub__note">{{ payment.note }}</p>
     </div>
 
@@ -98,7 +102,7 @@ const fileName = computed(() =>
           icon="check"
           :loading="busy"
           @click="emit('acknowledge')"
-          >recebi</Button
+          >Recebi</Button
         >
         <span v-else class="stub__wait">aguardando “recebi”</span>
         <button
@@ -157,7 +161,7 @@ const fileName = computed(() =>
 .stub__note {
   margin-top: var(--s-2);
   font-size: var(--t-14);
-  color: var(--blue);
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
 
@@ -218,7 +222,7 @@ const fileName = computed(() =>
 .stub__rlabel {
   display: grid;
   min-width: 0;
-  color: var(--blue);
+  color: var(--brand);
   font-size: var(--t-14);
   font-weight: 600;
 }
@@ -239,7 +243,7 @@ const fileName = computed(() =>
   align-items: center;
   gap: var(--s-2);
   min-height: 44px;
-  color: var(--blue);
+  color: var(--brand);
   font-size: var(--t-14);
   font-weight: 600;
   cursor: pointer;
@@ -250,7 +254,7 @@ const fileName = computed(() =>
 }
 
 .stub__attach:has(:focus-visible) {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
   border-radius: var(--r-1);
 }
@@ -284,8 +288,8 @@ const fileName = computed(() =>
 }
 
 .stub__remove:hover:not(:disabled) {
-  color: var(--red-text);
-  background: var(--red-wash);
+  color: var(--coral-ink);
+  background: var(--coral-wash);
 }
 
 @media (min-width: 600px) {

@@ -1,5 +1,6 @@
 import {
   changePasswordSchema,
+  deleteAccountSchema,
   forgotPasswordSchema,
   loginSchema,
   registerSchema,
@@ -73,6 +74,12 @@ export function authRoutes(
     const session = await auth.changePassword(actorOf(res), currentPassword, newPassword);
     setRefreshCookie(res, config, session.refreshToken);
     res.json({ accessToken: session.accessToken });
+  });
+
+  router.delete("/me", authLimiter, authenticate(services), async (req, res) => {
+    await auth.deleteAccount(actorOf(res), parse(deleteAccountSchema, req.body).password);
+    clearRefreshCookie(res, config);
+    res.status(204).end();
   });
 
   return router;

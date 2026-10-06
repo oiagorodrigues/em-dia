@@ -22,4 +22,8 @@ const { title, lede } = defineProps<{ title: string; lede?: string }>();
   margin-top: var(--s-3);
   color: var(--ink-2);
 }
+
+.ah__title::first-letter {
+  text-transform: uppercase;
+}
 </style>

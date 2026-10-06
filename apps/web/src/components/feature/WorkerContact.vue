@@ -65,7 +65,7 @@ async function copyPix(): Promise<void> {
 
 .wc__key {
   font-size: var(--t-12);
-  color: var(--blue);
+  color: var(--ink);
   overflow-wrap: anywhere;
   min-width: 0;
 }
@@ -77,12 +77,12 @@ async function copyPix(): Promise<void> {
   min-height: 44px;
   padding: 0 var(--s-2);
   font-weight: 600;
-  color: var(--blue);
+  color: var(--brand);
   border-radius: var(--r-1);
 }
 
 .wc__copy:hover {
-  background: var(--blue-wash);
+  background: var(--brand-wash);
 }
 
 .wc__link {

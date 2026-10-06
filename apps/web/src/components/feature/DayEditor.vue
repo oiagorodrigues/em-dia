@@ -15,7 +15,8 @@ import { computed, ref, watch } from "vue";
 import { entriesApi, errorMessage } from "@/api";
 import Button from "@/components/ui/Button.vue";
 import Field from "@/components/ui/Field.vue";
-import Segmented from "@/components/ui/Segmented.vue";
+import ChoiceField from "@/components/ui/ChoiceField.vue";
+import TimeField from "@/components/ui/TimeField.vue";
 import Sheet from "@/components/ui/Sheet.vue";
 import Stepper from "@/components/ui/Stepper.vue";
 import { useForm } from "@/composables/form.ts";
@@ -194,38 +195,42 @@ async function onRemove(): Promise<void> {
 
       <fieldset class="de__set" :disabled="ended">
         <legend class="label">O que aconteceu</legend>
-        <Segmented v-model="values.status" :options="statusOptions" label="O que aconteceu" wrap />
+        <ChoiceField
+          v-model="values.status"
+          :options="statusOptions"
+          label="O que aconteceu"
+          wrap
+        />
       </fieldset>
 
       <template v-if="worked">
         <div class="de__times">
           <Field v-slot="{ id, invalid, describedBy }" label="Entrada" :error="errors.checkIn">
-            <input
+            <TimeField
               :id="id"
               v-model="values.checkIn"
-              class="input"
-              type="time"
-              required
+              label="Entrada"
+              :step="15"
               :disabled="ended"
-              :aria-invalid="invalid || undefined"
-              :aria-describedby="describedBy"
-              @input="clearError('checkIn')"
+              :invalid="invalid"
+              :described-by="describedBy"
+              @update:model-value="clearError('checkIn')"
             />
           </Field>
           <Field v-slot="{ id, invalid, describedBy }" label="Saída" :error="errors.checkOut">
-            <input
+            <TimeField
               :id="id"
               v-model="values.checkOut"
-              class="input"
-              type="time"
+              label="Saída"
+              :step="15"
               :disabled="ended"
-              :aria-invalid="invalid || undefined"
-              :aria-describedby="describedBy"
-              @input="clearError('checkOut')"
+              :invalid="invalid"
+              :described-by="describedBy"
+              @update:model-value="clearError('checkOut')"
             />
           </Field>
         </div>
-        <Field v-slot="{ id }" label="Pausa (almoço, descanso)">
+        <Field v-slot="{ id }" label="Pausa em minutos (almoço, descanso)">
           <Stepper :id="id" v-model="values.breakMinutes" label="Pausa" />
         </Field>
         <p v-if="preview" class="de__preview">
@@ -250,17 +255,17 @@ async function onRemove(): Promise<void> {
 
       <div v-if="canDelete && !ended" class="de__danger">
         <Button variant="danger" icon="trash" :loading="removing" @click="onRemove">
-          {{ confirmRemove ? "toque de novo para apagar" : "apagar registro" }}
+          {{ confirmRemove ? "Toque de novo para apagar" : "Apagar registro" }}
         </Button>
       </div>
     </form>
 
     <template v-if="!ended" #footer>
       <Button v-if="canConfirm" icon="check" :loading="confirming" @click="onConfirm"
-        >confirmar</Button
+        >Confirmar</Button
       >
       <Button type="submit" form="day-editor" variant="primary" :loading="submitting">
-        {{ entry ? "salvar" : "anotar" }}
+        {{ entry ? "Salvar" : "Anotar" }}
       </Button>
     </template>
   </Sheet>
@@ -288,7 +293,7 @@ async function onRemove(): Promise<void> {
 }
 
 .de__dot.is-ok {
-  background: var(--green);
+  background: var(--brand);
 }
 
 .de__dot.is-open {
@@ -327,7 +332,7 @@ async function onRemove(): Promise<void> {
 }
 
 .de__night {
-  color: var(--blue);
+  color: var(--brand);
 }
 
 .de__danger {

@@ -4,6 +4,7 @@ import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { contractsApi, errorMessage, ApiError } from "@/api";
 import CodeBoxes from "@/components/feature/CodeBoxes.vue";
+import InviteSignedInNotice from "@/components/feature/InviteSignedInNotice.vue";
 import Button from "@/components/ui/Button.vue";
 import Stamp from "@/components/ui/Stamp.vue";
 import { firstName } from "@/lib/format.ts";
@@ -15,6 +16,7 @@ const router = useRouter();
 const code = ref(
   typeof route.query.convite === "string" ? normalizeInviteCode(route.query.convite) : "",
 );
+const fromLink = typeof route.query.convite === "string" ? route.query.convite : null;
 const error = ref<string | null>(null);
 const submitting = ref(false);
 const joined = ref<Contract | null>(null);
@@ -51,7 +53,7 @@ async function join(): Promise<void> {
   <div class="join">
     <template v-if="joined">
       <Stamp text="vínculo ok" label="Vínculo confirmado" tone="green" size="lg" />
-      <h1 class="page-title">pronto, {{ firstName(joined.employerName) }} já te vê aqui.</h1>
+      <h1 class="page-title">Pronto, {{ firstName(joined.employerName) }} já te vê aqui.</h1>
       <p class="muted">
         {{ OCCUPATION_LABEL[joined.occupation] }} em {{ joined.householdName }}. A partir de agora
         você bate o ponto pelo celular e acompanha seus pagamentos.
@@ -59,8 +61,13 @@ async function join(): Promise<void> {
       <Button variant="primary" icon="clock" @click="router.replace('/')">ir bater o ponto</Button>
     </template>
     <template v-else>
-      <h1 class="page-title">entrar no vínculo</h1>
+      <h1 class="page-title">Entrar no vínculo</h1>
       <p class="muted">Digite o código de 8 caracteres que quem te contratou te passou.</p>
+      <InviteSignedInNotice
+        v-if="fromLink"
+        text="Se o convite é para você, entre no vínculo com esta conta. Se é para outra pessoa, saia e continue para essa pessoa criar a conta."
+        @signed-out="router.replace({ path: '/criar-conta', query: { convite: fromLink } })"
+      />
       <form class="join__form" novalidate @submit.prevent="join">
         <CodeBoxes
           v-model="code"
@@ -95,7 +102,7 @@ async function join(): Promise<void> {
 }
 
 .join__err {
-  color: var(--red-text);
+  color: var(--coral-ink);
   font-size: var(--t-14);
 }
 </style>

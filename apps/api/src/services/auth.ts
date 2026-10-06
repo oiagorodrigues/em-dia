@@ -4,7 +4,7 @@ import { hashPassword, randomToken, sha256, verifyPassword } from "../lib/crypto
 import { AppError, fieldError, formError } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
 import { toPublicUser, type RefreshTokenRecord, type UserRecord } from "../repos/index.ts";
-import { audit, nowIso, type Actor, type ServiceDeps } from "./context.ts";
+import { audit, nowIso, requirePermission, type Actor, type ServiceDeps } from "./context.ts";
 import { linkWorkerByCode, resolveInvite } from "./invites.ts";
 
 const REFRESH_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -246,6 +246,55 @@ export function authService(deps: ServiceDeps) {
           action: "auth.password_reset",
           entity: "user",
           entityId: userId,
+        });
+      });
+    },
+
+    /**
+     * Anonymises instead of deleting so the other party keeps their records:
+     * an employer's contracts are archived, a worker is unlinked from theirs.
+     */
+    async deleteAccount(actor: Actor, password: string): Promise<void> {
+      requirePermission(actor, "account:delete");
+      const user = loadUser(actor.id);
+      if (!(await verifyPassword(password, user.passwordHash))) {
+        throw fieldError("password", "Senha incorreta");
+      }
+      const now = nowIso(deps);
+      repos.tx(() => {
+        if (user.role === "employer") {
+          for (const { contract } of repos.contracts.listForEmployer(user.id)) {
+            repos.contracts.setArchivedAt(contract.id, now);
+            repos.invites.deleteForContract(contract.id);
+            audit(deps, {
+              actorId: user.id,
+              contractId: contract.id,
+              action: "contract.archive",
+              entity: "contract",
+              entityId: contract.id,
+            });
+          }
+        } else {
+          for (const { contract } of repos.contracts.listForWorker(user.id, true)) {
+            audit(deps, {
+              actorId: user.id,
+              contractId: contract.id,
+              action: "contract.worker_left",
+              entity: "contract",
+              entityId: contract.id,
+            });
+          }
+          repos.contracts.unlinkWorker(user.id);
+        }
+        repos.refreshTokens.revokeAllForUser(user.id, now, "account_deleted");
+        repos.passwordResets.deleteForUser(user.id);
+        repos.users.anonymize(user.id, `excluida-${user.id}@conta-excluida.invalid`);
+        audit(deps, {
+          actorId: user.id,
+          contractId: null,
+          action: "auth.delete_account",
+          entity: "user",
+          entityId: user.id,
         });
       });
     },

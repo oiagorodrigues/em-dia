@@ -62,6 +62,13 @@ export const useAuthStore = defineStore("auth", () => {
     clear();
   }
 
+  /** The server anonymises the account and revokes every session; forget it here and in other tabs. */
+  async function deleteAccount(password: string, confirm: string): Promise<void> {
+    await meApi.deleteAccount(password, confirm);
+    announceLogout();
+    clear();
+  }
+
   async function reloadMe(): Promise<void> {
     user.value = (await meApi.get()).user;
   }
@@ -83,6 +90,7 @@ export const useAuthStore = defineStore("auth", () => {
     register,
     logout,
     logoutAll,
+    deleteAccount,
     reloadMe,
     setUser,
   };

@@ -96,7 +96,7 @@ function filter(l: Line): boolean {
       title="Não deu para carregar o histórico."
     >
       {{ feed.error.value.message }}
-      <template #actions><Button @click="feed.reload">tentar de novo</Button></template>
+      <template #actions><Button @click="feed.reload">Tentar de novo</Button></template>
     </EmptyState>
 
     <DataTable
@@ -108,6 +108,7 @@ function filter(l: Line): boolean {
       :default-sort="{ key: 'quando', dir: 'desc' }"
       :filter="filter"
       :filters-active="!!state.filters.tipo"
+      :filter-count="state.filters.tipo ? 1 : 0"
       :loading="feed.loading.value && !feed.data.value"
       label="Histórico do vínculo"
       search-placeholder="Buscar pessoa ou ação"
@@ -146,7 +147,7 @@ function filter(l: Line): boolean {
       </template>
 
       <template #cell-oque="{ row }">
-        <span class="hi__what" :class="`tone-${row.tone}`">
+        <span class="hi__what" :class="`ln-tone-${row.tone}`">
           <span class="hi__mark" aria-hidden="true" />
           <span>
             {{ row.text }}
@@ -156,7 +157,7 @@ function filter(l: Line): boolean {
       </template>
 
       <template #card="{ row }">
-        <div class="hi__item" :class="`tone-${row.tone}`">
+        <div class="hi__item" :class="`ln-tone-${row.tone}`">
           <span class="hi__mark" aria-hidden="true" />
           <p class="hi__text">
             <strong>{{ row.actor }}</strong> {{ row.text }}
@@ -195,9 +196,9 @@ function filter(l: Line): boolean {
 }
 
 .hi__chip[aria-checked="true"] {
-  background: var(--tint-sky);
+  background: var(--brand-wash);
   border-color: transparent;
-  color: var(--tint-sky-ink);
+  color: var(--brand-ink);
 }
 
 .hi__count {
@@ -220,25 +221,25 @@ function filter(l: Line): boolean {
   border: 1.5px solid var(--ink-3);
 }
 
-.tone-ok .hi__mark {
-  background: var(--green);
-  border-color: var(--green);
+.ln-tone-ok .hi__mark {
+  background: var(--brand);
+  border-color: var(--brand);
 }
 
-.tone-alert .hi__mark {
-  background: var(--red);
-  border-color: var(--red);
+.ln-tone-alert .hi__mark {
+  background: var(--coral);
+  border-color: var(--coral);
 }
 
-.tone-money .hi__mark {
-  border-color: var(--blue);
-  background: var(--blue-wash);
+.ln-tone-money .hi__mark {
+  border-color: var(--brand);
+  background: var(--brand-wash);
 }
 
 .hi__value {
   margin-left: var(--s-1);
   font-size: var(--t-12);
-  color: var(--blue);
+  color: var(--brand);
   white-space: nowrap;
 }
 

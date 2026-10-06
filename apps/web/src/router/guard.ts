@@ -19,6 +19,8 @@ export async function resolveAccess(
       const invite = typeof to.query.convite === "string" ? to.query.convite : null;
       if (invite && user.role === "worker")
         return { path: "/entrar-no-vinculo", query: { convite: invite } };
+      // Someone else's invite opened on a signed-in phone: the signup screen explains and offers to sign out.
+      if (invite && to.path === "/criar-conta") return true;
       return safeNext(to.query.next) ?? "/";
     }
     return true;
@@ -27,7 +29,12 @@ export async function resolveAccess(
   if (!user) return { path: "/entrar", query: to.fullPath === "/" ? {} : { next: to.fullPath } };
 
   const roles = to.matched.flatMap((r) => r.meta.roles ?? []);
-  if (roles.length > 0 && !roles.includes(user.role)) return "/";
+  if (roles.length > 0 && !roles.includes(user.role)) {
+    const invite = typeof to.query.convite === "string" ? to.query.convite : null;
+    if (invite && user.role === "employer")
+      return { path: "/criar-conta", query: { convite: invite } };
+    return "/";
+  }
   return true;
 }
 

@@ -9,7 +9,7 @@ const { items, limit = 6 } = defineProps<{ items: readonly Pendency[]; limit?: n
 <template>
   <section class="hp sheet" aria-labelledby="hp-title">
     <header class="hp__head">
-      <h2 id="hp-title" class="section-title">pendências</h2>
+      <h2 id="hp-title" class="section-title">Pendências</h2>
       <span v-if="items.length" class="hp__count mono">{{ items.length }}</span>
     </header>
     <p v-if="items.length === 0" class="hp__empty">
@@ -49,8 +49,8 @@ const { items, limit = 6 } = defineProps<{ items: readonly Pendency[]; limit?: n
   place-items: center;
   padding: 0 8px;
   border-radius: 13px;
-  background: var(--tint-butter);
-  color: var(--tint-butter-ink);
+  background: var(--amber-wash);
+  color: var(--amber-ink);
   font-size: var(--t-12);
   font-weight: 700;
 }
@@ -60,7 +60,7 @@ const { items, limit = 6 } = defineProps<{ items: readonly Pendency[]; limit?: n
   align-items: center;
   gap: var(--s-2);
   font-size: var(--t-14);
-  color: var(--green);
+  color: var(--brand);
   font-weight: 600;
 }
 
@@ -103,16 +103,16 @@ const { items, limit = 6 } = defineProps<{ items: readonly Pendency[]; limit?: n
   border-radius: 50%;
 }
 
-.hp__dot.is-red {
-  background: var(--red);
+.hp__dot.is-coral {
+  background: var(--coral);
 }
 
-.hp__dot.is-butter {
-  background: var(--tint-butter-ink);
+.hp__dot.is-amber {
+  background: var(--amber-ink);
 }
 
-.hp__dot.is-sky {
-  background: var(--tint-sky-ink);
+.hp__dot.is-brand {
+  background: var(--brand-ink);
 }
 
 .hp__more {

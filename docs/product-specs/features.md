@@ -124,6 +124,41 @@ Layout and columns: [DESIGN](../DESIGN.md#screens).
 - While E fills the "adicionar profissional" form, a resumo panel shows the schedule in words and the estimated cost for the month (daily: days × rate; hourly: days × hours × rate; monthly: the salary) plus the 12-month average.
 - When it cannot be priced (on demand, or hourly without times) the panel says what to fill in.
 
+## Agreements and compensation
+
+An agreement records something the worker pays back in work (a dining table, an advance). Each installment is a payment with method "compensação" linked to the agreement. Endpoints: [api-contract](api-contract.md#agreements-compensation-account-deletion-projections-v3).
+
+- E creates an agreement on the profissional's "Acordos" tab with a description, total, installment (optional) and start month. It shows "aguardando a profissional concordar" until W accepts.
+- W sees the agreement and taps "concordar" once. W cannot create or cancel agreements.
+- The tab lists descrição, total, abatido, falta, parcela and status (aguardando, em andamento, quitado, cancelado).
+- When E registers a payment, "abater de um acordo" offers the open agreements with the installment prefilled. The amount cannot exceed what remains; the form shows the error on the amount.
+- A compensation payment counts toward the month's paid total like any payment and W acknowledges it with "recebi". Without an agreement it is allowed only with a note.
+- E can cancel an agreement; payments already linked stay. Archived contracts reject agreement changes.
+
+## Delete account
+
+- Perfil has a "Excluir conta" zone for both roles. The dialog explains what is kept for the other party and asks for the password and the word EXCLUIR. A wrong password shows an error on the password field and nothing changes.
+- On success all sessions end and the person lands on the login screen. The same e-mail can register again later.
+- E deleting: their contracts are archived and stay readable by the workers. W deleting: the worker is unlinked, the employer keeps the history under the worker's name.
+- Retention details: [SECURITY](../SECURITY.md#account-deletion-and-lgpd).
+
+## Future months and projections
+
+- Início, Equipe, Cartão (board) and the worker home can navigate forward. Future months show "previsto" values from the estimate, styled as projections (dashed outline, "previsto" label), never mixed with actuals.
+- Future months have no hours, no pending counts and no payments to register for them from the dashboard.
+
+## Navigation and invite links
+
+- "voltar" returns to the screen the person came from inside the app, and to the module list only when the page was opened directly. Saving a form returns to where it was opened.
+- Opening an invite link (`/criar-conta?convite=`) while signed in shows "Você está conectado como …" with "sair e continuar" instead of redirecting into the app.
+
+## Form controls
+
+- Single choice: custom Select on fine pointers, native picker on touch; the native `<select>` stays in the DOM. `ChoiceField` is a segmented control on `md`+ and a Select below.
+- Time and date use masked custom fields (`TimeField`, `DateField`) with a popover on desktop and a sheet on touch; never the browser's own picker.
+- On small screens table filters move into a bottom drawer ("Filtros (n)") with "limpar" and "ver resultados".
+- Row actions: one action is a single inline button; with more, at most two inline and the rest in the `⋯` menu, remover in coral.
+
 ## Layout rules
 
 - Every collection is a table on `md` and wider and a list of cards below, from one column definition.

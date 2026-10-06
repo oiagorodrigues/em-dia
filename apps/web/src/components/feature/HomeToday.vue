@@ -55,7 +55,7 @@ async function clock(item: DashboardItem, action: "in" | "out"): Promise<void> {
 <template>
   <section class="ht sheet" aria-labelledby="ht-title">
     <header class="ht__head">
-      <h2 id="ht-title" class="section-title">hoje</h2>
+      <h2 id="ht-title" class="section-title">Hoje</h2>
       <p class="ht__date">{{ WEEKDAY_LONG[weekdayOf(today)] }}, {{ formatDayMonth(today) }}</p>
     </header>
     <p v-if="rows.length === 0" class="ht__empty">Ninguém previsto para hoje.</p>
@@ -70,12 +70,12 @@ async function clock(item: DashboardItem, action: "in" | "out"): Promise<void> {
         </span>
         <Button
           v-if="state === 'in' || state === 'out'"
-          :variant="state === 'in' ? 'secondary' : 'ghost'"
-          icon="clock"
+          :icon="state === 'in' ? 'clock-in' : 'clock-out'"
+          :class="state === 'in' ? 'ht__btn--in' : 'ht__btn--out'"
           :loading="busy === item.contract.id"
           :aria-label="`${state === 'in' ? 'Bater entrada' : 'Bater saída'} de ${item.contract.workerName}`"
           @click="clock(item, state)"
-          >{{ state === "in" ? "entrada" : "saída" }}</Button
+          >{{ state === "in" ? "Entrada" : "Saída" }}</Button
         >
       </li>
     </ul>
@@ -149,16 +149,35 @@ async function clock(item: DashboardItem, action: "in" | "out"): Promise<void> {
 }
 
 .ht__state.is-in {
-  color: var(--green);
+  color: var(--brand);
 }
 
 .ht__state.is-absent {
-  color: var(--red-text);
+  color: var(--coral-ink);
 }
 
 .ht__row :deep(.btn) {
   min-height: 40px;
   padding: 0 var(--s-3);
   font-size: var(--t-14);
+}
+
+/* Same meaning colors as the table's inline actions: entrada brand, saída amber. */
+.ht__row :deep(.ht__btn--in) {
+  color: var(--brand-ink);
+  border-color: color-mix(in srgb, var(--brand) 40%, var(--rule));
+}
+
+.ht__row :deep(.ht__btn--in:hover:not(:disabled)) {
+  background: var(--brand-wash);
+}
+
+.ht__row :deep(.ht__btn--out) {
+  color: var(--amber-ink);
+  border-color: color-mix(in srgb, var(--amber) 45%, var(--rule));
+}
+
+.ht__row :deep(.ht__btn--out:hover:not(:disabled)) {
+  background: var(--amber-wash);
 }
 </style>

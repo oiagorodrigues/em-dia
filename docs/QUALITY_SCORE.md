@@ -2,22 +2,23 @@
 
 Grades per domain and layer: A (done, tested, documented), B (works, minor gaps), C (works, notable gaps), D (partial), F (missing). `-` means the layer does not apply. Graded after the MVP landed.
 
-| Domain                | shared | db  | repos | services | http | stores | components | views | tests | docs |
-| --------------------- | ------ | --- | ----- | -------- | ---- | ------ | ---------- | ----- | ----- | ---- |
-| Auth and RBAC         | A      | A   | B     | A        | A    | B      | B          | B     | A     | B    |
-| Contracts and invites | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Team management       | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Time card and clock   | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Adjustments           | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Payments and receipts | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Summary and statement | A      | -   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Activity log          | -      | A   | B     | B        | B    | -      | B          | B     | C     | B    |
-| Dashboard             | -      | -   | B     | B        | B    | -      | B          | B     | B     | B    |
-| PWA and offline       | -      | -   | -     | -        | B    | -      | B          | B     | C     | B    |
-| Security              | B      | A   | B     | A        | A    | B      | B          | -     | A     | B    |
-| Reliability           | -      | B   | -     | -        | B    | -      | -          | -     | C     | B    |
+| Domain                 | shared | db  | repos | services | http | stores | components | views | tests | docs |
+| ---------------------- | ------ | --- | ----- | -------- | ---- | ------ | ---------- | ----- | ----- | ---- |
+| Auth and RBAC          | A      | A   | B     | A        | A    | B      | B          | B     | A     | B    |
+| Contracts and invites  | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Team management        | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Agreements and account | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Time card and clock    | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Adjustments            | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Payments and receipts  | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Summary and statement  | A      | -   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Activity log           | -      | A   | B     | B        | B    | -      | B          | B     | C     | B    |
+| Dashboard              | -      | -   | B     | B        | B    | -      | B          | B     | B     | B    |
+| PWA and offline        | -      | -   | -     | -        | B    | -      | B          | B     | C     | B    |
+| Security               | B      | A   | B     | A        | A    | B      | B          | -     | A     | B    |
+| Reliability            | -      | B   | -     | -        | B    | -      | -          | -     | C     | B    |
 
-Evidence at grading time (2026-10-06): api 180 tests (supertest: RBAC, auth, entries, payments, reports, team, static serving), web 105 tests plus `vue-tsc`, shared 33, harness 17, 13+ browser journeys in `tools/e2e`. Repos are graded B because they are tested only through services and http.
+Evidence at grading time (2026-10-06): api 199 tests (supertest: RBAC, auth, entries, payments, reports, team, agreements, account deletion, static serving), web 159 tests plus `vue-tsc`, shared 38, harness 18, 25 browser journeys defined in `tools/e2e` (pass results pending: not re-run when this was written). Repos are graded B because they are tested only through services and http.
 
 ## Gaps
 

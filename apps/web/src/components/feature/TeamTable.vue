@@ -15,18 +15,19 @@ import { contractsApi, entriesApi, errorMessage } from "@/api";
 import Avatar from "@/components/ui/Avatar.vue";
 import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
 import DataTable from "@/components/ui/DataTable.vue";
-import IconButton from "@/components/ui/IconButton.vue";
-import Menu from "@/components/ui/Menu.vue";
-import type { MenuItem } from "@/components/ui/menu.ts";
+import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
 import StatusChip from "@/components/ui/StatusChip.vue";
+import TableActions from "@/components/ui/TableActions.vue";
 import { isWritable } from "@/lib/contract.ts";
 import { clockStateOf } from "@/lib/entry.ts";
 import type { Column, TableState } from "@/lib/table.ts";
 import {
   attendanceShort,
   contactPhone,
+  projectedMinutes,
   TEAM_STATUS_LABEL,
   TEAM_STATUS_TONE,
+  teamRowActions,
   teamStatus,
   todayInfo,
 } from "@/lib/team.ts";
@@ -38,8 +39,10 @@ const {
   today,
   month,
   variant = "home",
+  projected = false,
   filter,
   filtersActive = false,
+  filterCount,
   loading = false,
 } = defineProps<{
   items: readonly DashboardItem[];
@@ -48,8 +51,11 @@ const {
   month: YearMonth;
   /** "home": the dashboard columns; "full": Equipe, with pay and contact. */
   variant?: "home" | "full";
+  /** A future month: show the estimate ("previsto") instead of actuals, never both. */
+  projected?: boolean;
   filter?: (item: DashboardItem) => boolean;
   filtersActive?: boolean;
+  filterCount?: number;
   loading?: boolean;
 }>();
 
@@ -66,6 +72,15 @@ const toast = useToastStore();
 const router = useRouter();
 const isCurrentMonth = computed(() => today.startsWith(month));
 
+function projectedHours(i: DashboardItem): string {
+  const m = projectedMinutes(i);
+  return m === null ? "—" : formatDuration(m);
+}
+
+function projectedCost(i: DashboardItem): string {
+  return i.estimate.cents === null ? "sem estimativa" : formatCents(i.estimate.cents);
+}
+
 const columns = computed<Column<DashboardItem>[]>(() => {
   const cols: Column<DashboardItem>[] = [
     {
@@ -79,9 +94,7 @@ const columns = computed<Column<DashboardItem>[]>(() => {
       searchable: true,
     },
   ];
-  if (variant === "home") {
-    cols.push({ key: "hoje", label: "Hoje", value: (i) => todayInfo(i, today).text });
-  } else {
+  if (variant === "full") {
     cols.push({
       key: "pagamento",
       label: "Pagamento",
@@ -91,40 +104,76 @@ const columns = computed<Column<DashboardItem>[]>(() => {
       hideBelow: "lg",
     });
   }
-  cols.push(
-    {
-      key: "horas",
-      label: "Horas",
-      value: (i) => i.summary.totalMinutes,
-      format: (i) => formatDuration(i.summary.totalMinutes),
-      sortable: true,
-      sortFirst: "desc",
-      align: "right",
-      mono: true,
-    },
-    {
-      key: "apagar",
-      label: "A pagar",
-      value: (i) => i.summary.balanceCents,
-      format: (i) => formatCents(Math.max(0, i.summary.balanceCents)),
-      sortable: true,
-      sortFirst: "desc",
-      align: "right",
-      mono: true,
-    },
-  );
-  if (variant === "home") {
-    cols.splice(cols.length - 1, 0, {
-      key: "dias",
-      label: "Dias",
-      value: (i) => i.summary.daysWorked,
-      format: attendanceShort,
-      sortable: true,
-      sortFirst: "desc",
-      align: "right",
-      mono: true,
-      hideBelow: "lg",
-    });
+  if (projected) {
+    cols.push(
+      {
+        key: "dias",
+        label: "Dias previstos",
+        value: (i) => i.estimate.days,
+        sortable: true,
+        sortFirst: "desc",
+        align: "right",
+        mono: true,
+      },
+      {
+        key: "horas",
+        label: "Horas previstas",
+        value: (i) => projectedMinutes(i),
+        format: projectedHours,
+        sortable: true,
+        sortFirst: "desc",
+        align: "right",
+        mono: true,
+        hideBelow: "lg",
+      },
+      {
+        key: "custo",
+        label: "Custo previsto",
+        value: (i) => i.estimate.cents,
+        format: projectedCost,
+        sortable: true,
+        sortFirst: "desc",
+        align: "right",
+        mono: true,
+      },
+    );
+  } else {
+    if (variant === "home" && isCurrentMonth.value) {
+      cols.push({ key: "hoje", label: "Hoje", value: (i) => todayInfo(i, today).text });
+    }
+    cols.push(
+      {
+        key: "horas",
+        label: "Horas",
+        value: (i) => i.summary.totalMinutes,
+        format: (i) => formatDuration(i.summary.totalMinutes),
+        sortable: true,
+        sortFirst: "desc",
+        align: "right",
+        mono: true,
+      },
+      {
+        key: "dias",
+        label: "Dias",
+        value: (i) => i.summary.daysWorked,
+        format: attendanceShort,
+        sortable: true,
+        sortFirst: "desc",
+        align: "right",
+        mono: true,
+        hideBelow: variant === "full" ? "xl" : "lg",
+      },
+      {
+        key: "apagar",
+        label: "A pagar",
+        value: (i) => i.summary.balanceCents,
+        format: (i) => formatCents(Math.max(0, i.summary.balanceCents)),
+        sortable: true,
+        sortFirst: "desc",
+        align: "right",
+        mono: true,
+      },
+    );
   }
   if (variant === "full") {
     cols.push(
@@ -133,7 +182,7 @@ const columns = computed<Column<DashboardItem>[]>(() => {
         label: "Contato",
         value: (i) => [contactPhone(i.contract), i.contract.contactEmail].filter(Boolean).join(" "),
         searchable: true,
-        hideBelow: "xl",
+        hideBelow: "2xl",
       },
       {
         key: "status",
@@ -148,14 +197,12 @@ const columns = computed<Column<DashboardItem>[]>(() => {
 
 const busy = ref<string | null>(null);
 
-async function clock(item: DashboardItem): Promise<void> {
-  const state = clockStateOf(item.today, isWritable(item.contract));
-  if (state !== "in" && state !== "out") return;
+async function clock(item: DashboardItem, action: "in" | "out"): Promise<void> {
   busy.value = item.contract.id;
   try {
-    const { entry } = await entriesApi.clock(item.contract.id, state);
+    const { entry } = await entriesApi.clock(item.contract.id, action);
     toast.success(
-      state === "in"
+      action === "in"
         ? `Entrada de ${item.contract.workerName} às ${entry.checkIn}.`
         : `Saída de ${item.contract.workerName} às ${entry.checkOut}.`,
     );
@@ -165,14 +212,6 @@ async function clock(item: DashboardItem): Promise<void> {
   } finally {
     busy.value = null;
   }
-}
-
-function clockLabel(item: DashboardItem): string | null {
-  if (!isCurrentMonth.value) return null;
-  const state = clockStateOf(item.today, isWritable(item.contract));
-  if (state === "in") return `Bater entrada de ${item.contract.workerName}`;
-  if (state === "out") return `Bater saída de ${item.contract.workerName}`;
-  return null;
 }
 
 async function sendInvite(item: DashboardItem): Promise<void> {
@@ -232,29 +271,71 @@ async function confirmRemove(): Promise<void> {
   }
 }
 
+const cardLink = (item: DashboardItem) => ({
+  path: `/equipe/${item.contract.id}`,
+  query: { mes: month },
+});
+
+/**
+ * Most frequent first, at most two inline: bater entrada/saída (today, current month) and
+ * registrar pagamento. Everything else lives in the ⋯ menu.
+ */
+function inlineFor(item: DashboardItem): InlineAction[] {
+  const name = item.contract.workerName;
+  const kinds = teamRowActions(item, {
+    currentMonth: isCurrentMonth.value,
+    projected,
+    clock: clockStateOf(item.today, isWritable(item.contract)),
+    writable: isWritable(item.contract),
+  });
+  return kinds.map((kind): InlineAction => {
+    switch (kind) {
+      case "restore":
+        return {
+          label: `Restaurar ${name}`,
+          icon: "undo",
+          tone: "brand",
+          onClick: () => void restore(item),
+        };
+      case "clock-in":
+      case "clock-out":
+        return {
+          label: kind === "clock-in" ? `Bater entrada de ${name}` : `Bater saída de ${name}`,
+          icon: kind,
+          tone: kind === "clock-in" ? "brand" : "amber",
+          loading: busy.value === item.contract.id,
+          onClick: () => void clock(item, kind === "clock-in" ? "in" : "out"),
+        };
+      case "pay":
+        return {
+          label: `Registrar pagamento de ${name}`,
+          icon: "wallet-plus",
+          tone: "brand",
+          to: { path: "/pagamentos/novo", query: { vinculo: item.contract.id, mes: month } },
+        };
+    }
+  });
+}
+
 function menuFor(item: DashboardItem): MenuItem[] {
   const status = teamStatus(item.contract);
   const id = item.contract.id;
-  if (status === "archived") {
-    return [{ label: "restaurar", icon: "undo", onSelect: () => void restore(item) }];
-  }
-  const list: MenuItem[] = [];
+  const list: MenuItem[] = [
+    { label: "Ver cartão", icon: "eye", onSelect: () => void router.push(cardLink(item)) },
+  ];
+  if (status === "archived") return list;
   if (status === "pending") {
     list.push({
-      label: item.contract.contactEmail ? "reenviar convite" : "copiar link do convite",
+      label: item.contract.contactEmail ? "Reenviar convite" : "Copiar link do convite",
       icon: item.contract.contactEmail ? "mail" : "link",
       onSelect: () => void sendInvite(item),
     });
   }
   list.push(
-    { label: "editar", icon: "pencil", onSelect: () => void navigateTo(`/equipe/${id}/ajustes`) },
-    { label: "remover", icon: "archive", danger: true, onSelect: () => askRemove(item) },
+    { label: "Editar", icon: "pencil", onSelect: () => void router.push(`/equipe/${id}/ajustes`) },
+    { label: "Remover", icon: "trash", danger: true, onSelect: () => askRemove(item) },
   );
   return list;
-}
-
-function navigateTo(path: string): Promise<unknown> {
-  return router.push(path);
 }
 </script>
 
@@ -272,6 +353,7 @@ function navigateTo(path: string): Promise<unknown> {
     search-placeholder="Buscar por nome, função ou frequência"
     :count-label="(n) => (n === 1 ? '1 pessoa' : `${n} pessoas`)"
     card-actions="below"
+    :filter-count="filterCount"
     @clear-filters="emit('clear-filters')"
   >
     <template v-if="$slots.filters" #filters><slot name="filters" /></template>
@@ -291,7 +373,7 @@ function navigateTo(path: string): Promise<unknown> {
           >
           <StatusChip
             v-if="variant === 'home' && teamStatus(row.contract) === 'pending'"
-            tone="butter"
+            tone="amber"
             class="tt__chip"
             >convite pendente</StatusChip
           >
@@ -342,17 +424,31 @@ function navigateTo(path: string): Promise<unknown> {
             >
           </span>
         </span>
-        <dl class="tt__nums">
+        <dl v-if="projected" class="tt__nums is-projected">
           <div>
-            <dt>horas</dt>
+            <dt>Dias previstos</dt>
+            <dd class="mono">{{ row.estimate.days }}</dd>
+          </div>
+          <div>
+            <dt>Horas previstas</dt>
+            <dd class="mono">{{ projectedHours(row) }}</dd>
+          </div>
+          <div>
+            <dt>Custo previsto</dt>
+            <dd class="mono">{{ projectedCost(row) }}</dd>
+          </div>
+        </dl>
+        <dl v-else class="tt__nums">
+          <div>
+            <dt>Horas</dt>
             <dd class="mono">{{ formatDuration(row.summary.totalMinutes) }}</dd>
           </div>
           <div>
-            <dt>{{ row.contract.schedule.kind === "per_month" ? "visitas" : "dias" }}</dt>
+            <dt>{{ row.contract.schedule.kind === "per_month" ? "Visitas" : "Dias" }}</dt>
             <dd class="mono">{{ attendanceShort(row) }}</dd>
           </div>
           <div>
-            <dt>a pagar</dt>
+            <dt>A pagar</dt>
             <dd class="mono">{{ formatCents(Math.max(0, row.summary.balanceCents)) }}</dd>
           </div>
         </dl>
@@ -361,7 +457,7 @@ function navigateTo(path: string): Promise<unknown> {
             TEAM_STATUS_LABEL[teamStatus(row.contract)]
           }}</StatusChip>
           <span
-            v-if="variant === 'home'"
+            v-if="variant === 'home' && isCurrentMonth && !projected"
             class="tt__today"
             :class="`is-${todayInfo(row, today).state}`"
           >
@@ -372,42 +468,17 @@ function navigateTo(path: string): Promise<unknown> {
     </template>
 
     <template #row-actions="{ row }">
-      <template v-if="teamStatus(row.contract) === 'archived'">
-        <IconButton
-          icon="undo"
-          :label="`Restaurar ${row.contract.workerName}`"
-          tone="blue"
-          @click="restore(row)"
-        />
-      </template>
-      <template v-else>
-        <IconButton
-          v-if="variant === 'home' && clockLabel(row)"
-          icon="clock"
-          :label="clockLabel(row)!"
-          tone="blue"
-          :loading="busy === row.contract.id"
-          @click="clock(row)"
-        />
-        <IconButton
-          v-if="isWritable(row.contract)"
-          icon="wallet"
-          :label="`Registrar pagamento de ${row.contract.workerName}`"
-          :to="{ path: '/pagamentos/novo', query: { vinculo: row.contract.id, mes: month } }"
-        />
-        <IconButton
-          icon="card"
-          :label="`Ver cartão de ${row.contract.workerName}`"
-          :to="{ path: `/equipe/${row.contract.id}`, query: { mes: month } }"
-        />
-      </template>
-      <Menu :items="menuFor(row)" :label="`Mais ações para ${row.contract.workerName}`" />
+      <TableActions
+        :actions="inlineFor(row)"
+        :menu="menuFor(row)"
+        :menu-label="`Mais ações para ${row.contract.workerName}`"
+      />
     </template>
   </DataTable>
 
   <ConfirmDialog
     v-model:open="confirmOpen"
-    :title="`remover ${removing?.contract.workerName ?? ''}?`"
+    :title="`Remover ${removing?.contract.workerName ?? ''}?`"
     message="O histórico fica guardado e você pode restaurar em Equipe → removidos."
     confirm-label="remover"
     :loading="removeBusy"
@@ -494,8 +565,8 @@ a.tt__name:hover {
 
 .tt__today.is-in .tt__today-dot {
   border: 0;
-  background: var(--green);
-  box-shadow: 0 0 0 3px var(--green-wash);
+  background: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-wash);
 }
 
 .tt__today.is-done .tt__today-dot {
@@ -504,17 +575,17 @@ a.tt__name:hover {
 }
 
 .tt__today.is-absent {
-  color: var(--red-text);
+  color: var(--coral-ink);
 }
 
 .tt__today.is-absent .tt__today-dot {
-  border-color: var(--red);
-  background: var(--red);
+  border-color: var(--coral);
+  background: var(--coral);
 }
 
 .tt__today.is-waiting .tt__today-dot {
   border-style: dashed;
-  border-color: var(--blue);
+  border-color: var(--brand);
 }
 
 .tt__card {
@@ -534,13 +605,18 @@ a.tt__name:hover {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--ink-2);
 }
 
 .tt__nums dd {
   font-size: var(--t-16);
   font-weight: 600;
+}
+
+.tt__nums.is-projected {
+  padding: var(--s-2) var(--s-3);
+  border: 1px dashed var(--ink-3);
+  border-radius: var(--r-1);
 }
 
 .tt__card-foot {

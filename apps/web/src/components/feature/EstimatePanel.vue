@@ -15,7 +15,6 @@ import Avatar from "@/components/ui/Avatar.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import { describeEstimate, describeHours } from "@/lib/estimate.ts";
 import { formatDayMonth } from "@/lib/format.ts";
-import { tintFor } from "@/lib/tint.ts";
 
 export interface EstimateDraft {
   workerName: string;
@@ -79,14 +78,14 @@ const invite = computed(() => {
 
 <template>
   <aside class="ep" aria-labelledby="ep-title">
-    <h2 id="ep-title" class="label">resumo</h2>
+    <h2 id="ep-title" class="label">Resumo</h2>
 
     <div class="ep__who">
       <Avatar :name="name || '?'" :size="48" />
       <div class="ep__who-text">
         <p class="ep__name" :class="{ 'is-empty': !name }">{{ name || "sem nome ainda" }}</p>
         <p class="ep__chips">
-          <StatusChip :tone="name ? tintFor(name) : 'neutral'" :dot="false">{{
+          <StatusChip tone="brand" :dot="false">{{
             OCCUPATION_LABEL[draft.occupation]
           }}</StatusChip>
           <StatusChip tone="neutral" :dot="false">{{ PAY_TYPE_LABEL[draft.payType] }}</StatusChip>
@@ -96,25 +95,25 @@ const invite = computed(() => {
 
     <dl class="ep__facts">
       <div>
-        <dt class="label">frequência</dt>
+        <dt class="label">Frequência</dt>
         <dd>{{ frequency }}</dd>
       </div>
       <div v-if="hours">
-        <dt class="label">horário</dt>
+        <dt class="label">Horário</dt>
         <dd class="mono">{{ hours }}</dd>
       </div>
       <div v-if="start">
-        <dt class="label">início</dt>
+        <dt class="label">Início</dt>
         <dd>{{ start }}</dd>
       </div>
       <div v-if="invite">
-        <dt class="label">convite</dt>
+        <dt class="label">Convite</dt>
         <dd>{{ invite }}</dd>
       </div>
     </dl>
 
-    <section class="ep__cost tint-peach" aria-live="polite" aria-labelledby="ep-cost">
-      <h3 id="ep-cost" class="ep__cost-label">custo estimado</h3>
+    <section class="ep__cost" aria-live="polite" aria-labelledby="ep-cost">
+      <h3 id="ep-cost" class="ep__cost-label">Custo estimado</h3>
       <template v-if="estimate.total">
         <p class="ep__total">
           <span class="mono">{{ estimate.total }}</span>
@@ -199,6 +198,8 @@ const invite = computed(() => {
   gap: var(--s-1);
   padding: var(--s-5);
   border-radius: var(--r-2);
+  background: var(--surface-2);
+  color: var(--ink);
 }
 
 .ep__cost-label {

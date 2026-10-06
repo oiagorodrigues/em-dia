@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { formatDuration } from "@emdia/shared";
 import Icon from "./Icon.vue";
 
 const model = defineModel<number>({ required: true });
@@ -9,7 +8,7 @@ const {
   min = 0,
   max = 720,
   label,
-  format = (v: number) => (v === 0 ? "sem pausa" : formatDuration(v)),
+  format = (v: number) => String(v),
   unit = "minutos",
 } = defineProps<{
   id?: string;
@@ -17,6 +16,7 @@ const {
   min?: number;
   max?: number;
   label: string;
+  /** The bare number by default: the unit belongs in the label, not inside the control. */
   format?: (value: number) => string;
   /** Spoken in the +/- button labels: "Menos 15 minutos". */
   unit?: string;
@@ -79,7 +79,7 @@ function bump(delta: number): void {
 
 .stp__val {
   text-align: center;
-  color: var(--blue);
+  color: var(--ink);
   font-size: var(--t-16);
   border-left: 1px solid var(--rule);
   border-right: 1px solid var(--rule);

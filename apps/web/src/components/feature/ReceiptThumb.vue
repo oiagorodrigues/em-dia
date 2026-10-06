@@ -66,6 +66,6 @@ onMounted(async () => {
 .thumb__ext {
   font-size: 9px;
   font-weight: 700;
-  color: var(--red-text);
+  color: var(--coral-ink);
 }
 </style>

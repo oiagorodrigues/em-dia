@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ROLE_LABEL } from "@emdia/shared";
-import { computed, ref } from "vue";
+import { computed, ref, useTemplateRef } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { errorMessage } from "@/api";
 import Avatar from "@/components/ui/Avatar.vue";
@@ -8,6 +8,7 @@ import Icon from "@/components/ui/Icon.vue";
 import Wordmark from "@/components/ui/Wordmark.vue";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
+import { useSlidingIndicator } from "@/lib/motion.ts";
 import { navItems } from "./nav.ts";
 
 const auth = useAuthStore();
@@ -17,6 +18,8 @@ const router = useRouter();
 
 const items = computed(() => navItems(auth.role));
 const active = computed(() => items.value.find((i) => i.match(route))?.to ?? null);
+const list = useTemplateRef<HTMLElement>("list");
+const indicator = useSlidingIndicator(list, ".is-active", "y", () => active.value);
 
 const leaving = ref(false);
 async function logout(): Promise<void> {
@@ -38,7 +41,8 @@ async function logout(): Promise<void> {
       <Wordmark :size="30" />
     </RouterLink>
     <nav aria-label="Principal">
-      <ul class="side__list">
+      <ul ref="list" class="side__list">
+        <li class="side__indicator" aria-hidden="true" :style="indicator" />
         <li v-for="item in items" :key="item.to">
           <RouterLink
             :to="item.to"
@@ -62,7 +66,7 @@ async function logout(): Promise<void> {
       </RouterLink>
       <button type="button" class="side__logout" :disabled="leaving" @click="logout">
         <Icon name="logout" :size="18" />
-        <span>sair</span>
+        <span>Sair</span>
       </button>
     </div>
   </aside>
@@ -99,6 +103,7 @@ async function logout(): Promise<void> {
 }
 
 .side__list {
+  position: relative;
   list-style: none;
   padding: 0;
   display: grid;
@@ -125,20 +130,11 @@ async function logout(): Promise<void> {
 }
 
 .side__item.is-active {
-  background: var(--sidebar-active);
   font-weight: 700;
-  box-shadow: var(--shadow-1);
 }
 
-.side__item.is-active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 10px;
-  bottom: 10px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--blue);
+.side__item.is-active:hover {
+  background: transparent;
 }
 
 .side__user {
@@ -190,5 +186,42 @@ async function logout(): Promise<void> {
 
 .side__logout:hover:not(:disabled) {
   background: var(--sidebar-active);
+}
+
+/* One white pill with a green bar that slides between items. */
+.side__indicator {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  border-radius: var(--r-1);
+  background: var(--sidebar-active);
+  box-shadow: var(--shadow-1);
+  pointer-events: none;
+  transition:
+    transform var(--d-sheet) var(--ease-out),
+    height var(--d-sheet) var(--ease-out),
+    opacity var(--d-fast) var(--ease-out);
+}
+
+.side__indicator::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--brand);
+}
+
+.side__item {
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side__indicator {
+    transition: opacity var(--d-fast) linear;
+  }
 }
 </style>

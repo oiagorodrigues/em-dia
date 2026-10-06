@@ -129,6 +129,18 @@ export function usersRepo(db: Db) {
       execute(db, "UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = ?", id);
     },
 
+    /** Keeps the row (history points at it) but removes everything that identifies the person. */
+    anonymize(id: string, placeholderEmail: string): void {
+      execute(
+        db,
+        `UPDATE users SET email = ?, name = 'Conta excluída', phone = NULL, pix_key = NULL, password_hash = '!',
+           token_version = token_version + 1, failed_logins = 0, locked_until = NULL
+         WHERE id = ?`,
+        placeholderEmail,
+        id,
+      );
+    },
+
     deleteByEmail(email: string): void {
       execute(db, "DELETE FROM users WHERE email = ?", email);
     },

@@ -1,0 +1,58 @@
+/*
+ * Tailwind v4 is the layout layer (grid, spacing, flex). No preflight: base.css owns the reset.
+ * Colors, radii, shadows and fonts point at the tokens in tokens.css, so utilities follow the
+ * theme (light/dark) without `dark:` variants, and the default palette is switched off.
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@theme inline {
+  --color-*: initial;
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-rule: var(--rule);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-brand: var(--brand);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-wash: var(--brand-wash);
+  --color-brand-ink: var(--brand-ink);
+  --color-coral: var(--coral);
+  --color-coral-wash: var(--coral-wash);
+  --color-coral-ink: var(--coral-ink);
+  --color-amber: var(--amber);
+  --color-amber-wash: var(--amber-wash);
+  --color-amber-ink: var(--amber-ink);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-ink: var(--sidebar-ink);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-on-ink: var(--on-ink);
+
+  --radius-*: initial;
+  --radius-1: var(--r-1);
+  --radius-2: var(--r-2);
+  --radius-3: var(--r-3);
+  --radius-full: 9999px;
+
+  --shadow-*: initial;
+  --shadow-rest: var(--shadow-1);
+  --shadow-lift: var(--shadow-2);
+
+  --font-*: initial;
+  --font-sans: var(--font-text);
+  --font-num: var(--font-mono);
+
+  --breakpoint-*: initial;
+  --breakpoint-md: 640px;
+  --breakpoint-lg: 960px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1600px;
+
+  --ease-enter: var(--ease-out);
+  --ease-leave: var(--ease-in);
+}

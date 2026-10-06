@@ -37,8 +37,9 @@ export function reportRoutes({ reports }: Services): Router {
     res.json(reports.team(actorOf(res), month, include === "archived"));
   });
 
-  router.get("/dashboard", (_req, res) => {
-    res.json(reports.dashboard(actorOf(res)));
+  router.get("/dashboard", (req, res) => {
+    const { month } = parse(monthQuerySchema.partial(), req.query);
+    res.json(reports.dashboard(actorOf(res), month));
   });
 
   return router;

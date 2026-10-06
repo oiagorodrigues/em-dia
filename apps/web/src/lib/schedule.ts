@@ -24,11 +24,19 @@ export const WEEKDAY_PRESETS = [
 ] as const;
 
 export const EVERY_WEEKS_OPTIONS = [
-  { value: 1, label: "toda semana" },
-  { value: 2, label: "a cada 2" },
-  { value: 3, label: "a cada 3" },
-  { value: 4, label: "a cada 4" },
+  { value: "1", label: "toda semana" },
+  { value: "2", label: "a cada 2" },
+  { value: "3", label: "a cada 3" },
+  { value: "custom", label: "personalizado" },
 ] as const;
+
+export type RepeatChoice = (typeof EVERY_WEEKS_OPTIONS)[number]["value"];
+export const MAX_EVERY_WEEKS = 12;
+
+/** Which repetition option an `everyWeeks` value shows as; 4–12 weeks is "personalizado". */
+export function repeatChoiceOf(everyWeeks: number): RepeatChoice {
+  return everyWeeks >= 1 && everyWeeks <= 3 ? (String(everyWeeks) as RepeatChoice) : "custom";
+}
 
 export function sameDays(a: readonly number[], b: readonly number[]): boolean {
   if (a.length !== b.length) return false;
@@ -50,7 +58,7 @@ export function withKind(schedule: Schedule, kind: ScheduleKind): Schedule {
   return next;
 }
 
-/** Live line under the schedule form, e.g. "quinzenal: sex · ~2 dias em outubro". */
+/** Live line under the schedule form, e.g. "quinzenal: sex · 2 dias previstos em outubro". */
 export function scheduleSummaryLine(
   schedule: Schedule,
   month: YearMonth,
@@ -65,9 +73,14 @@ export function scheduleSummaryLine(
   if (isEmpty) return "escolha os dias";
   const n = expectedCountInMonth(schedule, month, { startedOn, endedOn: null });
   const unit =
-    schedule.kind === "per_month" ? (n === 1 ? "visita" : "visitas") : n === 1 ? "dia" : "dias";
-  const approx = schedule.kind === "weekly" && schedule.everyWeeks > 1 ? "~" : "";
-  return `${described} · ${approx}${n} ${unit} em ${monthName(parseYearMonth(month).month)}`;
+    schedule.kind === "per_month"
+      ? n === 1
+        ? "visita prevista"
+        : "visitas previstas"
+      : n === 1
+        ? "dia previsto"
+        : "dias previstos";
+  return `${described} · ${n} ${unit} em ${monthName(parseYearMonth(month).month)}`;
 }
 
 /** "2 de 9", "visitas 1 de 2", or just "3" when nothing is expected. */

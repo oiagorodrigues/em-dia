@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { RouterLink, type RouteLocationRaw } from "vue-router";
 import Icon from "./Icon.vue";
 import type { IconName } from "./icons.ts";
+import Tooltip from "./Tooltip.vue";
 
 const {
   icon,
@@ -19,11 +20,15 @@ const {
   label: string;
   to?: RouteLocationRaw;
   href?: string;
-  tone?: "neutral" | "blue" | "danger";
+  /** Inline actions are colored by meaning: brand (bater entrada, pagar), amber (bater saída), coral (remover). */
+  tone?: "neutral" | "brand" | "amber" | "coral";
   disabled?: boolean;
   loading?: boolean;
   tooltip?: boolean;
 }>();
+
+// The root may be the Tooltip wrapper; listeners and attrs (e.g. @click) belong on the button.
+defineOptions({ inheritAttrs: false });
 
 const tag = computed(() => (to ? RouterLink : href ? "a" : "button"));
 const attrs = computed(() => {
@@ -34,9 +39,23 @@ const attrs = computed(() => {
 </script>
 
 <template>
+  <Tooltip v-if="tooltip" :text="label">
+    <component
+      :is="tag"
+      v-bind="{ ...$attrs, ...attrs }"
+      class="ib"
+      :class="[`ib--${tone}`, { 'is-loading': loading }]"
+      :aria-label="label"
+      :aria-busy="loading || undefined"
+    >
+      <span v-if="loading" class="ib__spin" aria-hidden="true" />
+      <Icon v-else :name="icon" :size="18" />
+    </component>
+  </Tooltip>
   <component
     :is="tag"
-    v-bind="attrs"
+    v-else
+    v-bind="{ ...$attrs, ...attrs }"
     class="ib"
     :class="[`ib--${tone}`, { 'is-loading': loading }]"
     :aria-label="label"
@@ -44,7 +63,6 @@ const attrs = computed(() => {
   >
     <span v-if="loading" class="ib__spin" aria-hidden="true" />
     <Icon v-else :name="icon" :size="18" />
-    <span v-if="tooltip" class="ib__tip" role="tooltip" aria-hidden="true">{{ label }}</span>
   </component>
 </template>
 
@@ -55,12 +73,13 @@ const attrs = computed(() => {
   place-items: center;
   width: 40px;
   height: 40px;
-  border-radius: var(--r-1);
+  border-radius: 50%;
   color: var(--ink-2);
   text-decoration: none;
   transition:
-    background-color var(--d-fast) var(--ease),
-    color var(--d-fast) var(--ease);
+    background-color var(--d-fast) var(--ease-out),
+    color var(--d-fast) var(--ease-out),
+    transform var(--d-fast) var(--ease-out);
 }
 
 /* 40px visible, 44px hit area */
@@ -68,6 +87,7 @@ const attrs = computed(() => {
   content: "";
   position: absolute;
   inset: -2px;
+  border-radius: 50%;
 }
 
 .ib:hover:not(:disabled) {
@@ -75,18 +95,35 @@ const attrs = computed(() => {
   color: var(--ink);
 }
 
-.ib--blue {
-  color: var(--blue);
+.ib:active:not(:disabled) {
+  transform: scale(0.94);
 }
 
-.ib--blue:hover:not(:disabled) {
-  background: var(--blue-wash);
-  color: var(--blue);
+.ib--brand {
+  color: var(--brand);
 }
 
-.ib--danger:hover:not(:disabled) {
-  background: var(--red-wash);
-  color: var(--red-text);
+.ib--brand:hover:not(:disabled) {
+  background: var(--brand-wash);
+  color: var(--brand-ink);
+}
+
+.ib--amber {
+  color: var(--amber);
+}
+
+.ib--amber:hover:not(:disabled) {
+  background: var(--amber-wash);
+  color: var(--amber-ink);
+}
+
+.ib--coral {
+  color: var(--coral);
+}
+
+.ib--coral:hover:not(:disabled) {
+  background: var(--coral-wash);
+  color: var(--coral-ink);
 }
 
 .ib:disabled {
@@ -94,35 +131,9 @@ const attrs = computed(() => {
   cursor: not-allowed;
 }
 
-.ib__tip {
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 50%;
-  z-index: 20;
-  transform: translate(-50%, 2px);
-  padding: 5px 8px;
-  border-radius: 6px;
-  background: var(--ink);
-  color: var(--surface);
-  font-size: var(--t-12);
-  font-weight: 600;
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  transition:
-    opacity var(--d-fast) var(--ease),
-    transform var(--d-fast) var(--ease);
-}
-
-.ib:hover .ib__tip,
-.ib:focus-visible .ib__tip {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  transition-delay: 350ms;
-}
-
-.ib:focus-visible .ib__tip {
-  transition-delay: 0ms;
+.ib:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .ib__spin {
@@ -140,9 +151,9 @@ const attrs = computed(() => {
   }
 }
 
-@media (hover: none) {
-  .ib__tip {
-    display: none;
+@media (prefers-reduced-motion: reduce) {
+  .ib:active:not(:disabled) {
+    transform: none;
   }
 }
 </style>

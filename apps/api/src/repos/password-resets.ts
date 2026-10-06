@@ -24,6 +24,10 @@ export function passwordResetsRepo(db: Db) {
       )?.user_id;
     },
 
+    deleteForUser(userId: string): void {
+      execute(db, "DELETE FROM password_resets WHERE user_id = ?", userId);
+    },
+
     markUsed(tokenHash: string, at: string): boolean {
       return (
         execute(

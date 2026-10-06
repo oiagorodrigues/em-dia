@@ -11,19 +11,26 @@ import { RouterLink, useRouter } from "vue-router";
 import Avatar from "@/components/ui/Avatar.vue";
 import Icon from "@/components/ui/Icon.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
-import type { BoardRow } from "@/lib/board.ts";
+import { rowTotals, type BoardRow } from "@/lib/board.ts";
 import { WEEKDAY_LETTER } from "@/lib/format.ts";
-import { attendanceText } from "@/lib/schedule.ts";
 import type { SortDir, SortState } from "@/lib/table.ts";
 import BoardCell from "./BoardCell.vue";
 
-const { rows, month, today, sort } = defineProps<{
+const {
+  rows,
+  month,
+  today,
+  sort,
+  projected = false,
+} = defineProps<{
   rows: readonly BoardRow[];
   month: YearMonth;
   today: IsoDate;
   sort: SortState | null;
   /** The month the app is in; links to a person's card drop `?mes=` for it. */
   currentMonth: YearMonth;
+  /** A future month: totals are the estimate ("previsto"), not actuals. */
+  projected?: boolean;
 }>();
 
 const emit = defineEmits<{ sort: [key: string, firstDir: SortDir] }>();
@@ -31,11 +38,14 @@ const router = useRouter();
 
 const days = computed(() => rows[0]?.cells ?? []);
 
+const rowTotalsOf = computed(
+  () => new Map(rows.map((r) => [r.item.contract.id, rowTotals(r.item, projected)])),
+);
 const totals = computed(() =>
-  rows.reduce(
+  [...rowTotalsOf.value.values()].reduce(
     (t, r) => ({
-      minutes: t.minutes + r.item.summary.totalMinutes,
-      due: t.due + Math.max(0, r.item.summary.balanceCents),
+      minutes: t.minutes + (r.minutes ?? 0),
+      due: t.due + Math.max(0, r.dueCents ?? 0),
     }),
     { minutes: 0, due: 0 },
   ),
@@ -124,7 +134,7 @@ function onClick(e: MouseEvent, row: BoardRow, currentMonth: YearMonth): void {
         <tr>
           <th scope="col" class="bg__name" :aria-sort="ariaSort('nome')">
             <button type="button" class="bg__sort" @click="emit('sort', 'nome', 'asc')">
-              profissional
+              Profissional
               <Icon
                 :name="sortIcon('nome')"
                 :size="14"
@@ -146,7 +156,7 @@ function onClick(e: MouseEvent, row: BoardRow, currentMonth: YearMonth): void {
           </th>
           <th scope="col" class="bg__total" :aria-sort="ariaSort('horas')">
             <button type="button" class="bg__sort" @click="emit('sort', 'horas', 'desc')">
-              horas
+              Horas
               <Icon
                 :name="sortIcon('horas')"
                 :size="14"
@@ -155,10 +165,10 @@ function onClick(e: MouseEvent, row: BoardRow, currentMonth: YearMonth): void {
               />
             </button>
           </th>
-          <th scope="col" class="bg__total">dias</th>
+          <th scope="col" class="bg__total">Dias</th>
           <th scope="col" class="bg__total" :aria-sort="ariaSort('apagar')">
             <button type="button" class="bg__sort" @click="emit('sort', 'apagar', 'desc')">
-              a pagar
+              {{ projected ? "Previsto" : "A pagar" }}
               <Icon
                 :name="sortIcon('apagar')"
                 :size="14"
@@ -205,25 +215,36 @@ function onClick(e: MouseEvent, row: BoardRow, currentMonth: YearMonth): void {
           >
             <BoardCell :kind="c.kind" :label="c.label" :tip="c.tip" focusable />
           </td>
-          <td class="bg__total mono">{{ formatDuration(row.item.summary.totalMinutes) }}</td>
-          <td class="bg__total mono">
-            {{ attendanceText(row.item.summary, row.item.contract.schedule.kind) }}
+          <td class="bg__total mono" :class="{ 'is-projected': projected }">
+            {{ rowTotalsOf.get(row.item.contract.id)!.hours }}
+          </td>
+          <td class="bg__total mono" :class="{ 'is-projected': projected }">
+            {{ rowTotalsOf.get(row.item.contract.id)!.days }}
           </td>
           <td
             class="bg__total mono bg__due"
-            :class="{ 'is-zero': row.item.summary.balanceCents <= 0 }"
+            :class="{
+              'is-zero': (rowTotalsOf.get(row.item.contract.id)!.dueCents ?? 0) <= 0,
+              'is-projected': projected,
+            }"
           >
-            {{ formatCents(Math.max(0, row.item.summary.balanceCents)) }}
+            {{ rowTotalsOf.get(row.item.contract.id)!.due }}
           </td>
         </tr>
       </tbody>
       <tfoot v-if="rows.length > 1">
         <tr>
-          <th scope="row" class="bg__name bg__foot-label">total</th>
+          <th scope="row" class="bg__name bg__foot-label">
+            {{ projected ? "Total previsto" : "Total" }}
+          </th>
           <td :colspan="days.length" />
-          <td class="bg__total mono">{{ formatDuration(totals.minutes) }}</td>
+          <td class="bg__total mono" :class="{ 'is-projected': projected }">
+            {{ formatDuration(totals.minutes) }}
+          </td>
           <td />
-          <td class="bg__total mono">{{ formatCents(totals.due) }}</td>
+          <td class="bg__total mono" :class="{ 'is-projected': projected }">
+            {{ formatCents(totals.due) }}
+          </td>
         </tr>
       </tfoot>
     </table>
@@ -303,7 +324,7 @@ thead .bg__name {
 }
 
 .bg__day.is-today {
-  color: var(--blue);
+  color: var(--brand);
 }
 
 .bg__day.is-today .bg__dn {
@@ -312,7 +333,7 @@ thead .bg__name {
   min-width: 22px;
   height: 20px;
   border-radius: 999px;
-  background: var(--blue);
+  background: var(--brand);
   color: var(--on-ink);
   font-weight: 700;
 }
@@ -332,7 +353,7 @@ thead .bg__name {
 }
 
 .is-today:not(th.bg__day) {
-  background: color-mix(in srgb, var(--blue-wash) 70%, transparent);
+  background: color-mix(in srgb, var(--brand-wash) 70%, transparent);
 }
 
 thead .bg__day.is-weekend {
@@ -340,7 +361,7 @@ thead .bg__day.is-weekend {
 }
 
 thead .bg__day.is-today {
-  background: var(--blue-wash);
+  background: var(--brand-wash);
 }
 
 .bg__total {
@@ -358,6 +379,16 @@ td.bg__total {
 thead .bg__total:last-child,
 tbody .bg__due {
   width: 116px;
+}
+
+/* Projections read as pencil, not ink: dashed underline and quieter text. */
+td.is-projected {
+  color: var(--ink-2);
+}
+
+td.is-projected {
+  text-decoration: underline dashed var(--ink-3);
+  text-underline-offset: 5px;
 }
 
 .bg__due.is-zero {
@@ -389,7 +420,7 @@ tbody .bg__due {
 
 .bg__sort-icon.is-on {
   opacity: 1;
-  color: var(--blue);
+  color: var(--brand);
 }
 
 tbody tr {
@@ -403,11 +434,11 @@ tbody tr:focus-within > * {
 
 tbody tr:hover > .is-today,
 tbody tr:focus-within > .is-today {
-  background-color: var(--blue-wash);
+  background-color: var(--brand-wash);
 }
 
 tbody tr:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--brand);
   outline-offset: -2px;
 }
 

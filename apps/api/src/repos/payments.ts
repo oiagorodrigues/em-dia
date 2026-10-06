@@ -20,6 +20,7 @@ interface Row {
   receipt_name: string | null;
   receipt_uploaded_at: string | null;
   acknowledged_at: string | null;
+  agreement_id: string | null;
   created_by: string;
   created_at: string;
 }
@@ -44,6 +45,7 @@ function toRecord(r: Row): PaymentRecord {
     note: r.note,
     receipt,
     acknowledgedAt: r.acknowledged_at,
+    agreementId: r.agreement_id,
     createdBy: r.created_by,
     createdAt: r.created_at,
     receiptFile: r.receipt_file,
@@ -117,8 +119,9 @@ export function paymentsRepo(db: Db) {
       execute(
         db,
         `INSERT INTO payments (id, contract_id, reference_month, paid_on, amount_cents, method, note, receipt_file,
-           receipt_mime, receipt_size, receipt_name, receipt_uploaded_at, acknowledged_at, created_by, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           receipt_mime, receipt_size, receipt_name, receipt_uploaded_at, acknowledged_at, agreement_id, created_by,
+           created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         p.id,
         p.contractId,
         p.referenceMonth,
@@ -132,6 +135,7 @@ export function paymentsRepo(db: Db) {
         p.receipt?.originalName ?? null,
         p.receipt?.uploadedAt ?? null,
         p.acknowledgedAt,
+        p.agreementId,
         p.createdBy,
         p.createdAt,
       );

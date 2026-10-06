@@ -21,7 +21,7 @@ const { lines, total, caption } = defineProps<{
         v-for="line in lines"
         :key="line.label"
         class="ledger__line"
-        :class="`tone-${line.tone ?? 'neutral'}`"
+        :class="`ln-tone-${line.tone ?? 'neutral'}`"
       >
         <dt>
           {{ line.label }}
@@ -33,7 +33,7 @@ const { lines, total, caption } = defineProps<{
       <div
         v-if="total"
         class="ledger__line ledger__total"
-        :class="`tone-${total.tone ?? 'neutral'}`"
+        :class="`ln-tone-${total.tone ?? 'neutral'}`"
       >
         <dt>{{ total.label }}</dt>
         <span class="ledger__lead" aria-hidden="true" />
@@ -100,13 +100,13 @@ const { lines, total, caption } = defineProps<{
   font-weight: 700;
 }
 
-.tone-red dd {
-  color: var(--red-text);
+.ln-tone-red dd {
+  color: var(--coral-ink);
 }
-.tone-green dd {
-  color: var(--green);
+.ln-tone-green dd {
+  color: var(--brand);
 }
-.tone-blue dd {
-  color: var(--blue);
+.ln-tone-blue dd {
+  color: var(--brand);
 }
 </style>

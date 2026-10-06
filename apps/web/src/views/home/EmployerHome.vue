@@ -24,7 +24,7 @@ import { useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import { firstName } from "@/lib/format.ts";
 import { greeting } from "@/lib/greeting.ts";
-import { pendencies, teamStatus, teamTotals } from "@/lib/team.ts";
+import { isFutureMonth, pendencies, projectionTotals, teamStatus, teamTotals } from "@/lib/team.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 
 const auth = useAuthStore();
@@ -42,11 +42,13 @@ const current = computed(() =>
     return s === "active" || s === "pending";
   }),
 );
-const totals = computed(() => teamTotals(current.value, today));
-const pending = computed(() => pendencies(current.value, today, month.value));
-const pendingCount = computed(() => pending.value.length);
-const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
+const future = computed(() => isFutureMonth(month.value, today));
 const isCurrent = computed(() => month.value === currentMonth);
+const totals = computed(() => teamTotals(current.value, today));
+const projection = computed(() => projectionTotals(current.value));
+const pending = computed(() => pendencies(current.value, today, month.value));
+const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
+const loadingFirst = computed(() => team.loading.value && !team.data.value);
 
 const pendingCaption = computed(() => {
   const t = totals.value;
@@ -56,22 +58,26 @@ const pendingCaption = computed(() => {
     t.unacknowledged ? `${t.unacknowledged} sem “recebi”` : null,
     t.invites ? `${t.invites} ${t.invites === 1 ? "convite" : "convites"}` : null,
   ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "tudo em dia";
+  return parts.length ? parts.join(" · ") : "Tudo em dia";
 });
+
+const people = computed(() =>
+  totals.value.people === 1 ? "1 pessoa" : `${totals.value.people} pessoas`,
+);
 </script>
 
 <template>
-  <div class="eh">
-    <header class="eh__head">
+  <div class="grid grid-cols-12 gap-6">
+    <header class="col-span-12 grid grid-cols-1 items-center gap-4 lg:grid-cols-[1fr_auto_auto]">
       <div>
         <p class="label">{{ greeting() }}, {{ firstName(auth.user?.name ?? "") }}</p>
         <h1 class="visually-hidden">Início</h1>
       </div>
-      <MonthSwitcher v-model="month" :max="shiftMonth(currentMonth, 1)" class="eh__month" />
-      <!-- Hidden while empty: the empty state carries the one "adicionar profissional" button. -->
-      <div v-if="current.length > 0" class="eh__actions">
-        <Button to="/equipe/novo" variant="primary" icon="plus">adicionar profissional</Button>
-        <Button to="/pagamentos/novo" icon="wallet">registrar pagamento</Button>
+      <MonthSwitcher v-model="month" :max="shiftMonth(currentMonth, 12)" class="lg:min-w-80" />
+      <!-- Hidden while empty: the empty state carries the one "Adicionar profissional" button. -->
+      <div v-if="current.length > 0" class="flex flex-wrap gap-2">
+        <Button to="/equipe/novo" variant="primary" icon="plus">Adicionar profissional</Button>
+        <Button to="/pagamentos/novo" icon="wallet-plus">Registrar pagamento</Button>
       </div>
     </header>
 
@@ -79,166 +85,139 @@ const pendingCaption = computed(() => {
       v-if="team.error.value && !team.data.value"
       tone="error"
       title="Não deu para carregar o início."
+      class="col-span-12"
     >
       {{ team.error.value.message }}
       <template #actions
-        ><Button icon="history" @click="team.reload">tentar de novo</Button></template
+        ><Button icon="history" @click="team.reload">Tentar de novo</Button></template
       >
     </EmptyState>
 
     <EmptyState
       v-else-if="team.data.value && current.length === 0"
       title="Ninguém cadastrado ainda."
-      class="eh__empty"
+      class="col-span-12"
     >
       Cadastre a diarista, babá ou cuidadora. Você recebe um código para a pessoa entrar e bater o
       ponto pelo celular.
       <template #actions>
-        <Button to="/equipe/novo" variant="primary" icon="plus">adicionar profissional</Button>
+        <Button to="/equipe/novo" variant="primary" icon="plus">Adicionar profissional</Button>
       </template>
     </EmptyState>
 
     <template v-else>
-      <section class="eh__kpis" aria-label="Resumo do mês">
+      <section v-if="future" class="kpi-grid col-span-12" :aria-label="`Previsão de ${monthLabel}`">
         <KpiCard
-          tint="mint"
+          projected
+          tone="brand"
           icon="clock"
-          :label="`horas em ${monthLabel}`"
-          :value="formatDuration(totals.minutes)"
-          :caption="totals.people === 1 ? '1 pessoa' : `${totals.people} pessoas`"
-          :loading="team.loading.value && !team.data.value"
+          :label="`Horas em ${monthLabel}`"
+          :value="formatDuration(projection.minutes)"
+          :amount="projection.minutes"
+          :format="formatDuration"
+          :caption="people"
+          :loading="loadingFirst"
         />
         <KpiCard
-          tint="peach"
+          projected
+          tone="amber"
           icon="coins"
-          label="a pagar"
+          label="Custo"
+          :value="formatCents(projection.cents)"
+          :amount="projection.cents"
+          :format="formatCents"
+          :caption="
+            projection.unpriced
+              ? `sem estimativa para ${projection.unpriced} ${projection.unpriced === 1 ? 'pessoa' : 'pessoas'}`
+              : 'se todos vierem nos dias combinados'
+          "
+          :loading="loadingFirst"
+        />
+        <KpiCard
+          projected
+          tone="brand"
+          icon="calendar"
+          label="Dias"
+          :value="String(projection.days)"
+          :amount="projection.days"
+          :format="String"
+          caption="dias e visitas combinados"
+          :loading="loadingFirst"
+        />
+      </section>
+      <section v-else class="kpi-grid col-span-12" :aria-label="`Resumo de ${monthLabel}`">
+        <KpiCard
+          tone="brand"
+          icon="clock"
+          :label="`Horas em ${monthLabel}`"
+          :value="formatDuration(totals.minutes)"
+          :amount="totals.minutes"
+          :format="formatDuration"
+          :caption="people"
+          :loading="loadingFirst"
+        />
+        <KpiCard
+          :tone="totals.balanceCents > 0 ? 'amber' : 'brand'"
+          icon="coins"
+          label="A pagar"
           :value="formatCents(totals.balanceCents)"
+          :amount="totals.balanceCents"
+          :format="formatCents"
           :caption="`de ${formatCents(totals.dueCents)} no mês`"
-          :loading="team.loading.value && !team.data.value"
+          :loading="loadingFirst"
           to="/pagamentos"
         />
         <KpiCard
-          tint="sky"
+          tone="brand"
           icon="wallet"
-          :label="`pago em ${monthLabel}`"
+          :label="`Pago em ${monthLabel}`"
           :value="formatCents(totals.paidCents)"
+          :amount="totals.paidCents"
+          :format="formatCents"
           :caption="totals.paidCents > 0 ? 'referente ao mês' : 'nenhum pagamento ainda'"
-          :loading="team.loading.value && !team.data.value"
+          :loading="loadingFirst"
         />
         <KpiCard
-          tint="butter"
+          :tone="pending.length > 0 ? 'amber' : 'brand'"
           icon="alert"
-          label="pendências"
-          :value="String(pendingCount)"
+          label="Pendências"
+          :value="String(pending.length)"
           :caption="pendingCaption"
-          :loading="team.loading.value && !team.data.value"
+          :loading="loadingFirst"
         />
       </section>
 
-      <InstallHint />
+      <InstallHint class="col-span-12" />
 
-      <div class="eh__main">
-        <section class="eh__team" aria-labelledby="eh-team">
-          <h2 id="eh-team" class="section-title">quem trabalha aqui</h2>
-          <TeamTable
-            :items="current"
-            :state="state"
-            :today="today"
-            :month="month"
-            :loading="team.loading.value && !team.data.value"
-            @reload="team.reload"
-            @clear-filters="clear"
-          />
-        </section>
-        <aside class="eh__side" aria-label="Hoje e pendências">
-          <HomeToday v-if="isCurrent" :items="current" :today="today" @reload="team.reload" />
-          <HomePendencies :items="pending" />
-        </aside>
-      </div>
+      <section
+        class="order-2 col-span-12 grid content-start gap-3 lg:order-none"
+        :class="{ '2xl:col-span-8': !future }"
+        aria-labelledby="eh-team"
+      >
+        <h2 id="eh-team" class="section-title">
+          {{ future ? `Previsão de ${monthLabel}` : "Quem trabalha aqui" }}
+        </h2>
+        <TeamTable
+          :items="current"
+          :state="state"
+          :today="today"
+          :month="month"
+          :projected="future"
+          :loading="loadingFirst"
+          @reload="team.reload"
+          @clear-filters="clear"
+        />
+      </section>
+
+      <!-- On phones "hoje" is what you open the app for, so it comes before the team list. -->
+      <aside
+        v-if="!future"
+        class="order-1 col-span-12 grid content-start items-start gap-5 lg:order-none lg:grid-cols-2 2xl:col-span-4 2xl:grid-cols-1"
+        aria-label="Hoje e pendências"
+      >
+        <HomeToday v-if="isCurrent" :items="current" :today="today" @reload="team.reload" />
+        <HomePendencies :items="pending" />
+      </aside>
     </template>
   </div>
 </template>
-
-<style scoped>
-.eh {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-6);
-}
-
-.eh__head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-4);
-  align-items: center;
-}
-
-.eh__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-2);
-}
-
-.eh__kpis {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-3);
-}
-
-.eh__team {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-3);
-  align-content: start;
-}
-
-.eh__side {
-  display: grid;
-  gap: var(--s-5);
-  align-content: start;
-  align-items: start;
-}
-
-@media (min-width: 960px) {
-  .eh__head {
-    grid-template-columns: minmax(0, 1fr) auto auto;
-  }
-  .eh__month {
-    min-width: 320px;
-  }
-  .eh__kpis {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: var(--s-5);
-  }
-}
-
-/* The team table needs ~1000px for its columns and quick actions, so "hoje" and
-   "pendências" only move beside it on very wide screens; otherwise they sit below, side by side. */
-.eh__main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-6);
-}
-
-/* On phones "hoje" is what you open the app for, so it comes before the team list. */
-@media (max-width: 959px) {
-  .eh__side {
-    order: -1;
-  }
-}
-
-@media (min-width: 960px) {
-  .eh__side {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1600px) {
-  .eh__main {
-    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
-  }
-  .eh__side {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-</style>

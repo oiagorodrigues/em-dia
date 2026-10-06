@@ -32,20 +32,20 @@ function onSubmit(): void {
 <template>
   <template v-if="!token">
     <AuthHeader
-      title="link incompleto"
+      title="Link incompleto"
       lede="Esse link de nova senha não tem o código. Peça outro."
     />
     <Button to="/esqueci-senha" variant="primary" block>pedir novo link</Button>
   </template>
   <template v-else-if="done">
     <AuthHeader
-      title="senha nova salva"
+      title="Senha nova salva"
       lede="Por segurança, saímos de todos os aparelhos. Entre com a senha nova."
     />
     <Button to="/entrar" variant="primary" block>entrar</Button>
   </template>
   <template v-else>
-    <AuthHeader title="nova senha" lede="Escolha uma senha que você não usa em outro lugar." />
+    <AuthHeader title="Nova senha" lede="Escolha uma senha que você não usa em outro lugar." />
     <form class="stack" novalidate @submit.prevent="onSubmit">
       <p v-if="formError || errors.token" class="form-error" role="alert">
         {{ formError ?? "Link inválido ou expirado." }}

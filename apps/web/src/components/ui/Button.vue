@@ -82,20 +82,20 @@ const attrs = computed(() => {
 }
 
 .btn--primary {
-  background: var(--blue);
+  background: var(--brand);
   color: var(--on-ink);
-  border: 1px solid var(--ink);
-  box-shadow: var(--press);
+  border: 1px solid var(--brand);
+  box-shadow: var(--shadow-1);
 }
 
 .btn--primary:hover:not(:disabled) {
-  transform: translate(-1px, -1px);
-  box-shadow: 3px 3px 0 var(--ink);
+  background: var(--brand-strong);
+  border-color: var(--brand-strong);
+  box-shadow: var(--shadow-2);
 }
 
-.btn--primary:active:not(:disabled) {
-  transform: translate(2px, 2px);
-  box-shadow: 0 0 0 var(--ink);
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .btn--secondary {
@@ -111,22 +111,22 @@ const attrs = computed(() => {
 }
 
 .btn--ghost {
-  color: var(--blue);
+  color: var(--brand);
   padding: 0 var(--s-3);
 }
 
 .btn--ghost:hover:not(:disabled) {
-  background: var(--blue-wash);
+  background: var(--brand-wash);
 }
 
 .btn--danger {
-  color: var(--red-text);
+  color: var(--coral-ink);
   border: 1px solid currentColor;
   background: transparent;
 }
 
 .btn--danger:hover:not(:disabled) {
-  background: var(--red-wash);
+  background: var(--coral-wash);
 }
 
 .btn:disabled {
@@ -159,8 +159,7 @@ const attrs = computed(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .btn--primary:hover:not(:disabled),
-  .btn--primary:active:not(:disabled) {
+  .btn:active:not(:disabled) {
     transform: none;
   }
 }

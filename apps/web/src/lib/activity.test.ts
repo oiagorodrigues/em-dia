@@ -54,5 +54,24 @@ describe("activityGroup", () => {
     expect(activityGroup("adjustment.create")).toBe("pagamentos");
     expect(activityGroup("contract.invite_sent")).toBe("vinculo");
     expect(activityGroup("contract.archive")).toBe("vinculo");
+    expect(activityGroup("agreement.accept")).toBe("pagamentos");
+  });
+});
+
+describe("agreements and leaving", () => {
+  it("names the agreement and shows its total", () => {
+    const line = describeActivity(
+      item("agreement.create", { description: "Mesa de jantar", totalCents: 120000 }),
+      "u1",
+    );
+    expect(line.text).toBe("propôs o acordo “Mesa de jantar”");
+    expect(line.value?.replace(/\u00a0/g, " ")).toBe("R$ 1.200,00");
+    expect(describeActivity(item("agreement.accept", { description: "Mesa" }), "u1").tone).toBe(
+      "ok",
+    );
+    expect(describeActivity(item("agreement.cancel"), "u1").text).toBe("cancelou o acordo");
+    expect(describeActivity(item("contract.worker_left"), "u1").text).toBe(
+      "excluiu a conta e saiu do vínculo",
+    );
   });
 });

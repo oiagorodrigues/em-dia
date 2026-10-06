@@ -225,13 +225,13 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
 @keyframes sheet-in {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: scale(0.98);
   }
 }
 @keyframes sheet-out {
   to {
     opacity: 0;
-    transform: translateY(12px);
+    transform: scale(0.98);
   }
 }
 @keyframes fade-in {
@@ -243,5 +243,9 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
   to {
     opacity: 0;
   }
+}
+
+.sheet-dlg__title::first-letter {
+  text-transform: uppercase;
 }
 </style>

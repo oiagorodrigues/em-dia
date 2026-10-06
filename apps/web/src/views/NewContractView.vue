@@ -7,6 +7,7 @@ import InviteSuccess from "@/components/feature/InviteSuccess.vue";
 import Button from "@/components/ui/Button.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
+import { useBack } from "@/composables/back.ts";
 import { firstName } from "@/lib/format.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
@@ -15,7 +16,7 @@ const created = ref<Contract | null>(null);
 const invite = ref<InviteDelivery | null>(null);
 const inviteError = ref<string | null>(null);
 const inviting = ref(false);
-const formKey = ref(0);
+const { to: backTo } = useBack("/equipe");
 
 async function save(data: CreateContractInput): Promise<void> {
   const res = await contractsApi.create(data);
@@ -38,14 +39,6 @@ async function generateInvite(): Promise<void> {
     inviting.value = false;
   }
 }
-
-function addAnother(): void {
-  created.value = null;
-  invite.value = null;
-  inviteError.value = null;
-  formKey.value++;
-  window.scrollTo({ top: 0 });
-}
 </script>
 
 <template>
@@ -54,14 +47,13 @@ function addAnother(): void {
       <PageHeader
         back="/equipe"
         back-label="equipe"
-        :title="`cadastro de ${firstName(created.workerName)} feito.`"
-        subtitle="Agora mande o convite para a pessoa criar a conta no celular. Enquanto isso, você já pode anotar os dias por aqui."
+        :title="`Cadastro de ${firstName(created.workerName)} concluído`"
       />
       <InviteSuccess v-if="invite" :contract="created" :invite="invite">
-        <Button :to="`/equipe/${created.id}`" variant="primary" icon-right="arrow-right"
-          >ir para o profissional</Button
+        <Button :to="`/equipe/${created.id}`" variant="primary"
+          >Abrir cartão de {{ firstName(created.workerName) }}</Button
         >
-        <Button variant="ghost" icon="plus" @click="addAnother">adicionar outra pessoa</Button>
+        <Button to="/" variant="ghost">Voltar ao início</Button>
       </InviteSuccess>
       <template v-else>
         <div v-if="inviteError" class="form-error" role="alert">
@@ -72,26 +64,20 @@ function addAnother(): void {
         </div>
         <Skeleton v-else h="320px" />
         <div class="nc__next">
-          <Button :to="`/equipe/${created.id}`" variant="primary" icon-right="arrow-right"
-            >ir para o profissional</Button
+          <Button :to="`/equipe/${created.id}`" variant="primary"
+            >Abrir cartão de {{ firstName(created.workerName) }}</Button
           >
+          <Button to="/" variant="ghost">Voltar ao início</Button>
         </div>
       </template>
     </template>
     <template v-else>
       <PageHeader
-        back="/equipe"
-        back-label="equipe"
-        title="adicionar profissional"
-        subtitle="Os dados do combinado. Dá para mudar depois."
+        :back="backTo"
+        title="Adicionar profissional"
+        subtitle="Preencha os dados de trabalho e pagamento. Você pode mudar depois."
       />
-      <ContractForm
-        :key="formKey"
-        submit-label="cadastrar e gerar convite"
-        :save="save"
-        contact
-        summary
-      />
+      <ContractForm submit-label="Salvar profissional" :save="save" contact summary />
     </template>
   </div>
 </template>

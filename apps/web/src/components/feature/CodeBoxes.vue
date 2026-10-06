@@ -118,12 +118,12 @@ function onPaste(i: number, e: ClipboardEvent): void {
   font-size: clamp(var(--t-20), 6vw, var(--t-28));
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--blue);
+  color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--rule);
   border-bottom: 2px solid var(--ink-2);
   border-radius: var(--r-1);
-  caret-color: var(--blue);
+  caret-color: var(--brand);
   transition:
     border-color var(--d-fast) var(--ease),
     transform var(--d-fast) var(--ease);
@@ -134,16 +134,16 @@ function onPaste(i: number, e: ClipboardEvent): void {
 }
 
 .box.is-filled {
-  border-bottom-color: var(--blue);
+  border-bottom-color: var(--brand);
 }
 
 .box:focus {
   outline: none;
-  border-color: var(--blue);
+  border-color: var(--brand);
   border-bottom-width: 3px;
 }
 
 .box[aria-invalid="true"] {
-  border-bottom-color: var(--red);
+  border-bottom-color: var(--coral);
 }
 </style>

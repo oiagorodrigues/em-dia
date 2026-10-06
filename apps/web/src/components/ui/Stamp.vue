@@ -67,13 +67,13 @@ const {
 }
 
 .stamp--red {
-  color: var(--red);
+  color: var(--coral);
 }
 .stamp--green {
-  color: var(--green);
+  color: var(--brand);
 }
 .stamp--blue {
-  color: var(--blue);
+  color: var(--brand);
 }
 .stamp--ink {
   color: var(--ink-2);

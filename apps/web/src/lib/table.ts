@@ -22,7 +22,7 @@ export interface Column<T> {
   mono?: boolean;
   width?: string;
   /** Hide the column below this breakpoint in table mode. */
-  hideBelow?: "lg" | "xl";
+  hideBelow?: "lg" | "xl" | "2xl";
   /** Visually hidden header (e.g. an avatar column); the label stays for screen readers. */
   srOnlyLabel?: boolean;
 }

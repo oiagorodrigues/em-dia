@@ -2,6 +2,7 @@ import "@fontsource-variable/bricolage-grotesque/opsz.css";
 import "@fontsource-variable/martian-mono/standard.css";
 import "./styles/tokens.css";
 import "./styles/base.css";
+import "./styles/tailwind.css";
 
 import { createPinia } from "pinia";
 import { createApp } from "vue";

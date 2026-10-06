@@ -9,6 +9,7 @@ import {
   parseYearMonth,
   shiftMonth,
   toYearMonth,
+  estimateMonthCost,
   expectedDatesInMonth,
   type IsoDate,
   type WorkEntry,
@@ -31,7 +32,7 @@ import { clockStateOf } from "@/lib/entry.ts";
 import { attendanceLabel, attendanceText } from "@/lib/schedule.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
-import { isWritable } from "@/lib/contract.ts";
+import { describeEstimate, estimateGap, isWritable } from "@/lib/contract.ts";
 
 const auth = useAuthStore();
 const toast = useToastStore();
@@ -40,7 +41,7 @@ const { contract, month, currentMonth, setMonth } = useContract();
 const today = nowInZone(DEFAULT_TIMEZONE).date;
 const minMonth = computed(() => toYearMonth(contract.value.startedOn));
 const maxMonth = computed(() =>
-  contract.value.endedOn ? toYearMonth(contract.value.endedOn) : shiftMonth(currentMonth, 1),
+  contract.value.endedOn ? toYearMonth(contract.value.endedOn) : shiftMonth(currentMonth, 12),
 );
 
 const key = computed(() => `${contract.value.id}|${month.value}`);
@@ -151,6 +152,29 @@ async function confirmAll(): Promise<void> {
 }
 
 const isCurrent = computed(() => month.value === currentMonth);
+/** A month ahead only has the estimate; its ledger is a projection, never mixed with actuals. */
+const future = computed(() => month.value > currentMonth);
+const projection = computed(() => {
+  const e = estimateMonthCost(contract.value, month.value);
+  const lines = [
+    {
+      label: kind.value === "per_month" ? "Visitas previstas" : "Dias previstos",
+      value: String(e.days),
+    },
+    ...(e.minutesPerDay !== null
+      ? [{ label: "Horas previstas", value: formatDuration(e.days * e.minutesPerDay) }]
+      : []),
+  ];
+  const why = describeEstimate(e, contract.value);
+  return {
+    lines: why ? [...lines, { label: "Conta", value: why }] : lines,
+    total: {
+      label: auth.isEmployer ? "A pagar previsto" : "A receber previsto",
+      value: e.cents === null ? "—" : formatCents(e.cents),
+    },
+    gap: e.cents === null ? estimateGap(contract.value) : null,
+  };
+});
 const active = computed(() => isWritable(contract.value));
 const todayEntry = computed(() => entries.data.value?.find((e) => e.date === today) ?? null);
 const showClock = computed(
@@ -280,7 +304,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
           }}
           sua confirmação.
         </p>
-        <Button icon="check" :loading="confirmingAll" @click="confirmAll">confirmar todos</Button>
+        <Button icon="check" :loading="confirmingAll" @click="confirmAll">Confirmar todos</Button>
       </div>
 
       <div ref="cardWrap" class="ct__card">
@@ -298,7 +322,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
           title="Não deu para carregar o cartão."
         >
           {{ entries.error.value.message }}
-          <template #actions><Button @click="entries.reload">tentar de novo</Button></template>
+          <template #actions><Button @click="entries.reload">Tentar de novo</Button></template>
         </EmptyState>
         <TimeCard
           v-else-if="entries.data.value"
@@ -346,12 +370,27 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
           }}
           neste mês.
         </p>
-        <Button icon="check" @click="bulkOpen = true">marcar como trabalhados</Button>
+        <Button icon="check" @click="bulkOpen = true">Marcar como trabalhados</Button>
       </div>
 
-      <section class="ct__totals" aria-labelledby="totals-title">
-        <h2 id="totals-title" class="section-title">conta de {{ monthLabel }}</h2>
-        <div v-if="summary.loading.value && !summary.data.value" aria-busy="true">
+      <section
+        class="ct__totals"
+        :class="{ 'is-projected': future }"
+        aria-labelledby="totals-title"
+      >
+        <h2 id="totals-title" class="section-title">
+          {{ future ? "Previsão de" : "Conta de" }} {{ monthLabel }}
+        </h2>
+        <template v-if="future">
+          <Ledger :lines="projection.lines" :total="projection.total" caption="previsto" />
+          <p class="ct__projnote">
+            {{
+              projection.gap ??
+              "Conta feita com os dias previstos no combinado. Faltas e extras mudam o valor quando o mês chegar."
+            }}
+          </p>
+        </template>
+        <div v-else-if="summary.loading.value && !summary.data.value" aria-busy="true">
           <Skeleton v-for="i in 5" :key="i" h="18px" :gap="i === 1 ? '0' : '12px'" />
         </div>
         <p v-else-if="summary.error.value" class="form-error">{{ summary.error.value.message }}</p>
@@ -359,15 +398,19 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
         <div class="ct__actions">
           <Button
             v-if="
-              auth.isEmployer && active && summary.data.value && summary.data.value.balanceCents > 0
+              !future &&
+              auth.isEmployer &&
+              active &&
+              summary.data.value &&
+              summary.data.value.balanceCents > 0
             "
             :to="{ path: '/pagamentos/novo', query: { vinculo: contract.id, mes: month } }"
             variant="primary"
             icon="plus"
-            >registrar pagamento</Button
+            >Registrar pagamento</Button
           >
           <Button icon="download" :loading="downloading" @click="downloadCsv"
-            >baixar planilha</Button
+            >Baixar planilha</Button
           >
         </div>
       </section>
@@ -461,7 +504,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 
 .ct__visits {
   font-size: var(--t-12);
-  color: var(--blue);
+  color: var(--brand);
 }
 
 .ct__note {
@@ -471,7 +514,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   justify-content: space-between;
   gap: var(--s-3);
   padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4);
-  background: var(--blue-wash);
+  background: var(--brand-wash);
   border-radius: var(--r-1);
   font-size: var(--t-14);
 }
@@ -511,7 +554,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 }
 
 .lg--ok {
-  background: var(--green);
+  background: var(--brand);
 }
 
 .lg--open {
@@ -522,7 +565,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   width: 3px;
   height: 14px;
   border-radius: 0;
-  background: var(--blue);
+  background: var(--brand);
 }
 
 .ct__totals {
@@ -533,6 +576,16 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
   box-shadow: var(--shadow-1);
+}
+
+.ct__totals.is-projected {
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.ct__projnote {
+  font-size: var(--t-12);
+  color: var(--ink-2);
 }
 
 .ct__actions {

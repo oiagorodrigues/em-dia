@@ -70,22 +70,22 @@ async function share(): Promise<void> {
         :href="delivery.whatsappUrl"
         icon="message"
         variant="primary"
-        >mandar no WhatsApp</Button
+        >Mandar no WhatsApp</Button
       >
-      <Button icon="copy" @click="copy(code, 'Código')">copiar código</Button>
+      <Button icon="copy" @click="copy(code, 'Código')">Copiar código</Button>
       <Button
         v-if="canShare"
         icon="share"
         :variant="delivery?.whatsappUrl ? 'secondary' : 'primary'"
         @click="share"
-        >compartilhar</Button
+        >Compartilhar</Button
       >
       <Button
         v-else
         icon="link"
         :variant="delivery?.whatsappUrl ? 'secondary' : 'primary'"
         @click="copy(link, 'Link')"
-        >copiar link</Button
+        >Copiar link</Button
       >
     </div>
     <p class="inv__link">
@@ -103,7 +103,7 @@ async function share(): Promise<void> {
   background: var(--surface);
   border: 1px solid var(--ink);
   border-radius: var(--r-2);
-  box-shadow: var(--press);
+  box-shadow: var(--shadow-1);
 }
 
 .inv__code {
@@ -112,7 +112,7 @@ async function share(): Promise<void> {
   font-size: clamp(2rem, 11vw, var(--t-64));
   font-weight: 600;
   letter-spacing: 0.12em;
-  color: var(--blue);
+  color: var(--brand);
   line-height: 1.1;
   user-select: all;
 }
@@ -123,7 +123,7 @@ async function share(): Promise<void> {
   gap: var(--s-2);
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-1);
-  background: var(--green-wash);
+  background: var(--brand-wash);
   color: var(--ink);
   font-size: var(--t-14);
   overflow-wrap: anywhere;

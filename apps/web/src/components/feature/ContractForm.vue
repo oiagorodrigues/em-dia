@@ -17,7 +17,10 @@ import { computed, useId } from "vue";
 import Button from "@/components/ui/Button.vue";
 import Field from "@/components/ui/Field.vue";
 import MoneyInput from "@/components/ui/MoneyInput.vue";
-import Segmented from "@/components/ui/Segmented.vue";
+import ChoiceField from "@/components/ui/ChoiceField.vue";
+import DateField from "@/components/ui/DateField.vue";
+import Select from "@/components/ui/Select.vue";
+import TimeField from "@/components/ui/TimeField.vue";
 import { useForm } from "@/composables/form.ts";
 import Toggle from "@/components/ui/Toggle.vue";
 import { maskPhone } from "@/lib/phone.ts";
@@ -130,7 +133,7 @@ function onSubmit(): void {
       <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
 
       <section class="cf__sec" :aria-labelledby="`${formId}-who`">
-        <h2 :id="`${formId}-who`" class="cf__title">quem é</h2>
+        <h2 :id="`${formId}-who`" class="cf__title">Quem é</h2>
         <Field
           v-slot="{ id, invalid, describedBy }"
           label="Nome de quem trabalha"
@@ -148,16 +151,23 @@ function onSubmit(): void {
             @input="clearError('workerName')"
           />
         </Field>
-        <fieldset class="cf__set">
-          <legend class="label">Função</legend>
-          <Segmented v-model="values.occupation" :options="occupationOptions" label="Função" wrap />
-        </fieldset>
+        <Field v-slot="{ id, invalid, describedBy }" label="Função" :error="errors.occupation">
+          <Select
+            :id="id"
+            :model-value="values.occupation"
+            :options="occupationOptions"
+            label="Função"
+            :invalid="invalid"
+            :described-by="describedBy"
+            @update:model-value="(v) => v && (values.occupation = v)"
+          />
+        </Field>
       </section>
 
       <section v-if="contact" class="cf__sec" :aria-labelledby="`${formId}-contact`">
         <div class="cf__head">
           <h2 :id="`${formId}-contact`" class="cf__title">
-            contato <span class="cf__opt">opcional</span>
+            Contato <span class="cf__opt">opcional</span>
           </h2>
           <p class="cf__desc">Se você preencher, a gente manda o link de cadastro.</p>
         </div>
@@ -204,12 +214,16 @@ function onSubmit(): void {
       </section>
 
       <section class="cf__sec" :aria-labelledby="`${formId}-pay`">
-        <h2 :id="`${formId}-pay`" class="cf__title">pagamento</h2>
+        <h2 :id="`${formId}-pay`" class="cf__title">Pagamento</h2>
         <div class="cf__pay">
-          <fieldset class="cf__set">
-            <legend class="label">Como paga</legend>
-            <Segmented v-model="values.payType" :options="payOptions" label="Como paga" />
-          </fieldset>
+          <Field v-slot="{ id }" label="Como paga">
+            <ChoiceField
+              :id="id"
+              v-model="values.payType"
+              :options="payOptions"
+              label="Como paga"
+            />
+          </Field>
           <Field
             v-slot="{ id, invalid, describedBy }"
             :label="RATE_LABEL[values.payType]"
@@ -227,13 +241,13 @@ function onSubmit(): void {
         <Toggle
           v-if="values.payType === 'monthly'"
           v-model="values.deductAbsences"
-          label="Descontar faltas não justificadas"
-          hint="Salário ÷ 30 por falta. Faltas justificadas, folgas e feriados não descontam."
+          label="Descontar faltas sem justificativa"
+          hint="Cada falta sem justificativa desconta 1/30 do salário. Ex.: salário de R$ 3.000 → R$ 100 por falta."
         />
       </section>
 
       <section class="cf__sec" :aria-labelledby="`${formId}-freq`">
-        <h2 :id="`${formId}-freq`" class="cf__title">frequência</h2>
+        <h2 :id="`${formId}-freq`" class="cf__title">Frequência</h2>
         <ScheduleField
           v-model="values.schedule"
           :month="previewMonth"
@@ -247,7 +261,7 @@ function onSubmit(): void {
       <section class="cf__sec" :aria-labelledby="`${formId}-hours`">
         <div class="cf__head">
           <h2 :id="`${formId}-hours`" class="cf__title">
-            horários <span class="cf__opt">opcional</span>
+            Horários <span class="cf__opt">opcional</span>
           </h2>
           <p v-if="values.payType === 'hourly'" class="cf__desc">
             Por hora, os horários entram na conta do custo estimado.
@@ -260,14 +274,13 @@ function onSubmit(): void {
             optional
             :error="errors.expectedStart"
           >
-            <input
+            <TimeField
               :id="id"
               v-model="values.expectedStart"
-              class="input"
-              type="time"
-              :aria-invalid="invalid || undefined"
-              :aria-describedby="describedBy"
-              @input="clearError('expectedStart')"
+              label="Chega às"
+              :invalid="invalid"
+              :described-by="describedBy"
+              @update:model-value="clearError('expectedStart')"
             />
           </Field>
           <Field
@@ -276,35 +289,34 @@ function onSubmit(): void {
             optional
             :error="errors.expectedEnd"
           >
-            <input
+            <TimeField
               :id="id"
               v-model="values.expectedEnd"
-              class="input"
-              type="time"
-              :aria-invalid="invalid || undefined"
-              :aria-describedby="describedBy"
-              @input="clearError('expectedEnd')"
+              label="Sai às"
+              :invalid="invalid"
+              :described-by="describedBy"
+              @update:model-value="clearError('expectedEnd')"
             />
           </Field>
         </div>
       </section>
 
       <section class="cf__sec" :aria-labelledby="`${formId}-start`">
-        <h2 :id="`${formId}-start`" class="cf__title">início</h2>
+        <h2 :id="`${formId}-start`" class="cf__title">Início</h2>
         <Field
           v-slot="{ id, invalid, describedBy }"
           label="Começou em"
           :error="errors.startedOn"
           :hint="lockStart ? 'Mudar a data de início não apaga registros antigos.' : undefined"
         >
-          <input
+          <DateField
             :id="id"
             v-model="values.startedOn"
-            class="input cf__date"
-            type="date"
-            :aria-invalid="invalid || undefined"
-            :aria-describedby="describedBy"
-            @input="clearError('startedOn')"
+            class="cf__date"
+            label="Começou em"
+            :invalid="invalid"
+            :described-by="describedBy"
+            @update:model-value="clearError('startedOn')"
           />
         </Field>
       </section>
@@ -394,19 +406,6 @@ function onSubmit(): void {
 .cf__desc {
   font-size: var(--t-14);
   color: var(--ink-2);
-}
-
-.cf__set {
-  border: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--s-2);
-  min-width: 0;
-}
-
-.cf__set legend {
-  padding: 0;
-  margin-bottom: var(--s-2);
 }
 
 .cf__pay {

@@ -54,6 +54,37 @@ describe.skipIf(!exists(WEB_SRC))("web taste", () => {
     expect(bad, bad.join("\n")).toEqual([]);
   });
 
+  it("does not use non-null assertions on the session user", () => {
+    const bad = collect(
+      files(WEB_SRC, [".ts", ".vue"]).filter((f) => !f.endsWith(".test.ts")),
+      /\buser!(\.|\[|\))/,
+      (f, h) =>
+        `${rel(f)}:${h.line} ${violation(
+          "non-null assertion on user (user!)",
+          "user is null before the session loads and after logout; guard it or use optional chaining",
+          "docs/FRONTEND.md#non-null-assertions-on-the-session",
+        )}`,
+    );
+    expect(bad, bad.join("\n")).toEqual([]);
+  });
+
+  it("uses TimeField/DateField instead of native time, date and month inputs", () => {
+    const candidates = files(WEB_SRC, [".vue"]).filter(
+      (f) => !rel(f).startsWith(`${WEB_SRC}/components/ui/`),
+    );
+    const bad = collect(
+      candidates,
+      /type=["'](time|date|month)["']/,
+      (f, h) =>
+        `${rel(f)}:${h.line} ${violation(
+          "native <input> of type time, date or month",
+          "use TimeField, DateField or MonthField from components/ui",
+          "docs/FRONTEND.md#controls",
+        )}`,
+    );
+    expect(bad, bad.join("\n")).toEqual([]);
+  });
+
   it("renders collections with DataTable, not a raw <table> in views", () => {
     const bad = collect(
       files(`${WEB_SRC}/views`, [".vue"]),

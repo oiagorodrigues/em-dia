@@ -5,6 +5,7 @@ import {
   attendanceText,
   DEFAULT_SCHEDULE,
   sameDays,
+  repeatChoiceOf,
   scheduleSummaryLine,
   toggleDay,
   WEEKDAY_PRESETS,
@@ -40,10 +41,10 @@ describe("schedule form logic", () => {
 
   it("summarises the schedule with the expected count for the month", () => {
     expect(scheduleSummaryLine(weekly([1, 3, 5]), "2026-10", "2026-01-01")).toBe(
-      "seg, qua e sex · 13 dias em outubro",
+      "seg, qua e sex · 13 dias previstos em outubro",
     );
     expect(scheduleSummaryLine(weekly([5], 2), "2026-10", "2026-10-02")).toBe(
-      "quinzenal: sex · ~3 dias em outubro",
+      "quinzenal: sex · 3 dias previstos em outubro",
     );
     expect(
       scheduleSummaryLine(
@@ -51,14 +52,14 @@ describe("schedule form logic", () => {
         "2026-10",
         "2026-01-01",
       ),
-    ).toBe("todo dia 5 · 1 dia em outubro");
+    ).toBe("todo dia 5 · 1 dia previsto em outubro");
     expect(
       scheduleSummaryLine(
         { ...DEFAULT_SCHEDULE, kind: "per_month", visitsPerMonth: 2 },
         "2026-10",
         "2026-01-01",
       ),
-    ).toBe("2x por mês · 2 visitas em outubro");
+    ).toBe("2x por mês · 2 visitas previstas em outubro");
     expect(
       scheduleSummaryLine({ ...DEFAULT_SCHEDULE, kind: "on_demand" }, "2026-10", "2026-01-01"),
     ).toBe("quando precisar · sem dias previstos");
@@ -67,16 +68,16 @@ describe("schedule form logic", () => {
   it("counts only the days from the start date on", () => {
     // Started Tue 06/10: Mon/Wed/Fri from the 7th are 7, 9, 12 … 30.
     expect(scheduleSummaryLine(weekly([1, 3, 5]), "2026-10", "2026-10-06")).toBe(
-      "seg, qua e sex · 11 dias em outubro",
+      "seg, qua e sex · 11 dias previstos em outubro",
     );
     expect(scheduleSummaryLine(weekly([1, 2, 3, 4, 5]), "2026-10", "2026-10-20")).toBe(
-      "seg a sex · 9 dias em outubro",
+      "seg a sex · 9 dias previstos em outubro",
     );
   });
 
   it("previews the start month when the contract starts in the future", () => {
     expect(scheduleSummaryLine(weekly([5], 2), "2026-11", "2026-11-06")).toBe(
-      "quinzenal: sex · ~2 dias em novembro",
+      "quinzenal: sex · 2 dias previstos em novembro",
     );
   });
 
@@ -90,5 +91,14 @@ describe("schedule form logic", () => {
     expect(attendanceText({ daysWorked: 3, expectedDays: 0 }, "on_demand")).toBe("3");
     expect(attendanceLabel("per_month")).toBe("Visitas");
     expect(attendanceLabel("weekly")).toBe("Dias trabalhados");
+  });
+});
+
+describe("repeatChoiceOf", () => {
+  it("maps 1-3 weeks to their options and the rest to personalizado", () => {
+    expect(repeatChoiceOf(1)).toBe("1");
+    expect(repeatChoiceOf(3)).toBe("3");
+    expect(repeatChoiceOf(4)).toBe("custom");
+    expect(repeatChoiceOf(12)).toBe("custom");
   });
 });

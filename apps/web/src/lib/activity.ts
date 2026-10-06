@@ -46,6 +46,11 @@ function day(meta: ActivityItem["meta"]): string {
   return d ? ` o dia ${formatDayMonth(d)}` : " um dia";
 }
 
+function agreementName(meta: ActivityItem["meta"]): string {
+  const d = str(meta, "description");
+  return d ? ` “${d}”` : "";
+}
+
 /** Turns an audit row into a short pt-BR sentence. Unknown actions get a neutral fallback. */
 export function describeActivity(item: ActivityItem, meId: string | null): ActivityLine {
   const actor = item.actorId && item.actorId === meId ? "Você" : (item.actorName ?? "Alguém");
@@ -138,6 +143,21 @@ export function describeActivity(item: ActivityItem, meId: string | null): Activ
       return { actor, text: "restaurou o vínculo", tone: "ok" };
     case "contract.join":
       return { actor, text: "entrou no vínculo com o código", tone: "ok" };
+    case "contract.worker_left":
+      return { actor, text: "excluiu a conta e saiu do vínculo", tone: "alert" };
+    case "agreement.create": {
+      const total = num(m, "totalCents");
+      return {
+        actor,
+        text: `propôs o acordo${agreementName(m)}`,
+        value: total !== null ? formatCents(total) : undefined,
+        tone: "money",
+      };
+    }
+    case "agreement.accept":
+      return { actor, text: `concordou com o acordo${agreementName(m)}`, tone: "ok" };
+    case "agreement.cancel":
+      return { actor, text: `cancelou o acordo${agreementName(m)}`, tone: "alert" };
     default:
       return { actor, text: "fez uma alteração", tone: "neutral" };
   }
@@ -145,9 +165,14 @@ export function describeActivity(item: ActivityItem, meId: string | null): Activ
 
 export type ActivityGroup = "registros" | "pagamentos" | "vinculo";
 
-/** History filter buckets: days, money (payments and extras), and the contract itself. */
+/** History filter buckets: days, money (payments, extras, agreements), and the contract itself. */
 export function activityGroup(action: string): ActivityGroup {
   if (action.startsWith("entry.")) return "registros";
-  if (action.startsWith("payment.") || action.startsWith("adjustment.")) return "pagamentos";
+  if (
+    action.startsWith("payment.") ||
+    action.startsWith("adjustment.") ||
+    action.startsWith("agreement.")
+  )
+    return "pagamentos";
   return "vinculo";
 }

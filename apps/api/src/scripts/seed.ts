@@ -77,10 +77,23 @@ interface SeedContract {
     amountCents: number;
     description: string;
   }[];
+  agreements?: {
+    key: string;
+    description: string;
+    totalCents: number;
+    installmentCents: number | null;
+    startMonth: YearMonth;
+    createdAt: string;
+    acceptedAt: string | null;
+  }[];
+  /** Listed in order; a payment without amountCents settles what is still due for its month. */
   payments: {
     month: YearMonth;
     paidOn: IsoDate;
     method: PaymentMethod;
+    amountCents?: number;
+    agreement?: string;
+    note?: string;
     receipt?: boolean;
     acknowledgedAt?: string;
   }[];
@@ -126,6 +139,17 @@ const MARIA_CONTRACT: SeedContract = {
     },
     { month: "2026-09", kind: "advance", amountCents: 10000, description: "Vale pedido no dia 15" },
   ],
+  agreements: [
+    {
+      key: "mesa",
+      description: "Mesa de jantar",
+      totalCents: 120000,
+      installmentCents: 20000,
+      startMonth: "2026-09",
+      createdAt: "2026-08-28T14:00:00.000Z",
+      acceptedAt: "2026-08-28T20:10:00.000Z",
+    },
+  ],
   payments: [
     {
       month: "2026-08",
@@ -133,6 +157,14 @@ const MARIA_CONTRACT: SeedContract = {
       method: "pix",
       receipt: true,
       acknowledgedAt: "2026-09-04T19:30:00.000Z",
+    },
+    {
+      month: "2026-09",
+      paidOn: "2026-10-02",
+      method: "compensation",
+      amountCents: 20000,
+      agreement: "mesa",
+      acknowledgedAt: "2026-10-02T19:00:00.000Z",
     },
     { month: "2026-09", paidOn: "2026-10-02", method: "pix" },
   ],
@@ -312,16 +344,17 @@ function plannedEntries(
   });
 }
 
-function dueFor(located: LocatedContract, month: YearMonth, today: IsoDate): number {
+/** What is still owed for `month` after the payments already recorded. */
+function balanceFor(located: LocatedContract, month: YearMonth, today: IsoDate): number {
   const { contract } = located;
   return computeMonthSummary({
     contract,
     month,
     entries: repos.entries.listByMonth(contract.id, month),
     adjustments: repos.adjustments.listByMonth(contract.id, month),
-    payments: [],
+    payments: repos.payments.listByMonth(contract.id, month),
     today,
-  }).dueCents;
+  }).balanceCents;
 }
 
 async function seed(): Promise<void> {
@@ -421,6 +454,27 @@ async function seed(): Promise<void> {
         createdAt: `${a.month}-15T12:00:00.000Z`,
       });
     }
+    const agreementIds = new Map<string, string>();
+    for (const a of seed.agreements ?? []) {
+      const id = newId();
+      agreementIds.set(a.key, id);
+      repos.agreements.insert({
+        id,
+        contractId,
+        description: a.description,
+        totalCents: a.totalCents,
+        installmentCents: a.installmentCents,
+        startMonth: a.startMonth,
+        acceptedAt: a.acceptedAt,
+        cancelledAt: null,
+        createdBy: anaId,
+        createdAt: a.createdAt,
+      });
+      audit(a.createdAt, anaId, contractId, "agreement.create", "agreement", id);
+      if (a.acceptedAt && linkedWorkerId) {
+        audit(a.acceptedAt, linkedWorkerId, contractId, "agreement.accept", "agreement", id);
+      }
+    }
     for (const p of seed.payments) {
       const id = newId();
       const createdAt = `${p.paidOn}T15:00:00.000Z`;
@@ -429,9 +483,10 @@ async function seed(): Promise<void> {
         contractId,
         referenceMonth: p.month,
         paidOn: p.paidOn,
-        amountCents: dueFor(located, p.month, today),
+        amountCents: p.amountCents ?? balanceFor(located, p.month, today),
         method: p.method,
-        note: null,
+        note: p.note ?? null,
+        agreementId: p.agreement ? (agreementIds.get(p.agreement) ?? null) : null,
         receipt: p.receipt
           ? {
               mimeType: "image/png",

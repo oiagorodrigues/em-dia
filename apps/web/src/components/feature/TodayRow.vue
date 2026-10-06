@@ -83,7 +83,7 @@ const total = computed(() => {
   top: 0;
   bottom: 0;
   width: 3px;
-  background: var(--blue);
+  background: var(--brand);
 }
 
 .today__date {
@@ -110,7 +110,7 @@ const total = computed(() => {
 }
 
 .today__cols dd.is-ink {
-  color: var(--blue);
+  color: var(--ink);
 }
 
 .today__total {

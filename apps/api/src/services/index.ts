@@ -5,6 +5,7 @@ import type { Mailer } from "../lib/mailer.ts";
 import { createFileStore } from "../lib/storage.ts";
 import { createRepos, type Db } from "../repos/index.ts";
 import { adjustmentsService } from "./adjustments.ts";
+import { agreementsService } from "./agreements.ts";
 import { authService } from "./auth.ts";
 import type { ServiceDeps } from "./context.ts";
 import { contractsService } from "./contracts.ts";
@@ -47,6 +48,7 @@ export function createServices({
     entries: entriesService(deps),
     adjustments: adjustmentsService(deps),
     payments: paymentsService(deps),
+    agreements: agreementsService(deps),
     reports: reportsService(deps),
     health: { databaseOk: () => deps.repos.ping() },
     outbox: () => deps.mailer.outbox(),

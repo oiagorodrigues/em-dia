@@ -6,13 +6,16 @@ import {
   type ScheduleKind,
   type YearMonth,
 } from "@emdia/shared";
-import { computed } from "vue";
+import { computed, ref, useId } from "vue";
+import ChoiceField from "@/components/ui/ChoiceField.vue";
 import MonthDayGrid from "@/components/ui/MonthDayGrid.vue";
-import Segmented from "@/components/ui/Segmented.vue";
 import Stepper from "@/components/ui/Stepper.vue";
 import {
   EVERY_WEEKS_OPTIONS,
+  MAX_EVERY_WEEKS,
+  repeatChoiceOf,
   sameDays,
+  type RepeatChoice,
   scheduleSummaryLine,
   WEEKDAY_PRESETS,
   withKind,
@@ -26,7 +29,7 @@ const {
   error,
   legendHidden = false,
 } = defineProps<{
-  /** Month used for the "~N dias em outubro" preview. */
+  /** Month used for the "N dias previstos em outubro" preview. */
   month: YearMonth;
   startedOn: string;
   error?: string | null;
@@ -49,10 +52,23 @@ const weekdays = computed({
   get: () => model.value.weekdays,
   set: (weekdays) => patch({ weekdays }),
 });
-const everyWeeks = computed({
-  get: () => model.value.everyWeeks,
-  set: (everyWeeks) => patch({ everyWeeks }),
+// "personalizado" stays open while the person types, even if they land on 2 or 3.
+const customRepeat = ref(repeatChoiceOf(model.value.everyWeeks) === "custom");
+const repeat = computed<RepeatChoice>({
+  get: () => (customRepeat.value ? "custom" : repeatChoiceOf(model.value.everyWeeks)),
+  set: (choice) => {
+    customRepeat.value = choice === "custom";
+    if (choice === "custom") {
+      if (model.value.everyWeeks < 4) patch({ everyWeeks: 4 });
+    } else patch({ everyWeeks: Number(choice) });
+  },
 });
+const customId = useId();
+function onCustomWeeks(e: Event): void {
+  const n = Math.round(Number((e.target as HTMLInputElement).value));
+  if (Number.isFinite(n) && n >= 1)
+    patch({ everyWeeks: Math.min(MAX_EVERY_WEEKS, Math.max(2, n)) });
+}
 const monthDays = computed({
   get: () => model.value.monthDays,
   set: (monthDays) => patch({ monthDays }),
@@ -68,7 +84,7 @@ const summary = computed(() => scheduleSummaryLine(model.value, month, startedOn
 <template>
   <fieldset class="sf">
     <legend :class="legendHidden ? 'visually-hidden' : 'label'">Frequência</legend>
-    <Segmented v-model="kind" :options="kindOptions" label="Frequência" wrap />
+    <ChoiceField v-model="kind" :options="kindOptions" label="Frequência" wrap />
 
     <div v-if="model.kind === 'weekly'" class="sf__body">
       <div class="sf__presets" role="group" aria-label="Atalhos">
@@ -86,12 +102,26 @@ const summary = computed(() => scheduleSummaryLine(model.value, month, startedOn
       </div>
       <WeekdayToggles v-model="weekdays" label="Dias da semana" />
       <div class="sf__repeat">
-        <span class="label">repete</span>
-        <Segmented
-          v-model="everyWeeks"
+        <span class="label">Repete</span>
+        <ChoiceField
+          v-model="repeat"
           :options="EVERY_WEEKS_OPTIONS"
           label="Repete a cada quantas semanas"
         />
+        <label v-if="repeat === 'custom'" class="sf__custom" :for="customId">
+          <span>a cada</span>
+          <input
+            :id="customId"
+            class="input input--mono sf__weeks"
+            type="number"
+            inputmode="numeric"
+            min="2"
+            :max="MAX_EVERY_WEEKS"
+            :value="model.everyWeeks"
+            @change="onCustomWeeks"
+          />
+          <span>semanas</span>
+        </label>
       </div>
     </div>
 
@@ -101,15 +131,8 @@ const summary = computed(() => scheduleSummaryLine(model.value, month, startedOn
     </div>
 
     <div v-else-if="model.kind === 'per_month'" class="sf__body">
-      <Stepper
-        v-model="visits"
-        :step="1"
-        :min="1"
-        :max="31"
-        label="Vezes por mês"
-        unit="vez"
-        :format="(v) => (v === 1 ? '1 vez por mês' : `${v} vezes por mês`)"
-      />
+      <span class="label" aria-hidden="true">Vezes por mês</span>
+      <Stepper v-model="visits" :step="1" :min="1" :max="31" label="Vezes por mês" unit="vez" />
       <p class="sf__hint">Sem data fixa: o cartão conta as visitas do mês.</p>
     </div>
 
@@ -169,15 +192,28 @@ const summary = computed(() => scheduleSummaryLine(model.value, month, startedOn
 
 .sf__preset.is-on {
   border-style: solid;
-  border-color: var(--blue);
-  color: var(--blue);
-  background: var(--blue-wash);
+  border-color: var(--brand);
+  color: var(--brand);
+  background: var(--brand-wash);
 }
 
 .sf__repeat {
   display: grid;
   gap: var(--s-2);
   margin-top: var(--s-2);
+}
+
+.sf__custom {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-14);
+  color: var(--ink-2);
+}
+
+.sf__weeks {
+  width: 88px;
+  text-align: center;
 }
 
 .sf__hint {
@@ -187,13 +223,13 @@ const summary = computed(() => scheduleSummaryLine(model.value, month, startedOn
 
 .sf__summary {
   font-size: var(--t-12);
-  color: var(--blue);
+  color: var(--ink);
   padding-left: var(--s-3);
-  border-left: 3px solid var(--blue);
+  border-left: 3px solid var(--brand);
 }
 
 .sf__error {
   font-size: var(--t-14);
-  color: var(--red-text);
+  color: var(--coral-ink);
 }
 </style>

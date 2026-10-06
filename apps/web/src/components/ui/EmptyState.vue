@@ -33,7 +33,7 @@ const { title, tone = "neutral" } = defineProps<{ title: string; tone?: "neutral
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: var(--red);
+  background: var(--coral);
 }
 
 .empty--neutral .empty__dot {

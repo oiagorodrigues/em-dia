@@ -134,8 +134,24 @@ function action(root: Page | Locator, name: string | RegExp): Locator {
 }
 
 /** Segmented controls hide their radios; the visible label is the click target. */
+/** Segmented control on wide screens, a Select (combobox plus a listbox) on phones; both driven like a user would. */
 async function choose(root: Page | Locator, group: string, option: string): Promise<void> {
-  await root.getByRole("radiogroup", { name: group }).getByText(option, { exact: true }).click();
+  const radios = root.getByRole("radiogroup", { name: group });
+  const combo = root.getByRole("combobox", { name: group }).last();
+  await radios.or(combo).first().waitFor();
+  if (await radios.count()) {
+    await radios.getByText(option, { exact: true }).click();
+    return;
+  }
+  const page = "page" in root && typeof root.page === "function" ? root.page() : (root as Page);
+  await combo.click();
+  try {
+    await page.getByRole("option", { name: option, exact: true }).click({ timeout: 3_000 });
+  } catch {
+    throw new Error(
+      `the "${group}" list opened but "${option}" cannot be clicked (list hidden or covered)`,
+    );
+  }
 }
 
 function parseCents(text: string): number {
@@ -197,7 +213,7 @@ interface ContractSpec {
   /** 0 = Sunday. Weekly only. */
   weekdays?: number[];
   weekdayPreset?: string;
-  everyWeeks?: "toda semana" | "a cada 2" | "a cada 3" | "a cada 4";
+  everyWeeks?: "toda semana" | "a cada 2" | "a cada 3";
   visitsPerMonth?: number;
   deductAbsences?: boolean;
   startedOn: string;
@@ -217,7 +233,7 @@ async function fillContractForm(page: Page, spec: ContractSpec): Promise<void> {
   if (spec.contactPhone) await page.getByLabel("Telefone (WhatsApp)").fill(spec.contactPhone);
   await choose(page, "Como paga", spec.payType);
   await page.getByLabel(RATE_LABEL[spec.payType]).fill(spec.rate);
-  if (spec.deductAbsences) await page.getByText("Descontar faltas não justificadas").click();
+  if (spec.deductAbsences) await page.getByText("Descontar faltas sem justificativa").click();
 
   await choose(page, "Frequência", spec.kind ?? "Dias da semana");
   if (spec.weekdayPreset)
@@ -233,21 +249,29 @@ async function fillContractForm(page: Page, spec: ContractSpec): Promise<void> {
   if (spec.everyWeeks) await choose(page, "Repete a cada quantas semanas", spec.everyWeeks);
   if (spec.visitsPerMonth !== undefined) {
     const stepper = page.getByRole("group", { name: "Vezes por mês" });
-    while (!(await textOf(stepper.locator("output"))).startsWith(`${spec.visitsPerMonth} `)) {
+    while ((await textOf(stepper.locator("output"))).trim() !== String(spec.visitsPerMonth)) {
       await stepper.getByRole("button", { name: /^Menos/ }).click();
     }
   }
-  await page.getByLabel("Começou em").fill(spec.startedOn);
+  await page.getByLabel("Começou em", { exact: true }).fill(spec.startedOn);
 }
 
-/** Creates a contract as the signed-in employer and returns its id. */
-async function addContract(page: Page, spec: ContractSpec): Promise<string> {
+/** Creates a contract as the signed-in employer; returns its id and the invite code shown afterwards. */
+async function addContractWithInvite(
+  page: Page,
+  spec: ContractSpec,
+): Promise<{ id: string; code: string }> {
   await page.goto(`${BASE}/equipe/novo`);
   await fillContractForm(page, spec);
-  await action(page, /cadastrar e gerar convite/).click();
-  await action(page, /ir para o profissional|abrir o cartão/).click();
+  await action(page, /^Salvar profissional$/).click();
+  const code = (await page.locator(".inv__code").innerText()).replace(/\s/g, "");
+  await action(page, /^Abrir cartão de /).click();
   await page.waitForURL(/\/equipe\/(?!novo)[^/]+$/);
-  return page.url().split("/").pop()!;
+  return { id: page.url().split("/").pop()!, code };
+}
+
+async function addContract(page: Page, spec: ContractSpec): Promise<string> {
+  return (await addContractWithInvite(page, spec)).id;
 }
 
 // Journeys
@@ -260,7 +284,7 @@ async function employerSignup(state: State): Promise<void> {
 
   await page.goto(BASE);
   await see("the empty dashboard", page.getByText("Ninguém cadastrado ainda."));
-  await action(page, /adicionar profissional/).click();
+  await action(page, /adicionar profissional/i).click();
   await page.waitForURL("**/equipe/novo");
 
   await fillContractForm(page, {
@@ -270,7 +294,7 @@ async function employerSignup(state: State): Promise<void> {
     weekdays: [1, 3, 5],
     startedOn: today().prevMonthStart,
   });
-  await action(page, /cadastrar e gerar convite/).click();
+  await action(page, /^Salvar profissional$/).click();
 
   const invite = page.getByRole("region", { name: "Código de convite" });
   await see("the invite code", invite.locator(".inv__code"));
@@ -278,7 +302,7 @@ async function employerSignup(state: State): Promise<void> {
   if (!/^[A-Z0-9]{8}$/.test(code)) throw new Error(`invite code "${code}" is not 8 letters/digits`);
   state.inviteCode = code;
 
-  await action(page, /ir para o profissional|abrir o cartão/).click();
+  await action(page, /^Abrir cartão de /).click();
   await page.waitForURL(/\/equipe\/(?!novo)[^/]+$/);
   state.contractId = page.url().split("/").pop()!;
   await see("the worker name on the card", page.getByRole("heading", { name: WORKER_NAME }));
@@ -292,18 +316,18 @@ async function workerClocksIn(state: State): Promise<void> {
   await page.waitForURL(`${BASE}/`);
   await see("the employer's house on the worker home", page.getByText(EMPLOYER_NAME).first());
 
-  await action(page, /bater entrada/).click();
+  await action(page, /bater entrada/i).click();
   const row = page.locator('section[aria-label="Hoje"]');
   const columns = row.locator("dd");
   await poll("a check-in time in today's row", async () =>
     /\d{2}:\d{2}/.test(await textOf(columns.nth(0))),
   );
 
-  await action(page, /bater saída/).click();
+  await action(page, /bater saída/i).click();
   await poll("a check-out time in today's row", async () =>
     /\d{2}:\d{2}/.test(await textOf(columns.nth(1))),
   );
-  await see("the closed day", action(page, /dia fechado/));
+  await see("the closed day", action(page, /dia fechado/i));
 }
 
 async function confirmDay(state: State): Promise<void> {
@@ -324,7 +348,7 @@ async function confirmDay(state: State): Promise<void> {
     "'aguardando sua confirmação' in the day editor",
     dialog.getByText("aguardando sua confirmação"),
   );
-  await action(dialog, /^confirmar$/).click();
+  await action(dialog, /^confirmar$/i).click();
   await absent("the day editor", dialog);
   await see(
     "today confirmed",
@@ -341,7 +365,7 @@ async function confirmDay(state: State): Promise<void> {
     worker.locator('button[aria-current="date"][aria-label$="confirmado"]'),
   );
   await worker.goto(BASE);
-  await see("the worker home", action(worker, /ver cartão/));
+  await see("the worker home", worker.locator('section[aria-label="Hoje"]'));
   await absent("the pending-confirmation note", worker.getByText(/aguardando confirmação/));
 }
 
@@ -355,7 +379,7 @@ async function markAbsence(state: State): Promise<void> {
 
   const dialog = page.getByRole("dialog");
   await choose(dialog, "O que aconteceu", "Faltou");
-  await action(dialog, /^anotar$/).click();
+  await action(dialog, /^anotar$/i).click();
   await absent("the day editor", dialog);
 
   const absentRow = page.getByRole("button", { name: /Faltou/ });
@@ -375,7 +399,7 @@ async function addExtra(state: State): Promise<void> {
   await page.goto(`${BASE}/equipe/${id}/extras`);
   await choose(page, "Tipo", "Vale-transporte");
   await page.getByLabel("Valor", { exact: true }).fill("2000");
-  await action(page, /^lançar em/).click();
+  await action(page, /^lançar em/i).click();
   await see("the new entry in the list", page.getByRole("list").getByText("Vale-transporte"));
   await see("the extras net", page.getByText("saldo dos lançamentos"));
   const net = await textOf(page.locator(".ex__net .mono"));
@@ -433,7 +457,7 @@ async function createPayment(state: State): Promise<void> {
       `expected 1 payment after one rejected and one accepted upload, found ${stubs}`,
     );
 
-  await action(page, /ver comprovante/).click();
+  await action(page, /ver comprovante/i).click();
   const image = page.getByRole("dialog").getByRole("img", { name: /Comprovante de/ });
   await see("the receipt image", image);
   const src = await image.getAttribute("src");
@@ -451,7 +475,7 @@ async function acknowledgePayment(state: State): Promise<void> {
   const employer = need(state.employer, 1).page;
 
   await worker.goto(`${BASE}/equipe/${id}/pagamentos`);
-  await action(worker, /^recebi$/).click();
+  await action(worker, /^recebi$/i).click();
   await see("the worker's 'recebido' stamp", worker.getByText(/recebido/i));
 
   await employer.goto(`${BASE}/equipe/${id}/pagamentos`);
@@ -464,7 +488,7 @@ async function acknowledgePayment(state: State): Promise<void> {
 async function downloadCsv(state: State): Promise<void> {
   const { page } = need(state.employer, 1);
   await page.goto(`${BASE}/equipe/${need(state.contractId, 1)}`);
-  const button = action(page, /baixar planilha/);
+  const button = action(page, /baixar planilha/i);
   await see("the download button", button);
   const [download] = await Promise.all([page.waitForEvent("download"), button.click()]);
 
@@ -498,9 +522,9 @@ async function monthlyAllDays(state: State): Promise<void> {
   if ((await missing.count()) !== days)
     throw new Error(`expected ${days} missing days, found ${await missing.count()}`);
 
-  await action(page, /marcar como trabalhados/).click();
+  await action(page, /marcar como trabalhados/i).click();
   const dialog = page.getByRole("dialog");
-  await action(dialog, new RegExp(`^marcar ${days} dias$`)).click();
+  await action(dialog, new RegExp(`^marcar ${days} dias$`, "i")).click();
   await absent("the bulk sheet", dialog);
   await poll("no days left without a record", async () => (await missing.count()) === 0);
   const worked = await rows.filter({ hasText: /\d{2}:\d{2}/ }).count();
@@ -509,7 +533,7 @@ async function monthlyAllDays(state: State): Promise<void> {
 
   await rows.first().click();
   await choose(dialog, "O que aconteceu", "Faltou");
-  await action(dialog, /^salvar$/).click();
+  await action(dialog, /^salvar$/i).click();
   await absent("the day editor", dialog);
 
   const deduction = page.locator(".ledger__line").filter({ hasText: "Faltas descontadas" });
@@ -540,7 +564,7 @@ async function oncePerMonth(state: State): Promise<void> {
     throw new Error("per-month contract shows '— registrar' placeholders");
 
   await todayRow(page).click();
-  await action(page.getByRole("dialog"), /^anotar$/).click();
+  await action(page.getByRole("dialog"), /^anotar$/i).click();
   await see("'visitas: 1 de 1'", page.getByText("visitas: 1 de 1"));
   if ((await placeholders.count()) !== 0)
     throw new Error("'— registrar' placeholders after recording the visit");
@@ -638,7 +662,7 @@ async function contactInvite(state: State): Promise<void> {
     return /\d+ diárias? × R\$\s*180,00/.test(text) && text;
   });
 
-  await action(page, /cadastrar e gerar convite/).click();
+  await action(page, /^Salvar profissional$/).click();
   await see(
     "the e-mail sent notice",
     page.getByText(/e-mail enviado para/).filter({ hasText: email }),
@@ -691,7 +715,7 @@ async function removeAndRestore(state: State): Promise<void> {
     `${name} to be absent from 'ativos'`,
     async () => (await personRow(team, name).count()) === 0,
   );
-  await tabs.getByRole("button", { name: /^removidos/ }).click();
+  await tabs.getByRole("button", { name: /^removidos/i }).click();
   await see(`${name} under 'removidos'`, personRow(team, name));
 
   await page.goto(`${BASE}/equipe/${id}`);
@@ -706,7 +730,7 @@ async function removeAndRestore(state: State): Promise<void> {
     `${name} to leave 'removidos'`,
     async () => (await personRow(team, name).count()) === 0,
   );
-  await tabs.getByRole("button", { name: /^ativos/ }).click();
+  await tabs.getByRole("button", { name: /^ativos/i }).click();
   await see(`${name} back under 'ativos'`, personRow(team, name));
 }
 
@@ -753,7 +777,7 @@ async function teamSearchSortFilter(state: State): Promise<void> {
   if (sorted[0]! < 900000)
     throw new Error(`top 'a pagar' is ${sorted[0]}, expected the R$ 9.000,00 monthly salary first`);
 
-  await page.getByLabel(/^Função/).selectOption({ label: "Jardineiro" });
+  await choose(page, "Função", "Jardineiro");
   await poll("the função filter to leave one person", async () => (await rows.count()) === 1);
   await search.fill("antonio");
   await page.waitForURL(/q=antonio/);
@@ -809,14 +833,14 @@ async function paymentsTable(state: State): Promise<void> {
   const mine = rows.filter({ hasText: WORKER_NAME });
   await poll("both payments listed with the person's name", async () => (await mine.count()) >= 2);
 
-  await page.getByLabel("Recebido", { exact: true }).selectOption("nao");
+  await choose(page, "Recebido", "Sem “recebi”");
   await poll("only the payment without 'recebi'", async () => (await rows.count()) === 1);
   const text = await textOf(rows);
   if (!text.includes(WORKER_NAME) || !/12,00/.test(text))
     throw new Error(`filtered row is "${text}", expected ${WORKER_NAME} R$ 12,00`);
 
   await worker.goto(`${BASE}/pagamentos`);
-  await see("the 'recebi' button for the worker", action(worker, /^recebi$/));
+  await see("the 'recebi' button for the worker", action(worker, /^recebi$/i));
 }
 
 async function sidebarLogout(state: State): Promise<void> {
@@ -834,7 +858,7 @@ async function sidebarLogout(state: State): Promise<void> {
     .getByRole("link", { name: "Equipe" })
     .click();
   await page.waitForURL("**/equipe");
-  await action(page.getByRole("complementary", { name: "Menu lateral" }), /^sair$/).click();
+  await action(page.getByRole("complementary", { name: "Menu lateral" }), /^sair$/i).click();
   await page.waitForURL("**/entrar");
   await page.goBack();
   await page.waitForURL("**/entrar**");
@@ -849,6 +873,160 @@ async function legacyUrl(state: State): Promise<void> {
   await page.goto(`${BASE}/vinculos/${id}/historico`);
   await page.waitForURL(`${BASE}/equipe/${id}/historico`);
   await see("the history tab", page.getByRole("link", { name: "Histórico" }).first());
+}
+
+async function agreement(state: State): Promise<void> {
+  const id = need(state.contractId, 1);
+  const worker = need(state.worker, 2).page;
+  const page = await deskOf(state);
+
+  await page.goto(`${BASE}/equipe/${id}/acordos`);
+  await action(page, /^Novo acordo$/).click();
+  const sheet = page.getByRole("dialog");
+  await sheet.getByLabel("Descrição").fill("Mesa");
+  await sheet.getByLabel("Valor total").fill("60000");
+  await sheet.getByLabel("Parcela por mês").fill("20000");
+  await action(sheet, /^Criar acordo$/).click();
+  await absent("the agreement form", sheet);
+  const table = page.getByRole("region", { name: "Acordos" });
+  const row = table.getByRole("row").filter({ hasText: "Mesa" });
+  await see("the Mesa agreement, waiting for the worker", row.getByText(/aguardando/i));
+
+  await worker.goto(`${BASE}/equipe/${id}/acordos`);
+  await action(worker, /^Concordo$/).click();
+  await see("the agreement running on the worker side", worker.getByText("em andamento").first());
+
+  await page.reload();
+  await see("the agreement running for the employer", row.getByText("em andamento"));
+  await action(row, /^Abater parcela de R\$\s*200,00$/).click();
+  await page.waitForURL(/\/pagamentos\/novo/);
+
+  const amount = page.getByLabel("Valor", { exact: true });
+  await poll("the installment to prefill R$ 200,00", async () =>
+    /200,00/.test(await amount.inputValue()),
+  );
+  const method = page
+    .getByRole("radio", { name: "Compensação" })
+    .or(page.getByRole("combobox", { name: "Como pagou" }));
+  const selected = await method
+    .first()
+    .evaluate((el) =>
+      el instanceof HTMLInputElement ? el.checked : (el.textContent ?? "").includes("Compensação"),
+    );
+  if (!selected) throw new Error("the payment method is not preselected as Compensação");
+  await action(page, /^registrar pagamento$/).click();
+
+  await page.goto(`${BASE}/equipe/${id}/acordos`);
+  await poll("the agreement to show abatido R$ 200 and falta R$ 400", async () => {
+    const text = await textOf(row);
+    return /600,00.*200,00.*400,00/.test(text) && text;
+  });
+}
+
+async function futureMonth(state: State): Promise<void> {
+  const page = await deskOf(state);
+  await page.goto(BASE);
+  await see("the current month KPIs", page.getByRole("region", { name: /^Resumo de/ }));
+  await page.getByRole("button", { name: /^Próximo mês/ }).click();
+
+  const forecast = page.getByRole("region", { name: /^Previsão de/ });
+  await see("the forecast section", forecast.first());
+  const tags = await page.getByText("previsto", { exact: true }).count();
+  if (tags < 3) throw new Error(`expected 3 'previsto' KPI tags, found ${tags}`);
+  await absent("the actual-month summary", page.getByRole("region", { name: /^Resumo de/ }));
+  await absent(
+    "the today and pendencies panel",
+    page.getByRole("complementary", { name: "Hoje e pendências" }),
+  );
+  await absent("the Pendências KPI", page.getByText("Pendências", { exact: true }));
+}
+
+async function deleteAccount(state: State): Promise<void> {
+  const desk = await deskOf(state);
+  const email = `e2e+${RUN}-leaver@emdia.dev`;
+  const { id, code } = await addContractWithInvite(desk, {
+    workerName: "Saindo E2E",
+    payType: "Por diária",
+    rate: "10000",
+    weekdays: [1, 3, 5],
+    startedOn: today().prevMonthStart,
+  });
+
+  const { page } = await openSession(state, "leaver");
+  await register(page, "Eu trabalho", "Saindo E2E", email, `?convite=${code}`);
+  await action(page, /^criar conta$/i).click();
+  await page.waitForURL(`${BASE}/`);
+  await action(page, /bater entrada/i).click();
+  await see("the check-in time", page.locator('section[aria-label="Hoje"] dd').first());
+
+  await page.goto(`${BASE}/perfil`);
+  await action(page, /^Excluir minha conta$/).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Sua senha", { exact: true }).fill(PASSWORD);
+  await dialog.getByLabel("Digite EXCLUIR para confirmar").fill("EXCLUIR");
+  await action(dialog, /^Excluir conta$/).click();
+  await page.waitForURL("**/entrar");
+  await see("the deletion toast", page.getByText("Sua conta foi excluída."));
+
+  await login(page, email, PASSWORD);
+  await see(
+    "a login error for the deleted account",
+    page.locator('p[role="alert"]').filter({ hasText: /\w/ }),
+  );
+  if (!page.url().includes("/entrar")) throw new Error("the deleted account could still sign in");
+
+  await desk.goto(`${BASE}/equipe/${id}/historico`);
+  await see("the clock-in still in the employer's history", desk.getByText(/bateu a entrada/));
+  await desk.goto(`${BASE}/equipe/${id}`);
+  await see(
+    "the contract flagged as having no linked worker",
+    desk.getByText(/convite pendente/i).first(),
+  );
+}
+
+async function backNavigation(state: State): Promise<void> {
+  const page = await deskOf(state);
+  await page.goto(BASE);
+  await action(page, /^Registrar pagamento$/)
+    .first()
+    .click();
+  await page.waitForURL(/\/pagamentos\/novo/);
+  await action(page, /^voltar$/i)
+    .first()
+    .click();
+  await page.waitForURL(`${BASE}/`);
+}
+
+async function signedInInvite(state: State): Promise<void> {
+  const desk = await deskOf(state);
+  const { code } = await addContractWithInvite(desk, {
+    workerName: "Convite E2E",
+    payType: "Por diária",
+    rate: "10000",
+    weekdays: [1],
+    startedOn: today().prevMonthStart,
+  });
+
+  for (const [who, email, name] of [
+    ["employer", state.employerEmail, EMPLOYER_NAME],
+    ["worker", state.workerEmail, WORKER_NAME],
+  ] as const) {
+    const { page } = await openSession(state, `invite-${who}`);
+    await login(page, email, PASSWORD);
+    await page.waitForURL(`${BASE}/`);
+    await page.goto(`${BASE}/criar-conta?convite=${code}`);
+    const notice = page.getByRole("status").filter({ hasText: "Você está conectado como" });
+    await see(`the signed-in notice for the ${who}`, notice);
+    if (!(await textOf(notice)).includes(name.split(" ")[0]!))
+      throw new Error(`the notice does not name ${name}`);
+
+    await action(notice, /^Sair e continuar$/).click();
+    await page.waitForURL(new RegExp(`/criar-conta\\?convite=${code}`));
+    await see("the signup form with the invite", page.getByLabel("Seu nome"));
+    const prefilled = await page.getByLabel("Código de convite").inputValue();
+    if (prefilled.replace(/\W/g, "").toUpperCase() !== code)
+      throw new Error(`invite field holds "${prefilled}", expected ${code}`);
+  }
 }
 
 async function securityChecks(state: State): Promise<void> {
@@ -885,7 +1063,7 @@ async function securityChecks(state: State): Promise<void> {
   await anon.page.waitForURL(`${BASE}/`);
   await anon.page.goto(`${BASE}/perfil`);
   await see("the profile", anon.page.getByText(state.employerEmail));
-  await action(anon.page, /^sair$/).click();
+  await action(anon.page, /^sair$/i).click();
   await anon.page.waitForURL("**/entrar");
   await anon.page.goBack();
   await anon.page.waitForURL("**/entrar**");
@@ -941,6 +1119,11 @@ const JOURNEYS: [string, (state: State) => Promise<void>][] = [
   ["17 board cell for a worked day, row opens the person", boardCell],
   ["18 payments table lists, filters, worker sees recebi", paymentsTable],
   ["20 old /vinculos URL redirects to /equipe", legacyUrl],
+  ["21 agreement: create, worker agrees, installment payment", agreement],
+  ["22 future month shows forecast KPIs only", futureMonth],
+  ["23 worker deletes the account, employer keeps the history", deleteAccount],
+  ["24 voltar from a payment form returns to Início", backNavigation],
+  ["25 invite link while signed in offers 'Sair e continuar'", signedInInvite],
   ["19 sidebar logout, back shows nothing private", sidebarLogout],
   ["8  security and logout checks", securityChecks],
   ["9  forgot password and login with the new one", forgotPassword],

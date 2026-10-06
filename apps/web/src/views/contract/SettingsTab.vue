@@ -11,6 +11,7 @@ import { contractsApi, errorMessage } from "@/api";
 import ContractForm from "@/components/feature/ContractForm.vue";
 import InviteCard from "@/components/feature/InviteCard.vue";
 import Button from "@/components/ui/Button.vue";
+import DateField from "@/components/ui/DateField.vue";
 import Field from "@/components/ui/Field.vue";
 import Sheet from "@/components/ui/Sheet.vue";
 import { useContract } from "@/composables/contractContext.ts";
@@ -73,7 +74,7 @@ function onEnd(): void {
       aria-labelledby="st-invite"
     >
       <div class="st__head">
-        <h2 id="st-invite" class="section-title">convite</h2>
+        <h2 id="st-invite" class="section-title">Convite</h2>
         <p class="muted">
           <template v-if="invite">Gerar outro código invalida o anterior.</template>
           <template v-else-if="contract.contactEmail"
@@ -113,7 +114,7 @@ function onEnd(): void {
     </p>
 
     <section v-if="writable" class="st__block" aria-labelledby="st-edit">
-      <h2 id="st-edit" class="section-title">combinado e contato</h2>
+      <h2 id="st-edit" class="section-title">Combinado e contato</h2>
       <ContractForm
         :key="contract.id"
         :initial="{
@@ -146,7 +147,7 @@ function onEnd(): void {
 
     <div class="st__danger">
       <section class="st__block sheet st__card" aria-labelledby="st-end">
-        <h2 id="st-end" class="st__title">encerrar vínculo</h2>
+        <h2 id="st-end" class="st__title">Encerrar vínculo</h2>
         <template v-if="contract.status === 'ended'">
           <p class="muted">
             Encerrado em
@@ -161,7 +162,7 @@ function onEnd(): void {
             Para quando a pessoa deixar de trabalhar aqui. Nada é apagado: o cartão e os pagamentos
             ficam guardados.
           </p>
-          <Button variant="danger" @click="endOpen = true">encerrar vínculo…</Button>
+          <Button variant="danger" @click="endOpen = true">Encerrar vínculo…</Button>
         </template>
         <p v-else class="muted">Restaure o vínculo antes de encerrar.</p>
       </section>
@@ -176,19 +177,19 @@ function onEnd(): void {
             <span class="mono">{{ formatDateShort(contract.archivedAt.slice(0, 10)) }}</span
             >. Restaurar devolve a pessoa para a equipe com todo o histórico.
           </p>
-          <Button icon="undo" :loading="restoring" @click="restore">restaurar</Button>
+          <Button icon="undo" :loading="restoring" @click="restore">Restaurar</Button>
         </template>
         <template v-else>
           <p class="muted">
             Some da equipe e do início. O histórico fica guardado e você pode restaurar em Equipe →
             removidos.
           </p>
-          <Button variant="danger" icon="archive" @click="askRemove">remover…</Button>
+          <Button variant="danger" icon="archive" @click="askRemove">Remover…</Button>
         </template>
       </section>
     </div>
 
-    <Sheet v-model:open="endOpen" title="encerrar vínculo" :subtitle="contract.workerName">
+    <Sheet v-model:open="endOpen" title="Encerrar vínculo" :subtitle="contract.workerName">
       <form id="end-form" class="stack" novalidate @submit.prevent="onEnd">
         <p v-if="endForm.formError.value" class="form-error" role="alert">
           {{ endForm.formError.value }}
@@ -199,21 +200,20 @@ function onEnd(): void {
           label="Último dia"
           :error="endForm.errors.value.endedOn"
         >
-          <input
+          <DateField
             :id="id"
             v-model="endForm.values.endedOn"
-            class="input"
-            type="date"
+            label="Último dia"
             :min="contract.startedOn"
-            :aria-invalid="invalid || undefined"
-            :aria-describedby="describedBy"
+            :invalid="invalid"
+            :described-by="describedBy"
           />
         </Field>
       </form>
       <template #footer>
-        <Button @click="endOpen = false">cancelar</Button>
+        <Button @click="endOpen = false">Cancelar</Button>
         <Button type="submit" form="end-form" variant="danger" :loading="endForm.submitting.value"
-          >encerrar</Button
+          >Encerrar</Button
         >
       </template>
     </Sheet>

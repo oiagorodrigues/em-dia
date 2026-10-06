@@ -23,6 +23,10 @@ The agreement between family and worker differs a lot, so the app models the agr
 - Quinzenal: every other week on a weekday. A plain weekday list cannot express it.
 - Also common: "todo dia 5" (a fixed date each month) and "quando precisar" (no expectation).
 
+## Compensation (acordos)
+
+Some arrangements are paid in work, not cash: the family buys a dining table for the worker and she works it off over several months, or advances a sum she repays with her days. Without a record, this becomes a dispute ("I already paid that off"). The app models it as an agreement both sides see, which the worker must accept, and each installment is a payment with method "compensação" that she acknowledges like any other. The balance of what is still owed is always visible to both.
+
 ## Principles
 
 - Both sides see the same truth. The employer and the worker read the same time card, adjustments and payments.

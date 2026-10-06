@@ -48,7 +48,7 @@ function onClosed(): void {
 <template>
   <Sheet
     v-model:open="open"
-    title="comprovante"
+    title="Comprovante"
     :subtitle="
       payment
         ? `${formatCents(payment.amountCents)} · ${formatYearMonth(payment.referenceMonth)}`
@@ -75,8 +75,8 @@ function onClosed(): void {
       </template>
     </div>
     <template v-if="url" #footer>
-      <Button :href="url" icon="external">abrir</Button>
-      <Button :href="url" :download="filename" icon="download" variant="primary">baixar</Button>
+      <Button :href="url" icon="external">Abrir</Button>
+      <Button :href="url" :download="filename" icon="download" variant="primary">Baixar</Button>
     </template>
   </Sheet>
 </template>

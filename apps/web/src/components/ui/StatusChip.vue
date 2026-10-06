@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import type { Tint } from "@/lib/tint.ts";
+import type { Tone } from "@/lib/tone.ts";
 
-const { tone = "neutral", dot = true } = defineProps<{
-  tone?: Tint | "neutral" | "green" | "red" | "blue";
-  dot?: boolean;
-}>();
+const { tone = "neutral", dot = true } = defineProps<{ tone?: Tone; dot?: boolean }>();
 </script>
 
 <template>
@@ -38,36 +35,16 @@ const { tone = "neutral", dot = true } = defineProps<{
   background: var(--surface-2);
   color: var(--ink-2);
 }
-.chip--green {
-  background: var(--green-wash);
-  color: var(--tint-mint-ink);
+.chip--brand {
+  background: var(--brand-wash);
+  color: var(--brand-ink);
 }
-.chip--red {
-  background: var(--red-wash);
-  color: var(--red-text);
+.chip--amber {
+  background: var(--amber-wash);
+  color: var(--amber-ink);
 }
-.chip--blue {
-  background: var(--blue-wash);
-  color: var(--blue);
-}
-.chip--mint {
-  background: var(--tint-mint);
-  color: var(--tint-mint-ink);
-}
-.chip--peach {
-  background: var(--tint-peach);
-  color: var(--tint-peach-ink);
-}
-.chip--butter {
-  background: var(--tint-butter);
-  color: var(--tint-butter-ink);
-}
-.chip--sky {
-  background: var(--tint-sky);
-  color: var(--tint-sky-ink);
-}
-.chip--rose {
-  background: var(--tint-rose);
-  color: var(--tint-rose-ink);
+.chip--coral {
+  background: var(--coral-wash);
+  color: var(--coral-ink);
 }
 </style>

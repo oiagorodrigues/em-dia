@@ -134,3 +134,21 @@ Additions to `Contract`: `contactEmail`, `contactPhone` (typed by the employer b
 Archived contracts are read-only: writes to entries, clock, adjustments and payments return 409 `CONFLICT` ("Este vínculo foi removido"). The worker keeps read access to history and sees the contract as removed. `/dashboard` never includes archived contracts.
 
 Shared estimate helpers (`packages/shared/src/estimate.ts`): `estimateMonthCost` (rate × expected days, × hours per day for hourly, fixed for monthly) and `estimateAverageMonthlyCost` (12-month average). Both return `null` when the schedule can't be priced (on demand, or hourly without expected times).
+
+## Agreements, compensation, account deletion, projections (v3)
+
+Agreements (`Agreement` in `@emdia/shared`) record something the worker pays back in work (a dining table, an advance). Each installment is a `Payment` with `method: "compensation"` and `agreementId`. Compensation payments count toward `paidCents` like any payment and go through the same "recebi" acknowledgement. A compensation payment without an agreement is allowed for one-off settlements and needs a `note`.
+
+| Method | Path                                    | Who      | Body                                             | Response                                                                                                                                      |
+| ------ | --------------------------------------- | -------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/contracts/:id/agreements`             | both     | –                                                | `{ agreements: Agreement[] }` newest first, with derived `settledCents`/`remainingCents`                                                      |
+| POST   | `/contracts/:id/agreements`             | employer | `createAgreementSchema`                          | 201 `{ agreement }`                                                                                                                           |
+| POST   | `/contracts/:id/agreements/:aid/accept` | worker   | –                                                | `{ agreement }` sets `acceptedAt`                                                                                                             |
+| POST   | `/contracts/:id/agreements/:aid/cancel` | employer | –                                                | `{ agreement }` sets `cancelledAt`; linked payments stay                                                                                      |
+| POST   | `/contracts/:id/payments`               | employer | `createPaymentSchema` (+ optional `agreementId`) | An `agreementId` must belong to the contract, not be cancelled, and the amount can't exceed `remainingCents` (400 `fieldErrors.amountCents`). |
+
+Archived contracts reject agreement writes with 409 like other writes. Audit actions: `agreement.create`, `agreement.accept`, `agreement.cancel`.
+
+`DELETE /me` with `deleteAccountSchema` (`{ password, confirm: "EXCLUIR" }`): wrong password → 400 `fieldErrors.password`. The account is anonymised, not erased: name becomes "Conta excluída", e-mail is replaced so it can be reused, password hash and phone/Pix are wiped, every session is revoked, the refresh cookie is cleared. An employer's contracts are archived (history stays for the worker). A worker is unlinked from their contracts (`workerId = null`, `workerName` kept) so the employer keeps the records. Audit `auth.delete_account`. 204.
+
+Projections: `DashboardItem.estimate` (a `MonthEstimate` from `estimateMonthCost`) is returned by `/dashboard` and `/team` for any month, including future ones (`/dashboard?month=YYYY-MM` now accepts a month too, default current). For future months the summary has no entries, so clients show the estimate as "previsto".

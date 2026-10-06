@@ -6,7 +6,8 @@ export type RevokeReason =
   | "logout"
   | "logout_all"
   | "password_change"
-  | "password_reset";
+  | "password_reset"
+  | "account_deleted";
 
 export interface RefreshTokenRecord {
   id: string;

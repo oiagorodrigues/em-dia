@@ -16,7 +16,7 @@ const router = useRouter();
 const menu = computed<MenuItem[]>(() => [
   { label: "Perfil", icon: "user", onSelect: () => void router.push("/perfil") },
   {
-    label: "sair",
+    label: "Sair",
     icon: "logout",
     onSelect: async () => {
       try {

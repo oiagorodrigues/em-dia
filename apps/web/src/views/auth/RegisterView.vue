@@ -2,6 +2,7 @@
 import { registerSchema, type Role } from "@emdia/shared";
 import { computed } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
+import InviteSignedInNotice from "@/components/feature/InviteSignedInNotice.vue";
 import AuthHeader from "@/components/layout/AuthHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import Field from "@/components/ui/Field.vue";
@@ -40,6 +41,8 @@ const ROLE_CHOICES: { value: Role; title: string; text: string }[] = [
 ];
 
 const isWorker = computed(() => values.role === "worker");
+/** An invite link opened on a phone that is already signed in (usually the employer testing it). */
+const signedInWithInvite = computed(() => !!auth.user && !!inviteFromLink);
 
 function onSubmit(): void {
   const code = normalizeInviteCode(values.inviteCode ?? "");
@@ -56,8 +59,9 @@ function onSubmit(): void {
 </script>
 
 <template>
-  <AuthHeader title="criar conta" lede="Leva um minuto. Sem cartão de crédito, sem pegadinha." />
-  <form class="stack" novalidate @submit.prevent="onSubmit">
+  <AuthHeader title="Criar conta" lede="Leva um minuto. Sem cartão de crédito, sem pegadinha." />
+  <InviteSignedInNotice v-if="signedInWithInvite" />
+  <form v-else class="stack" novalidate @submit.prevent="onSubmit">
     <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
 
     <fieldset class="roles">
@@ -193,12 +197,13 @@ function onSubmit(): void {
 }
 
 .role.is-on {
-  border-color: var(--ink);
-  box-shadow: var(--press);
+  border-color: var(--brand);
+  background: var(--brand-wash);
+  box-shadow: var(--shadow-1);
 }
 
 .role:has(:focus-visible) {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
@@ -213,8 +218,8 @@ function onSubmit(): void {
 }
 
 .role.is-on .role__mark {
-  border: 0;
-  background: var(--red);
+  border: 4px solid var(--brand);
+  background: var(--surface);
 }
 
 .role__title {

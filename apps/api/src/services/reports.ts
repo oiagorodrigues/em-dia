@@ -5,6 +5,8 @@ import {
   DEFAULT_TIMEZONE,
   describeSchedule,
   ENTRY_STATUS_LABEL,
+  estimateMonthCost,
+  PAYMENT_METHOD_LABEL,
   formatDuration,
   formatYearMonth,
   nowInZone,
@@ -43,6 +45,7 @@ export function reportsService(deps: ServiceDeps) {
     return {
       contract,
       summary: summarize(located, month).summary,
+      estimate: estimateMonthCost(contract, month),
       today: repos.entries.find(contract.id, todayIn(located.timezone)) ?? null,
       lastPayment: latest ? toPayment(latest) : null,
     };
@@ -61,6 +64,23 @@ export function reportsService(deps: ServiceDeps) {
       const located = loadContract(deps, actor, contractId);
       const { contract } = located;
       const { summary, entries } = summarize(located, month);
+      const agreementNames = new Map(
+        repos.agreements.list(contract.id).map((a) => [a.id, a.description]),
+      );
+      const payments = repos.payments
+        .listByMonth(contract.id, month)
+        .reverse()
+        .map((p) => {
+          const agreement = p.agreementId ? agreementNames.get(p.agreementId) : undefined;
+          const method = PAYMENT_METHOD_LABEL[p.method];
+          return [
+            brDate(p.paidOn),
+            agreement ? `${method}: ${agreement}` : method,
+            centsToDecimal(p.amountCents),
+            p.acknowledgedAt ? "Sim" : "Não",
+            p.note ?? "",
+          ];
+        });
       const byDate = new Map(entries.map((e) => [e.date, e]));
       const unrecorded = new Set(summary.unrecordedDates);
       const expected = new Set(summary.expectedDates);
@@ -118,6 +138,10 @@ export function reportsService(deps: ServiceDeps) {
         ["Total devido (R$)", centsToDecimal(summary.dueCents)],
         ["Pago (R$)", centsToDecimal(summary.paidCents)],
         ["Saldo (R$)", centsToDecimal(summary.balanceCents)],
+        [],
+        ["Pagamentos"],
+        ["Data", "Forma", "Valor (R$)", "Recebido", "Observação"],
+        ...payments,
       ]);
       return { filename: `extrato-${month}.csv`, csv };
     },
@@ -128,15 +152,16 @@ export function reportsService(deps: ServiceDeps) {
       return repos.audit.listByContract(contractId, limit);
     },
 
-    dashboard(actor: Actor): { items: DashboardItem[]; month: YearMonth; today: IsoDate } {
+    /** Active contracts; `month` defaults to each household's current month. */
+    dashboard(
+      actor: Actor,
+      month: YearMonth | undefined,
+    ): { items: DashboardItem[]; month: YearMonth; today: IsoDate } {
       const items = listContracts(deps, actor)
         .filter((l) => l.contract.status === "active")
-        .map((located) => {
-          const month = toYearMonth(todayIn(located.timezone));
-          return teamItem(located, month);
-        });
+        .map((located) => teamItem(located, month ?? toYearMonth(todayIn(located.timezone))));
       const today = todayIn(DEFAULT_TIMEZONE);
-      return { items, month: toYearMonth(today), today };
+      return { items, month: month ?? toYearMonth(today), today };
     },
 
     /** Every contract the actor can see, ended ones included, with `month`'s numbers. */

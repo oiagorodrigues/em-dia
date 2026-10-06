@@ -5,7 +5,7 @@ import {
   type IsoDate,
   type YearMonth,
 } from "@emdia/shared";
-import type { Tint } from "./tint.ts";
+import type { Tone } from "./tone.ts";
 
 export type TeamStatus = "active" | "pending" | "ended" | "archived";
 
@@ -16,11 +16,11 @@ export const TEAM_STATUS_LABEL: Record<TeamStatus, string> = {
   archived: "removido",
 };
 
-export const TEAM_STATUS_TONE: Record<TeamStatus, Tint | "neutral" | "red"> = {
-  active: "mint",
-  pending: "butter",
+export const TEAM_STATUS_TONE: Record<TeamStatus, Tone> = {
+  active: "brand",
+  pending: "amber",
   ended: "neutral",
-  archived: "red",
+  archived: "coral",
 };
 
 export function teamStatus(
@@ -37,10 +37,10 @@ export const TEAM_TABS = ["ativos", "convites", "encerrados", "removidos"] as co
 export type TeamTab = (typeof TEAM_TABS)[number];
 
 export const TEAM_TAB_LABEL: Record<TeamTab, string> = {
-  ativos: "ativos",
-  convites: "convites pendentes",
-  encerrados: "encerrados",
-  removidos: "removidos",
+  ativos: "Ativos",
+  convites: "Convites pendentes",
+  encerrados: "Encerrados",
+  removidos: "Removidos",
 };
 
 export function inTab(item: DashboardItem, tab: TeamTab): boolean {
@@ -101,7 +101,7 @@ export function todayInfo(item: DashboardItem, today: IsoDate): TodayInfo {
 export interface Pendency {
   key: string;
   contractId: string;
-  tone: "red" | "butter" | "sky";
+  tone: Tone;
   text: string;
   /** Where the fix happens. */
   to: string;
@@ -130,7 +130,7 @@ export function pendencies(
       late.push({
         key: `late-${c.id}`,
         contractId: c.id,
-        tone: "red",
+        tone: "coral",
         text: `${name}: ${days === 1 ? "1 dia" : `${days} dias`} sem registro`,
         to: `/equipe/${c.id}?mes=${month}`,
       });
@@ -140,7 +140,7 @@ export function pendencies(
       payments.push({
         key: `ack-${c.id}`,
         contractId: c.id,
-        tone: "butter",
+        tone: "amber",
         text: `${name}: pagamento de ${formatCents(p.amountCents)} sem “recebi”`,
         to: `/equipe/${c.id}/pagamentos`,
       });
@@ -150,7 +150,7 @@ export function pendencies(
       confirm.push({
         key: `confirm-${c.id}`,
         contractId: c.id,
-        tone: "sky",
+        tone: "brand",
         text: `${name}: ${n === 1 ? "1 dia aguarda" : `${n} dias aguardam`} confirmação`,
         to: `/equipe/${c.id}?mes=${month}`,
       });
@@ -159,7 +159,7 @@ export function pendencies(
       invites.push({
         key: `invite-${c.id}`,
         contractId: c.id,
-        tone: "butter",
+        tone: "amber",
         text: `${name}: convite ainda não usado`,
         to: `/equipe/${c.id}/ajustes`,
       });
@@ -206,4 +206,65 @@ export function teamTotals(items: readonly DashboardItem[], today: IsoDate): Tea
 /** Best phone for contact links: the worker's own profile wins over what the employer typed. */
 export function contactPhone(c: Pick<Contract, "workerPhone" | "contactPhone">): string | null {
   return c.workerPhone ?? c.contactPhone ?? null;
+}
+
+/** A month after today's: nothing recorded yet, numbers are projections. */
+export function isFutureMonth(month: YearMonth, today: IsoDate): boolean {
+  return month > today.slice(0, 7);
+}
+
+export interface Projection {
+  people: number;
+  /** Expected days (visits for per_month) across the team. */
+  days: number;
+  /** Expected minutes, from the expected times; contracts without times count 0. */
+  minutes: number;
+  /** Expected cost; contracts that can't be priced are left out and counted in `unpriced`. */
+  cents: number;
+  unpriced: number;
+}
+
+export function projectedMinutes(item: DashboardItem): number | null {
+  const e = item.estimate;
+  return e.minutesPerDay === null ? null : e.days * e.minutesPerDay;
+}
+
+/** Totals of `DashboardItem.estimate` for a future month: never mixed with actuals. */
+export function projectionTotals(items: readonly DashboardItem[]): Projection {
+  const current = items.filter((i) => {
+    const s = teamStatus(i.contract);
+    return s === "active" || s === "pending";
+  });
+  return {
+    people: current.length,
+    days: current.reduce((s, i) => s + i.estimate.days, 0),
+    minutes: current.reduce((s, i) => s + (projectedMinutes(i) ?? 0), 0),
+    cents: current.reduce((s, i) => s + (i.estimate.cents ?? 0), 0),
+    unpriced: current.filter((i) => i.estimate.cents === null).length,
+  };
+}
+
+export type TeamRowAction = "clock-in" | "clock-out" | "pay" | "restore";
+
+/**
+ * The quick actions shown inline on a team row, most frequent first (the table keeps at most
+ * two inline): restore for removed people; otherwise bater entrada/saída when it's today's
+ * month and the day is still open, then registrar pagamento while the contract is writable.
+ */
+export function teamRowActions(
+  item: DashboardItem,
+  ctx: {
+    currentMonth: boolean;
+    projected: boolean;
+    clock: "in" | "out" | "done" | "off";
+    writable: boolean;
+  },
+): TeamRowAction[] {
+  if (teamStatus(item.contract) === "archived") return ["restore"];
+  const out: TeamRowAction[] = [];
+  if (ctx.currentMonth && !ctx.projected && (ctx.clock === "in" || ctx.clock === "out")) {
+    out.push(ctx.clock === "in" ? "clock-in" : "clock-out");
+  }
+  if (ctx.writable) out.push("pay");
+  return out;
 }

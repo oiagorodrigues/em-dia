@@ -1,5 +1,6 @@
 import {
   datesOfMonth,
+  formatCents,
   ENTRY_STATUS_LABEL,
   formatDuration,
   weekdayOf,
@@ -11,6 +12,7 @@ import {
   type YearMonth,
 } from "@emdia/shared";
 import { formatDayMonth, WEEKDAY_SHORT } from "./format.ts";
+import { attendanceText } from "./schedule.ts";
 
 /**
  * worked: mint · absent: coral · soft: excused/day off/holiday (butter) ·
@@ -117,11 +119,16 @@ export function boardCells(
   });
 }
 
-/** The 7 days (Monday first) to show on the phone strip: this week, or the month's edge week. */
+/**
+ * The 7 days (Monday first) for the phone strip: this week, the last week of a past month,
+ * or the first full week of a future month (so it isn't mostly the month before).
+ */
 export function stripDates(month: YearMonth, today: IsoDate): IsoDate[] {
   const days = datesOfMonth(month);
-  const focus =
-    today < days[0]! ? days[0]! : today > days[days.length - 1]! ? days[days.length - 1]! : today;
+  let focus: IsoDate;
+  if (today > days[days.length - 1]!) focus = days[days.length - 1]!;
+  else if (today < days[0]!) focus = days.find((d) => weekdayOf(d) === 1)!;
+  else focus = today;
   const [y, m, d] = focus.split("-").map(Number) as [number, number, number];
   const monday = Date.UTC(y, m - 1, d) - ((weekdayOf(focus) + 6) % 7) * 86_400_000;
   return Array.from({ length: 7 }, (_, i) =>
@@ -140,4 +147,43 @@ export function matchesBoardStatus(contract: Pick<Contract, "status">, filter: s
   if (filter === "todos") return true;
   if (filter === "encerrados") return contract.status === "ended";
   return contract.status === "active";
+}
+
+export interface RowTotals {
+  /** Sort keys; null when unknown (a projection without times or without a price). */
+  minutes: number | null;
+  dueCents: number | null;
+  hours: string;
+  days: string;
+  due: string;
+}
+
+/**
+ * Row totals of the board. A future month has nothing recorded yet, so it shows the
+ * projection from `DashboardItem.estimate` instead (styled apart, never mixed with actuals).
+ */
+export function rowTotals(item: DashboardItem, projected: boolean): RowTotals {
+  const { summary, contract } = item;
+  if (!projected) {
+    return {
+      minutes: summary.totalMinutes,
+      dueCents: summary.balanceCents,
+      hours: formatDuration(summary.totalMinutes),
+      days: attendanceText(summary, contract.schedule.kind),
+      due: formatCents(Math.max(0, summary.balanceCents)),
+    };
+  }
+  const { estimate } = item;
+  const minutes = estimate.minutesPerDay === null ? null : estimate.days * estimate.minutesPerDay;
+  const unit = contract.schedule.kind === "per_month" ? ["visita", "visitas"] : ["dia", "dias"];
+  return {
+    minutes,
+    dueCents: estimate.cents,
+    hours: minutes === null ? "—" : formatDuration(minutes),
+    days:
+      contract.schedule.kind === "on_demand"
+        ? "—"
+        : `${estimate.days} ${estimate.days === 1 ? unit[0] : unit[1]}`,
+    due: estimate.cents === null ? "—" : formatCents(estimate.cents),
+  };
 }

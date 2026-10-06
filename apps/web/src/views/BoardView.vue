@@ -9,12 +9,13 @@ import PageHeader from "@/components/layout/PageHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import Icon from "@/components/ui/Icon.vue";
-import Segmented from "@/components/ui/Segmented.vue";
+import ChoiceField from "@/components/ui/ChoiceField.vue";
+import Select from "@/components/ui/Select.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import { useMonthQuery } from "@/composables/contractContext.ts";
 import { useMonthBoard } from "@/composables/monthBoard.ts";
 import { useTableState } from "@/composables/tableState.ts";
-import { BOARD_STATUS_FILTERS, matchesBoardStatus, type BoardRow } from "@/lib/board.ts";
+import { BOARD_STATUS_FILTERS, matchesBoardStatus, rowTotals, type BoardRow } from "@/lib/board.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
 import { nextSort, searchRows, sortRows, type Column, type SortDir } from "@/lib/table.ts";
 import { useAuthStore } from "@/stores/auth.ts";
@@ -26,6 +27,8 @@ const { month, currentMonth, setMonth } = useMonthQuery();
 const monthModel = computed({ get: () => month.value, set: setMonth });
 
 const board = useMonthBoard(() => month.value);
+/** Future months have nothing recorded: the board shows what is expected and the estimate. */
+const projected = computed(() => (board.data.value?.month ?? month.value) > currentMonth);
 const { state, active, clear } = useTableState({
   defaultSort: { key: "nome", dir: "asc" },
   filters: ["status"],
@@ -44,8 +47,8 @@ const columns: Column<BoardRow>[] = [
     value: (r) => OCCUPATION_LABEL[r.item.contract.occupation],
     searchable: true,
   },
-  { key: "horas", label: "Horas", value: (r) => r.item.summary.totalMinutes },
-  { key: "apagar", label: "A pagar", value: (r) => r.item.summary.balanceCents },
+  { key: "horas", label: "Horas", value: (r) => rowTotals(r.item, projected.value).minutes },
+  { key: "apagar", label: "A pagar", value: (r) => rowTotals(r.item, projected.value).dueCents },
 ];
 
 const statusModel = computed({
@@ -71,6 +74,12 @@ const sortModel = computed({
     (state.sort = v.startsWith("-") ? { key: v.slice(1), dir: "desc" } : { key: v, dir: "asc" }),
 });
 
+const SORT_OPTIONS = [
+  { value: "nome", label: "Ordem: nome" },
+  { value: "-horas", label: "Ordem: mais horas" },
+  { value: "-apagar", label: "Ordem: mais a pagar" },
+];
+
 const count = computed(() =>
   shown.value.length === 1 ? "1 pessoa" : `${shown.value.length} pessoas`,
 );
@@ -79,7 +88,7 @@ const count = computed(() =>
 <template>
   <ContractPickerView v-if="!auth.isEmployer" tab="card" />
   <div v-else class="bv">
-    <PageHeader title="cartão" subtitle="O mês de todo mundo, dia a dia.">
+    <PageHeader title="Cartão" subtitle="O mês de todo mundo, dia a dia.">
       <template #actions>
         <Button to="/pagamentos/novo" icon="coins">registrar pagamento</Button>
       </template>
@@ -103,20 +112,20 @@ const count = computed(() =>
           spellcheck="false"
         />
       </label>
-      <Segmented
+      <ChoiceField
         v-model="statusModel"
         :options="BOARD_STATUS_FILTERS"
         label="Mostrar"
         class="bv__status"
       />
-      <label v-if="!wide" class="bv__sort">
-        <span class="label">ordem</span>
-        <select v-model="sortModel" class="input">
-          <option value="nome">nome</option>
-          <option value="-horas">mais horas</option>
-          <option value="-apagar">mais a pagar</option>
-        </select>
-      </label>
+      <Select
+        v-if="!wide"
+        :model-value="sortModel"
+        :options="SORT_OPTIONS"
+        label="Ordem"
+        class="bv__sort"
+        @update:model-value="(v) => v && (sortModel = v)"
+      />
       <p class="bv__count" aria-live="polite">
         {{ board.loading.value && !board.data.value ? "carregando…" : count }}
       </p>
@@ -150,12 +159,18 @@ const count = computed(() =>
     </div>
 
     <template v-else-if="board.data.value">
+      <p v-if="projected" class="bv__projection" role="note">
+        <span class="bv__tag">previsto</span>
+        Este mês ainda não começou. O quadro mostra os dias combinados, e as horas e os valores são
+        uma estimativa.
+      </p>
       <BoardGrid
         v-if="wide"
         :rows="shown"
         :month="board.data.value.month"
         :today="board.data.value.today"
         :current-month="currentMonth"
+        :projected="projected"
         :sort="state.sort"
         :aria-busy="board.loading.value || undefined"
         @sort="sortBy"
@@ -166,6 +181,7 @@ const count = computed(() =>
         :month="board.data.value.month"
         :today="board.data.value.today"
         :current-month="currentMonth"
+        :projected="projected"
       />
       <p v-if="wide" class="bv__hint">
         Passe o mouse ou use as setas num dia para ver as horas. Enter abre o cartão da pessoa.
@@ -232,8 +248,8 @@ const count = computed(() =>
 
 .bv__search-input:focus {
   outline: none;
-  border-color: var(--blue);
-  box-shadow: 0 0 0 3px var(--blue-wash);
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-wash);
 }
 
 .bv__status {
@@ -267,6 +283,27 @@ const count = computed(() =>
   border-radius: var(--r-2);
   color: var(--ink-2);
   text-align: center;
+}
+
+.bv__projection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border: 1px dashed var(--ink-3);
+  border-radius: var(--r-2);
+  font-size: var(--t-14);
+  color: var(--ink-2);
+}
+
+.bv__tag {
+  padding: 2px 8px;
+  border: 1px dashed var(--ink-3);
+  border-radius: 999px;
+  font-size: var(--t-12);
+  font-weight: 600;
+  color: var(--ink-2);
 }
 
 .bv__hint {

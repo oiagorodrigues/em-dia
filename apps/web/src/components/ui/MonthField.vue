@@ -99,12 +99,12 @@ function onKey(e: KeyboardEvent): void {
 }
 
 .mf:focus-within {
-  border-color: var(--blue);
-  box-shadow: inset 0 -1px 0 var(--blue);
+  border-color: var(--brand);
+  box-shadow: inset 0 -1px 0 var(--brand);
 }
 
 .mf.is-invalid {
-  border-color: var(--red);
+  border-color: var(--coral);
 }
 
 .mf__btn {
@@ -127,7 +127,7 @@ function onKey(e: KeyboardEvent): void {
   justify-content: center;
   align-items: baseline;
   gap: var(--s-2);
-  color: var(--blue);
+  color: var(--ink);
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;

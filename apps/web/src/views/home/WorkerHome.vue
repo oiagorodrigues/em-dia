@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import {
+  DEFAULT_TIMEZONE,
   describeSchedule,
   formatCents,
   formatDuration,
   monthName,
+  nowInZone,
   parseYearMonth,
+  shiftMonth,
+  toYearMonth,
   type DashboardItem,
   type Payment,
+  type YearMonth,
 } from "@emdia/shared";
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { useRoute } from "vue-router";
@@ -19,8 +24,9 @@ import ReceiptViewer from "@/components/feature/ReceiptViewer.vue";
 import TodayRow from "@/components/feature/TodayRow.vue";
 import Button from "@/components/ui/Button.vue";
 import KpiCard from "@/components/ui/KpiCard.vue";
+import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
-import Segmented from "@/components/ui/Segmented.vue";
+import ChoiceField from "@/components/ui/ChoiceField.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import { useResource } from "@/composables/resource.ts";
 import { clockStateOf } from "@/lib/entry.ts";
@@ -30,6 +36,7 @@ import { greeting } from "@/lib/greeting.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { isWritable } from "@/lib/contract.ts";
+import { isFutureMonth, projectedMinutes } from "@/lib/team.ts";
 
 const auth = useAuthStore();
 const toast = useToastStore();
@@ -62,8 +69,8 @@ const clockState = computed(() =>
   item.value ? clockStateOf(item.value.today, isWritable(item.value.contract)) : "off",
 );
 const ledgerLines = computed<LedgerLine[]>(() => {
-  if (!item.value) return [];
-  const { summary, contract } = item.value;
+  if (!viewItem.value) return [];
+  const { summary, contract } = viewItem.value;
   return [
     {
       label: attendanceLabel(contract.schedule.kind),
@@ -91,7 +98,29 @@ const ledgerLines = computed<LedgerLine[]>(() => {
     },
   ];
 });
-const month = computed(() => (data.value ? monthName(parseYearMonth(data.value.month).month) : ""));
+/*
+ * The clock and today's row always use the current month; the right column can browse
+ * other months. Past months show what happened, future months only the estimate.
+ */
+const today = nowInZone(DEFAULT_TIMEZONE).date;
+const currentMonth = toYearMonth(today);
+const viewMonth = ref<YearMonth>(currentMonth);
+const future = computed(() => isFutureMonth(viewMonth.value, today));
+const other = useResource(viewMonth, (m) =>
+  m === currentMonth ? Promise.resolve(null) : dashboardApi.get(m),
+);
+const viewItem = computed<DashboardItem | null>(() => {
+  if (viewMonth.value === currentMonth) return item.value;
+  return other.data.value?.items.find((i) => i.contract.id === selectedId.value) ?? null;
+});
+const month = computed(() => monthName(parseYearMonth(viewMonth.value).month));
+const minMonth = computed(() =>
+  item.value ? toYearMonth(item.value.contract.startedOn) : undefined,
+);
+const projectedHours = computed(() => {
+  const m = viewItem.value ? projectedMinutes(viewItem.value) : null;
+  return m === null ? "—" : formatDuration(m);
+});
 
 const clocking = ref(false);
 const freshDate = ref<string | null>(null);
@@ -191,9 +220,9 @@ const stopShortcut = watch(
       </template>
     </EmptyState>
 
-    <div v-else-if="data && item" class="wh__grid">
-      <div class="wh__left">
-        <Segmented
+    <div v-else-if="data && item" class="grid grid-cols-12 gap-6 lg:gap-8">
+      <div class="col-span-12 grid content-start gap-6 lg:sticky lg:top-6 lg:col-span-5">
+        <ChoiceField
           v-if="options.length > 1"
           v-model="selectedId"
           :options="options"
@@ -214,50 +243,95 @@ const stopShortcut = watch(
         <InstallHint />
       </div>
 
-      <div class="wh__right">
-        <section class="wh__kpis" aria-label="Resumo do mês">
+      <div class="col-span-12 grid content-start gap-6 lg:col-span-7">
+        <MonthSwitcher v-model="viewMonth" :min="minMonth" :max="shiftMonth(currentMonth, 12)" />
+
+        <p v-if="other.loading.value && !viewItem" class="wh__pending">Carregando…</p>
+
+        <section
+          v-else-if="viewItem && future"
+          class="kpi-grid"
+          :aria-label="`Previsão de ${month}`"
+        >
           <KpiCard
-            tint="mint"
-            icon="clock"
-            :label="`horas em ${month}`"
-            :value="formatDuration(item.summary.totalMinutes)"
-          />
-          <KpiCard
-            tint="peach"
+            projected
+            tone="amber"
             icon="coins"
-            label="a receber"
-            :value="formatCents(Math.max(0, item.summary.balanceCents))"
-            :caption="`de ${formatCents(item.summary.dueCents)} no mês`"
+            label="A receber"
+            :value="
+              viewItem.estimate.cents === null
+                ? 'sem estimativa'
+                : formatCents(viewItem.estimate.cents)
+            "
+            caption="se você vier em todos os dias combinados"
           />
           <KpiCard
-            tint="sky"
+            projected
+            tone="brand"
             icon="calendar"
-            :label="item.contract.schedule.kind === 'per_month' ? 'visitas' : 'dias'"
-            :value="attendanceText(item.summary, item.contract.schedule.kind)"
-            :caption="item.summary.absences ? `${item.summary.absences} falta(s)` : 'sem faltas'"
+            :label="viewItem.contract.schedule.kind === 'per_month' ? 'Visitas' : 'Dias'"
+            :value="String(viewItem.estimate.days)"
+            :caption="describeSchedule(viewItem.contract.schedule)"
           />
+          <KpiCard projected tone="brand" icon="clock" label="Horas" :value="projectedHours" />
         </section>
 
-        <section class="wh__month sheet" aria-labelledby="wh-month">
-          <div class="wh__monthhead">
-            <h2 id="wh-month" class="section-title">conta de {{ month }}</h2>
-            <Button :to="`/equipe/${item.contract.id}`" variant="ghost" icon-right="arrow-right"
-              >ver cartão</Button
-            >
-          </div>
-          <Ledger :lines="ledgerLines" />
-          <p v-if="item.summary.pendingConfirmation > 0" class="wh__pending">
-            {{ item.summary.pendingConfirmation }}
-            {{
-              item.summary.pendingConfirmation === 1
-                ? "dia aguardando confirmação"
-                : "dias aguardando confirmação"
-            }}
-          </p>
-        </section>
+        <template v-else-if="viewItem">
+          <section class="kpi-grid" :aria-label="`Resumo de ${month}`">
+            <KpiCard
+              tone="brand"
+              icon="clock"
+              :label="`Horas em ${month}`"
+              :value="formatDuration(viewItem.summary.totalMinutes)"
+              :amount="viewItem.summary.totalMinutes"
+              :format="formatDuration"
+            />
+            <KpiCard
+              :tone="viewItem.summary.balanceCents > 0 ? 'amber' : 'brand'"
+              icon="coins"
+              label="A receber"
+              :value="formatCents(Math.max(0, viewItem.summary.balanceCents))"
+              :amount="Math.max(0, viewItem.summary.balanceCents)"
+              :format="formatCents"
+              :caption="`de ${formatCents(viewItem.summary.dueCents)} no mês`"
+            />
+            <KpiCard
+              :tone="viewItem.summary.absences ? 'coral' : 'brand'"
+              icon="calendar"
+              :label="viewItem.contract.schedule.kind === 'per_month' ? 'Visitas' : 'Dias'"
+              :value="attendanceText(viewItem.summary, viewItem.contract.schedule.kind)"
+              :caption="
+                viewItem.summary.absences
+                  ? `${viewItem.summary.absences} ${viewItem.summary.absences === 1 ? 'falta' : 'faltas'}`
+                  : 'sem faltas'
+              "
+            />
+          </section>
+
+          <section class="wh__month sheet" aria-labelledby="wh-month">
+            <div class="wh__monthhead">
+              <h2 id="wh-month" class="section-title">Conta de {{ month }}</h2>
+              <Button
+                :to="{ path: `/equipe/${viewItem.contract.id}`, query: { mes: viewMonth } }"
+                variant="ghost"
+                icon="eye"
+                >Ver cartão</Button
+              >
+            </div>
+            <Ledger :lines="ledgerLines" />
+            <p v-if="viewItem.summary.pendingConfirmation > 0" class="wh__pending">
+              {{ viewItem.summary.pendingConfirmation }}
+              {{
+                viewItem.summary.pendingConfirmation === 1
+                  ? "dia aguardando confirmação"
+                  : "dias aguardando confirmação"
+              }}
+            </p>
+          </section>
+        </template>
 
         <section v-if="item.lastPayment" class="wh__pay" aria-labelledby="wh-pay">
-          <h2 id="wh-pay" class="section-title">último pagamento</h2>
+          <h2 id="wh-pay" class="section-title">Último pagamento</h2>
           <ReceiptStub
             :payment="item.lastPayment"
             can-acknowledge
@@ -278,15 +352,6 @@ const stopShortcut = watch(
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-6);
-}
-
-.wh__grid,
-.wh__left,
-.wh__right {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-6);
-  align-content: start;
 }
 
 .wh__clock {
@@ -317,16 +382,6 @@ const stopShortcut = watch(
   text-align: center;
 }
 
-.wh__kpis {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s-3);
-}
-
-.wh__kpis > :first-child {
-  grid-column: 1 / -1;
-}
-
 .wh__month {
   display: grid;
   gap: var(--s-4);
@@ -348,22 +403,5 @@ const stopShortcut = watch(
 .wh__pay {
   display: grid;
   gap: var(--s-4);
-}
-
-@media (min-width: 960px) {
-  .wh__grid {
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
-    gap: var(--s-7);
-  }
-  .wh__kpis {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .wh__kpis > :first-child {
-    grid-column: auto;
-  }
-  .wh__left {
-    position: sticky;
-    top: var(--s-6);
-  }
 }
 </style>
