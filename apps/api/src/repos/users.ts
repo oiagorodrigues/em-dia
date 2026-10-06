@@ -1,5 +1,8 @@
 import type { PublicUser, Role } from "@emdia/shared";
+import { eq, sql } from "drizzle-orm";
 import type { Executor } from "../db/index.ts";
+import { users } from "../db/schema.ts";
+import { date, iso, isoOrNull } from "./convert.ts";
 
 export interface UserRecord extends PublicUser {
   passwordHash: string;
@@ -7,19 +10,7 @@ export interface UserRecord extends PublicUser {
   lockedUntil: string | null;
 }
 
-interface Row {
-  id: string;
-  email: string;
-  name: string;
-  role: Role;
-  phone: string | null;
-  pix_key: string | null;
-  password_hash: string;
-  token_version: number;
-  failed_logins: number;
-  locked_until: string | null;
-  created_at: string;
-}
+type Row = typeof users.$inferSelect;
 
 function toRecord(r: Row): UserRecord {
   return {
@@ -28,11 +19,11 @@ function toRecord(r: Row): UserRecord {
     name: r.name,
     role: r.role,
     phone: r.phone,
-    pixKey: r.pix_key,
-    createdAt: r.created_at,
-    passwordHash: r.password_hash,
-    tokenVersion: r.token_version,
-    lockedUntil: r.locked_until,
+    pixKey: r.pixKey,
+    createdAt: iso(r.createdAt),
+    passwordHash: r.passwordHash,
+    tokenVersion: r.tokenVersion,
+    lockedUntil: isoOrNull(r.lockedUntil),
   };
 }
 
@@ -48,15 +39,25 @@ export function toPublicUser(u: UserRecord): PublicUser {
   };
 }
 
+/** Postgres unique_violation on users.email, whichever driver raised it (Drizzle wraps the cause). */
+export function isDuplicateEmail(err: unknown): boolean {
+  for (let e: unknown = err; e instanceof Error; e = e.cause) {
+    const pg = e as Error & { code?: unknown; constraint?: unknown };
+    const where = typeof pg.constraint === "string" ? pg.constraint : pg.message;
+    if (pg.code === "23505" && where.includes("users_email")) return true;
+  }
+  return false;
+}
+
 export function usersRepo(db: Executor) {
   return {
     async findById(id: string): Promise<UserRecord | undefined> {
-      const r = await db.get<Row>("SELECT * FROM users WHERE id = ?", id);
+      const [r] = await db.select().from(users).where(eq(users.id, id));
       return r && toRecord(r);
     },
 
     async findByEmail(email: string): Promise<UserRecord | undefined> {
-      const r = await db.get<Row>("SELECT * FROM users WHERE email = ?", email);
+      const [r] = await db.select().from(users).where(eq(users.email, email));
       return r && toRecord(r);
     },
 
@@ -68,42 +69,34 @@ export function usersRepo(db: Executor) {
       passwordHash: string;
       createdAt: string;
     }): Promise<void> {
-      await db.run(
-        "INSERT INTO users (id, email, name, role, password_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        u.id,
-        u.email,
-        u.name,
-        u.role,
-        u.passwordHash,
-        u.createdAt,
-      );
+      await db.insert(users).values({ ...u, createdAt: date(u.createdAt) });
     },
 
     async updateProfile(
       id: string,
       p: { name: string; phone: string | null; pixKey: string | null },
     ): Promise<void> {
-      await db.run(
-        "UPDATE users SET name = ?, phone = ?, pix_key = ? WHERE id = ?",
-        p.name,
-        p.phone,
-        p.pixKey,
-        id,
-      );
+      await db.update(users).set(p).where(eq(users.id, id));
     },
 
     /** Also bumps the token version (kills access tokens) and clears any lockout. */
     async setPassword(id: string, passwordHash: string): Promise<void> {
-      await db.run(
-        `UPDATE users SET password_hash = ?, token_version = token_version + 1, failed_logins = 0, locked_until = NULL
-         WHERE id = ?`,
-        passwordHash,
-        id,
-      );
+      await db
+        .update(users)
+        .set({
+          passwordHash,
+          tokenVersion: sql`${users.tokenVersion} + 1`,
+          failedLogins: 0,
+          lockedUntil: null,
+        })
+        .where(eq(users.id, id));
     },
 
     async bumpTokenVersion(id: string): Promise<void> {
-      await db.run("UPDATE users SET token_version = token_version + 1 WHERE id = ?", id);
+      await db
+        .update(users)
+        .set({ tokenVersion: sql`${users.tokenVersion} + 1` })
+        .where(eq(users.id, id));
     },
 
     /** Counts a failed login atomically; returns the lock expiry when this failure reached the threshold. */
@@ -112,32 +105,38 @@ export function usersRepo(db: Executor) {
       threshold: number,
       lockUntil: string,
     ): Promise<string | null> {
-      const row = await db.get<{ locked_until: string | null }>(
-        `UPDATE users SET
-           failed_logins = CASE WHEN failed_logins + 1 >= ? THEN 0 ELSE failed_logins + 1 END,
-           locked_until = CASE WHEN failed_logins + 1 >= ? THEN ? ELSE locked_until END
-         WHERE id = ? RETURNING locked_until`,
-        threshold,
-        threshold,
-        lockUntil,
-        id,
-      );
-      return row?.locked_until === lockUntil ? lockUntil : null;
+      const reached = sql`${users.failedLogins} + 1 >= ${threshold}`;
+      const [row] = await db
+        .update(users)
+        .set({
+          failedLogins: sql`CASE WHEN ${reached} THEN 0 ELSE ${users.failedLogins} + 1 END`,
+          lockedUntil: sql`CASE WHEN ${reached} THEN ${lockUntil}::timestamptz ELSE ${users.lockedUntil} END`,
+        })
+        .where(eq(users.id, id))
+        .returning({ lockedUntil: users.lockedUntil });
+      const locked = row ? isoOrNull(row.lockedUntil) : null;
+      return locked === lockUntil ? lockUntil : null;
     },
 
     async clearLoginFailures(id: string): Promise<void> {
-      await db.run("UPDATE users SET failed_logins = 0, locked_until = NULL WHERE id = ?", id);
+      await db.update(users).set({ failedLogins: 0, lockedUntil: null }).where(eq(users.id, id));
     },
 
     /** Keeps the row (history points at it) but removes everything that identifies the person. */
     async anonymize(id: string, placeholderEmail: string): Promise<void> {
-      await db.run(
-        `UPDATE users SET email = ?, name = 'Conta excluída', phone = NULL, pix_key = NULL, password_hash = '!',
-           token_version = token_version + 1, failed_logins = 0, locked_until = NULL
-         WHERE id = ?`,
-        placeholderEmail,
-        id,
-      );
+      await db
+        .update(users)
+        .set({
+          email: placeholderEmail,
+          name: "Conta excluída",
+          phone: null,
+          pixKey: null,
+          passwordHash: "!",
+          tokenVersion: sql`${users.tokenVersion} + 1`,
+          failedLogins: 0,
+          lockedUntil: null,
+        })
+        .where(eq(users.id, id));
     },
   };
 }

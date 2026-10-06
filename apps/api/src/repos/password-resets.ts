@@ -1,4 +1,7 @@
+import { and, eq, gt, isNull } from "drizzle-orm";
 import type { Executor } from "../db/index.ts";
+import { passwordResets } from "../db/schema.ts";
+import { date } from "./convert.ts";
 
 export function passwordResetsRepo(db: Executor) {
   return {
@@ -9,37 +12,37 @@ export function passwordResetsRepo(db: Executor) {
       expiresAt: string;
       createdAt: string;
     }): Promise<void> {
-      await db.run("DELETE FROM password_resets WHERE user_id = ?", r.userId);
-      await db.run(
-        "INSERT INTO password_resets (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
-        r.tokenHash,
-        r.userId,
-        r.expiresAt,
-        r.createdAt,
-      );
+      await db.delete(passwordResets).where(eq(passwordResets.userId, r.userId));
+      await db
+        .insert(passwordResets)
+        .values({ ...r, expiresAt: date(r.expiresAt), createdAt: date(r.createdAt) });
     },
 
     async findValidUserId(tokenHash: string, now: string): Promise<string | undefined> {
-      const row = await db.get<{ user_id: string }>(
-        "SELECT user_id FROM password_resets WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?",
-        tokenHash,
-        now,
-      );
-      return row?.user_id;
+      const [row] = await db
+        .select({ userId: passwordResets.userId })
+        .from(passwordResets)
+        .where(
+          and(
+            eq(passwordResets.tokenHash, tokenHash),
+            isNull(passwordResets.usedAt),
+            gt(passwordResets.expiresAt, date(now)),
+          ),
+        );
+      return row?.userId;
     },
 
     async deleteForUser(userId: string): Promise<void> {
-      await db.run("DELETE FROM password_resets WHERE user_id = ?", userId);
+      await db.delete(passwordResets).where(eq(passwordResets.userId, userId));
     },
 
     async markUsed(tokenHash: string, at: string): Promise<boolean> {
-      return (
-        (await db.run(
-          "UPDATE password_resets SET used_at = ? WHERE token_hash = ? AND used_at IS NULL",
-          at,
-          tokenHash,
-        )) > 0
-      );
+      const rows = await db
+        .update(passwordResets)
+        .set({ usedAt: date(at) })
+        .where(and(eq(passwordResets.tokenHash, tokenHash), isNull(passwordResets.usedAt)))
+        .returning({ tokenHash: passwordResets.tokenHash });
+      return rows.length > 0;
     },
   };
 }

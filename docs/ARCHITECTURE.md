@@ -9,10 +9,10 @@
  |  components/{ui,feature}| ---------> | runtime.ts (wiring, boot checks)     |
  |  composables            |  Bearer    |  http  (routes, middleware)          |
  |  stores (Pinia)         |  + cookie  |  services (business rules)           |
- |  api (fetch client)     | <--------- |  repos (SQL)                         |
- | service worker (cache)  |            |  db (driver: node:sqlite or libSQL)  |
+ |  api (fetch client)     | <--------- |  repos (Drizzle queries)             |
+ | service worker (cache)  |            |  db (Drizzle: PGlite|node-postgres)  |
  +-------------------------+            +-------------------+------------------+
-            ^                     SQLite file + uploads dir  |  or  Turso + Vercel Blob
+            ^             PGlite / Postgres + uploads dir  |  or  Neon + Vercel Blob
             |  both import types, schemas, RBAC, pay math
             +------------------ @emdia/shared ------------------+
 ```
@@ -33,24 +33,24 @@ Enforced by `tools/harness/tests/architecture.test.ts`.
 
 Source is under `apps/api/src`:
 
-| Dir          | Responsibility                                                                                                   |
-| ------------ | ---------------------------------------------------------------------------------------------------------------- |
-| `config`     | Env parsing and validation, one frozen config object                                                             |
-| `db`         | Async `Database` driver (`node:sqlite` for files, libSQL for Turso), migrations                                  |
-| `repos`      | SQL only. One repo per table group. Returns plain objects                                                        |
-| `services`   | Business rules, RBAC checks, transactions, audit log writes                                                      |
-| `http`       | Express routers, middleware, request parsing, error mapping                                                      |
-| `lib`        | Pure helpers: ids, hashing, logger, mailer, errors, csv                                                          |
-| `runtime.ts` | Opens the database, migrates a local file (only reports pending migrations on Turso), wires services and the app |
-| `server.ts`  | Long-running entry: `startRuntime`, listen, graceful shutdown                                                    |
-| `vercel.ts`  | Vercel Function entry: one runtime per instance, restores the rewritten URL ([deploy](DEPLOY-VERCEL.md))         |
+| Dir          | Responsibility                                                                                                         |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `config`     | Env parsing and validation, one frozen config object                                                                   |
+| `db`         | Drizzle schema (`schema.ts`), drivers (PGlite, node-postgres), migrator under an advisory lock                         |
+| `repos`      | SQL only. One repo per table group. Returns plain objects                                                              |
+| `services`   | Business rules, RBAC checks, transactions, audit log writes                                                            |
+| `http`       | Express routers, middleware, request parsing, error mapping                                                            |
+| `lib`        | Pure helpers: ids, hashing, logger, mailer, errors, csv                                                                |
+| `runtime.ts` | Opens the database, migrates embedded PGlite (only reports pending migrations on Postgres), wires services and the app |
+| `server.ts`  | Long-running entry: `startRuntime`, listen, graceful shutdown                                                          |
+| `vercel.ts`  | Vercel Function entry: one runtime per instance, restores the rewritten URL ([deploy](DEPLOY-VERCEL.md))               |
 
 Rules:
 
 - Imports flow `http -> services -> repos -> db`. A layer may skip down (http may call repos for trivial reads) but never up.
 - `config` and `lib` may be imported by any layer.
 - Entrypoints are `server.ts`, `runtime.ts`, `vercel.ts` and `scripts/`. They are composition roots and may import any layer, including `http`. No layer imports an entrypoint, and nothing else imports `http`. The harness enforces both.
-- Every database call is async. A write that spans statements runs in `repos.tx(async (r) => …)` and uses only the transaction's repositories `r`; the same SQL runs on both drivers (SQLite dialect). The app never relies on `ON DELETE` cascades at runtime: in libSQL foreign-key enforcement is a per-connection pragma, off by default, and HTTP requests may each get their own connection.
+- Every database call is async and goes through the Drizzle query builder in `repos`. A write that spans statements runs in `repos.tx(async (r) => …)` and uses only the transaction's repositories `r`. Repos return the `@emdia/shared` domain types exactly (`tests/repo-types.test.ts` proves it at compile time). See [Drizzle/Postgres notes](references/drizzle-postgres.md).
 - Receipts go through the `FileStore` interface: disk (`UPLOAD_DIR`) or a private Vercel Blob store. Both are streamed by the API after the auth check; storage URLs never reach the browser.
 - `repos`, `services`, `db` and `config` never import `express` or other HTTP libraries. Services take plain values and throw `AppError`; `http` maps errors to the `ApiErrorBody` shape.
 - Every route parses params, query and body with a schema from `@emdia/shared` before calling a service.
