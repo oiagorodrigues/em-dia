@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { RECEIPT_MAX_BYTES } from "@emdia/shared";
 import { z } from "zod";
 import pkg from "../../package.json" with { type: "json" };
 
@@ -9,10 +10,18 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_PATH: z.string().min(1).default("./data/emdia.db"),
+  DATABASE_URL: z.string().trim().optional(),
+  DATABASE_AUTH_TOKEN: z.string().trim().optional(),
+  BLOB_READ_WRITE_TOKEN: z.string().trim().optional(),
+  BLOB_STORE_ID: z.string().trim().optional(),
+  UPSTASH_REDIS_REST_URL: z.string().trim().optional(),
+  UPSTASH_REDIS_REST_TOKEN: z.string().trim().optional(),
+  VERCEL: z.string().optional(),
+  VERCEL_PROJECT_PRODUCTION_URL: z.string().trim().optional(),
   UPLOAD_DIR: z.string().min(1).default("./data/uploads"),
   JWT_SECRET: z.string().optional(),
-  WEB_ORIGIN: z.url().default("http://localhost:5173"),
-  TRUST_PROXY: z.string().default("false"),
+  WEB_ORIGIN: z.url().optional(),
+  TRUST_PROXY: z.string().optional(),
   LOG_LEVEL: z.enum(LOG_LEVELS).default("info"),
   RATE_LIMIT_GLOBAL: z.coerce.number().int().min(1).default(300),
   RATE_LIMIT_AUTH: z.coerce.number().int().min(1).default(10),
@@ -26,12 +35,24 @@ const envSchema = z.object({
   REFRESH_REUSE_GRACE_MS: z.coerce.number().int().min(0).max(300_000).default(20_000),
 });
 
+/** Leaves room for the multipart envelope under Vercel's 4.5 MB request limit. */
+const VERCEL_RECEIPT_MAX_BYTES = 4 * 1024 * 1024;
+
 export interface Config {
   env: "development" | "test" | "production";
   isProduction: boolean;
   version: string;
   port: number;
-  databasePath: string;
+  /** A file path / `:memory:` (node:sqlite) or `libsql://…` (Turso). */
+  databaseUrl: string;
+  databaseAuthToken: string | null;
+  /** Receipts go to a private Vercel Blob store when a token or connected store is present. */
+  blob: { token: string | null } | null;
+  upstash: { url: string; token: string } | null;
+  /** Running as a Vercel Function: ephemeral disk, one process per instance. */
+  onVercel: boolean;
+  /** Vercel rejects function bodies over 4.5 MB before our code runs, so the limit drops there. */
+  receiptMaxBytes: number;
   uploadDir: string;
   jwtSecret: string;
   /** True when the secret was generated at boot because none was configured. */
@@ -55,6 +76,20 @@ function parseTrustProxy(value: string): boolean | number | string {
   return value;
 }
 
+/** Just the database settings, for scripts that must not require the rest (the build's migrate step). */
+export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): {
+  url: string;
+  authToken: string | null;
+  explicit: boolean;
+} {
+  const url = env.DATABASE_URL?.trim();
+  return {
+    url: url || env.DATABASE_PATH?.trim() || "./data/emdia.db",
+    authToken: env.DATABASE_AUTH_TOKEN?.trim() || null,
+    explicit: Boolean(url),
+  };
+}
+
 /** Throws with every invalid variable listed; callers should let it crash the process. */
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = envSchema.safeParse(env);
@@ -62,7 +97,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`Invalid environment:\n${z.prettifyError(parsed.error)}`);
   }
   const e = parsed.data;
-  const isProduction = e.NODE_ENV === "production";
+  const onVercel = e.VERCEL === "1";
+  // Every Vercel deployment, previews included, is public: never fall back to dev behaviour
+  // (dev outbox with reset links, non-Secure cookies) because NODE_ENV was left unset.
+  const runtimeEnv = onVercel ? "production" : e.NODE_ENV;
+  const isProduction = runtimeEnv === "production";
   const secret = e.JWT_SECRET?.trim() || undefined;
 
   if (secret !== undefined && secret.length < 32) {
@@ -72,17 +111,47 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error("Invalid environment: JWT_SECRET is required in production");
   }
 
+  const databaseUrl = e.DATABASE_URL || e.DATABASE_PATH;
+  const blob =
+    e.BLOB_READ_WRITE_TOKEN || e.BLOB_STORE_ID ? { token: e.BLOB_READ_WRITE_TOKEN || null } : null;
+  // The function disk is ephemeral and per instance: a local database or upload dir would silently lose data.
+  if (onVercel && !/^(libsql|https?|wss?):\/\//.test(databaseUrl)) {
+    throw new Error("Invalid environment: on Vercel DATABASE_URL must be a libsql:// (Turso) URL");
+  }
+  if (onVercel && !blob) {
+    throw new Error("Invalid environment: on Vercel connect a Blob store (BLOB_READ_WRITE_TOKEN)");
+  }
+  if (Boolean(e.UPSTASH_REDIS_REST_URL) !== Boolean(e.UPSTASH_REDIS_REST_TOKEN)) {
+    throw new Error(
+      "Invalid environment: set both UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN",
+    );
+  }
+  const webOrigin =
+    e.WEB_ORIGIN ??
+    (onVercel && e.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${e.VERCEL_PROJECT_PRODUCTION_URL}`
+      : "http://localhost:5173");
+
   return {
-    env: e.NODE_ENV,
+    env: runtimeEnv,
     isProduction,
     version: pkg.version,
     port: e.PORT,
-    databasePath: e.DATABASE_PATH,
+    databaseUrl,
+    databaseAuthToken: e.DATABASE_AUTH_TOKEN || null,
+    blob,
+    upstash:
+      e.UPSTASH_REDIS_REST_URL && e.UPSTASH_REDIS_REST_TOKEN
+        ? { url: e.UPSTASH_REDIS_REST_URL, token: e.UPSTASH_REDIS_REST_TOKEN }
+        : null,
+    onVercel,
+    receiptMaxBytes: onVercel ? VERCEL_RECEIPT_MAX_BYTES : RECEIPT_MAX_BYTES,
     uploadDir: e.UPLOAD_DIR,
     jwtSecret: secret ?? randomBytes(48).toString("base64url"),
     jwtSecretEphemeral: secret === undefined,
-    webOrigin: new URL(e.WEB_ORIGIN).origin,
-    trustProxy: parseTrustProxy(e.TRUST_PROXY),
+    webOrigin: new URL(webOrigin).origin,
+    // Vercel's edge is the single proxy in front of every function.
+    trustProxy: parseTrustProxy(e.TRUST_PROXY ?? (onVercel ? "1" : "false")),
     logLevel: e.LOG_LEVEL,
     rateLimit: { global: e.RATE_LIMIT_GLOBAL, auth: e.RATE_LIMIT_AUTH },
     refreshReuseGraceMs: e.REFRESH_REUSE_GRACE_MS,

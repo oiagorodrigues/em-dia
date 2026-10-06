@@ -1,11 +1,15 @@
-import { execute, queryOne, type Db } from "../db/index.ts";
+import type { Executor } from "../db/index.ts";
 
-export function invitesRepo(db: Db) {
+export function invitesRepo(db: Executor) {
   return {
     /** One live code per contract: regenerating replaces the previous one. */
-    upsert(contractId: string, codeHash: string, expiresAt: string, createdAt: string): void {
-      execute(
-        db,
+    async upsert(
+      contractId: string,
+      codeHash: string,
+      expiresAt: string,
+      createdAt: string,
+    ): Promise<void> {
+      await db.run(
         `INSERT INTO invites (contract_id, code_hash, expires_at, created_at) VALUES (?, ?, ?, ?)
          ON CONFLICT (contract_id) DO UPDATE SET code_hash = excluded.code_hash, expires_at = excluded.expires_at,
            created_at = excluded.created_at`,
@@ -16,17 +20,17 @@ export function invitesRepo(db: Db) {
       );
     },
 
-    findContractId(codeHash: string, now: string): string | undefined {
-      return queryOne<{ contract_id: string }>(
-        db,
+    async findContractId(codeHash: string, now: string): Promise<string | undefined> {
+      const row = await db.get<{ contract_id: string }>(
         "SELECT contract_id FROM invites WHERE code_hash = ? AND expires_at > ?",
         codeHash,
         now,
-      )?.contract_id;
+      );
+      return row?.contract_id;
     },
 
-    deleteForContract(contractId: string): void {
-      execute(db, "DELETE FROM invites WHERE contract_id = ?", contractId);
+    async deleteForContract(contractId: string): Promise<void> {
+      await db.run("DELETE FROM invites WHERE contract_id = ?", contractId);
     },
   };
 }

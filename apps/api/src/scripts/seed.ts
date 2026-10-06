@@ -23,8 +23,13 @@ import { hashPassword } from "../lib/crypto.ts";
 import { newId } from "../lib/ids.ts";
 import { createLogger } from "../lib/logger.ts";
 import { solidPng } from "../lib/png.ts";
-import { createFileStore } from "../lib/storage.ts";
-import { createRepos, type ContractFields, type LocatedContract } from "../repos/index.ts";
+import {
+  createRepos,
+  type ContractFields,
+  type LocatedContract,
+  type TxRepos,
+} from "../repos/index.ts";
+import { createReceiptStore } from "../services/index.ts";
 
 const PASSWORD = "emdia12345";
 const ANA = { email: "ana@emdia.dev", name: "Ana Souza" };
@@ -33,22 +38,58 @@ const MONTHS: YearMonth[] = ["2026-08", "2026-09", "2026-10"];
 
 const config = loadConfig();
 const logger = createLogger(config.logLevel === "silent" ? "silent" : "info", { script: "seed" });
-const db = openDatabase(config.databasePath);
+const db = openDatabase(config.databaseUrl, config.databaseAuthToken ?? undefined);
 const repos = createRepos(db);
-const files = createFileStore(config.uploadDir);
+const files = createReceiptStore(config);
 
+const placeholders = (n: number) => Array.from({ length: n }, () => "?").join(", ");
+
+/**
+ * Deletes children before parents explicitly: Turso does not enforce foreign
+ * keys, so cascades can't be relied on to clean up.
+ */
 async function reset(): Promise<void> {
-  const ana = repos.users.findByEmail(ANA.email);
-  if (ana) {
-    const contractIds = repos.contracts.listForEmployer(ana.id).map((l) => l.contract.id);
-    const receipts = repos.payments.listReceiptFiles(contractIds);
-    repos.tx(() => repos.households.deleteByOwner(ana.id));
-    await Promise.all(receipts.map((name) => files.remove(name)));
-  }
-  repos.tx(() => {
-    repos.users.deleteByEmail(ANA.email);
-    repos.users.deleteByEmail(MARIA.email);
+  const userIds = (
+    await db.all<{ id: string }>(
+      "SELECT id FROM users WHERE email IN (?, ?)",
+      ANA.email,
+      MARIA.email,
+    )
+  ).map((u) => u.id);
+  if (userIds.length === 0) return;
+  const users = placeholders(userIds.length);
+  const contractIds = (
+    await db.all<{ id: string }>(
+      `SELECT c.id FROM contracts c JOIN households h ON h.id = c.household_id WHERE h.owner_id IN (${users})`,
+      ...userIds,
+    )
+  ).map((c) => c.id);
+  const receipts = await repos.payments.listReceiptFiles(contractIds);
+
+  await db.transaction(async (tx) => {
+    if (contractIds.length > 0) {
+      const contracts = placeholders(contractIds.length);
+      for (const table of [
+        "audit_log",
+        "payments",
+        "agreements",
+        "adjustments",
+        "work_entries",
+        "invites",
+      ]) {
+        await tx.run(`DELETE FROM ${table} WHERE contract_id IN (${contracts})`, ...contractIds);
+      }
+      await tx.run(`DELETE FROM contracts WHERE id IN (${contracts})`, ...contractIds);
+    }
+    await tx.run(`UPDATE contracts SET worker_id = NULL WHERE worker_id IN (${users})`, ...userIds);
+    await tx.run(`UPDATE audit_log SET actor_id = NULL WHERE actor_id IN (${users})`, ...userIds);
+    for (const table of ["refresh_tokens", "password_resets"]) {
+      await tx.run(`DELETE FROM ${table} WHERE user_id IN (${users})`, ...userIds);
+    }
+    await tx.run(`DELETE FROM households WHERE owner_id IN (${users})`, ...userIds);
+    await tx.run(`DELETE FROM users WHERE id IN (${users})`, ...userIds);
   });
+  await Promise.all(receipts.map((name) => files.remove(name)));
 }
 
 /** Deterministic wobble so the card does not look machine-generated. */
@@ -345,14 +386,19 @@ function plannedEntries(
 }
 
 /** What is still owed for `month` after the payments already recorded. */
-function balanceFor(located: LocatedContract, month: YearMonth, today: IsoDate): number {
+async function balanceFor(
+  r: TxRepos,
+  located: LocatedContract,
+  month: YearMonth,
+  today: IsoDate,
+): Promise<number> {
   const { contract } = located;
   return computeMonthSummary({
     contract,
     month,
-    entries: repos.entries.listByMonth(contract.id, month),
-    adjustments: repos.adjustments.listByMonth(contract.id, month),
-    payments: repos.payments.listByMonth(contract.id, month),
+    entries: await r.entries.listByMonth(contract.id, month),
+    adjustments: await r.adjustments.listByMonth(contract.id, month),
+    payments: await r.payments.listByMonth(contract.id, month),
     today,
   }).balanceCents;
 }
@@ -360,7 +406,7 @@ function balanceFor(located: LocatedContract, month: YearMonth, today: IsoDate):
 async function seed(): Promise<void> {
   const [anaHash, mariaHash] = await Promise.all([hashPassword(PASSWORD), hashPassword(PASSWORD)]);
   const receiptPng = solidPng(240, 320, [35, 64, 232]);
-  const receiptFile = await files.save(receiptPng, "png");
+  const receiptFile = await files.save(receiptPng, "png", "image/png");
   const today = nowInZone(DEFAULT_TIMEZONE).date;
   const yesterday = new Date(Date.parse(`${today}T12:00:00Z`) - 86_400_000)
     .toISOString()
@@ -371,6 +417,7 @@ async function seed(): Promise<void> {
   const householdId = newId();
 
   const audit = (
+    r: TxRepos,
     at: string,
     actorId: string,
     contractId: string,
@@ -378,7 +425,7 @@ async function seed(): Promise<void> {
     entity: string,
     entityId: string,
   ) =>
-    repos.audit.insert({
+    r.audit.insert({
       id: newId(),
       actorId,
       contractId,
@@ -389,9 +436,13 @@ async function seed(): Promise<void> {
       at,
     });
 
-  function insertContract(seed: SeedContract, worker: { id: string } | null): LocatedContract {
+  async function insertContract(
+    r: TxRepos,
+    seed: SeedContract,
+    worker: { id: string } | null,
+  ): Promise<LocatedContract> {
     const id = newId();
-    repos.contracts.insert({
+    await r.contracts.insert({
       id,
       householdId,
       createdAt: seed.createdAt,
@@ -399,17 +450,26 @@ async function seed(): Promise<void> {
       contactPhone: null,
       ...seed.fields,
     });
-    audit(seed.createdAt, anaId, id, "contract.create", "contract", id);
+    await audit(r, seed.createdAt, anaId, id, "contract.create", "contract", id);
     if (worker) {
-      repos.contracts.linkWorker(id, worker.id);
-      audit(seed.createdAt.replace("T12", "T18"), worker.id, id, "contract.join", "contract", id);
+      await r.contracts.linkWorker(id, worker.id);
+      await audit(
+        r,
+        seed.createdAt.replace("T12", "T18"),
+        worker.id,
+        id,
+        "contract.join",
+        "contract",
+        id,
+      );
     }
-    const located = repos.contracts.findById(id);
+    const located = await r.contracts.findById(id);
     if (!located) throw new Error(`contract ${id} missing`);
     return located;
   }
 
-  function fillContract(
+  async function fillContract(
+    r: TxRepos,
     seed: SeedContract,
     located: LocatedContract,
     linkedWorkerId: string | null,
@@ -425,10 +485,10 @@ async function seed(): Promise<void> {
       author,
       linkedWorkerId ? anaId : null,
     )) {
-      repos.entries.save(entry);
+      await r.entries.save(entry);
     }
     if (!seed.archived && scheduledDates(located).includes(FUTURE_HOLIDAY.date)) {
-      repos.entries.save({
+      await r.entries.save({
         id: newId(),
         contractId,
         date: FUTURE_HOLIDAY.date,
@@ -446,7 +506,7 @@ async function seed(): Promise<void> {
       });
     }
     for (const a of seed.adjustments ?? []) {
-      repos.adjustments.insert({
+      await r.adjustments.insert({
         id: newId(),
         contractId,
         ...a,
@@ -458,7 +518,7 @@ async function seed(): Promise<void> {
     for (const a of seed.agreements ?? []) {
       const id = newId();
       agreementIds.set(a.key, id);
-      repos.agreements.insert({
+      await r.agreements.insert({
         id,
         contractId,
         description: a.description,
@@ -470,20 +530,28 @@ async function seed(): Promise<void> {
         createdBy: anaId,
         createdAt: a.createdAt,
       });
-      audit(a.createdAt, anaId, contractId, "agreement.create", "agreement", id);
+      await audit(r, a.createdAt, anaId, contractId, "agreement.create", "agreement", id);
       if (a.acceptedAt && linkedWorkerId) {
-        audit(a.acceptedAt, linkedWorkerId, contractId, "agreement.accept", "agreement", id);
+        await audit(
+          r,
+          a.acceptedAt,
+          linkedWorkerId,
+          contractId,
+          "agreement.accept",
+          "agreement",
+          id,
+        );
       }
     }
     for (const p of seed.payments) {
       const id = newId();
       const createdAt = `${p.paidOn}T15:00:00.000Z`;
-      repos.payments.insert({
+      await r.payments.insert({
         id,
         contractId,
         referenceMonth: p.month,
         paidOn: p.paidOn,
-        amountCents: p.amountCents ?? balanceFor(located, p.month, today),
+        amountCents: p.amountCents ?? (await balanceFor(r, located, p.month, today)),
         method: p.method,
         note: p.note ?? null,
         agreementId: p.agreement ? (agreementIds.get(p.agreement) ?? null) : null,
@@ -500,38 +568,54 @@ async function seed(): Promise<void> {
         createdBy: anaId,
         createdAt,
       });
-      audit(createdAt, anaId, contractId, "payment.create", "payment", id);
+      await audit(r, createdAt, anaId, contractId, "payment.create", "payment", id);
       if (p.acknowledgedAt && linkedWorkerId) {
-        audit(p.acknowledgedAt, linkedWorkerId, contractId, "payment.acknowledge", "payment", id);
+        await audit(
+          r,
+          p.acknowledgedAt,
+          linkedWorkerId,
+          contractId,
+          "payment.acknowledge",
+          "payment",
+          id,
+        );
       }
     }
     if (seed.archived) {
-      repos.contracts.setArchivedAt(contractId, seed.archived.at);
-      audit(seed.archived.at, anaId, contractId, "contract.archive", "contract", contractId);
+      await r.contracts.setArchivedAt(contractId, seed.archived.at);
+      await audit(
+        r,
+        seed.archived.at,
+        anaId,
+        contractId,
+        "contract.archive",
+        "contract",
+        contractId,
+      );
     }
   }
 
-  repos.tx(() => {
-    repos.users.insert({
+  await repos.tx(async (r) => {
+    await r.users.insert({
       id: anaId,
       ...ANA,
       role: "employer",
       passwordHash: anaHash,
       createdAt: "2026-07-20T12:00:00.000Z",
     });
-    repos.users.insert({
+    await r.users.insert({
       id: mariaId,
       ...MARIA,
       role: "worker",
       passwordHash: mariaHash,
       createdAt: "2026-07-28T12:00:00.000Z",
     });
-    repos.users.updateProfile(mariaId, {
+    await r.users.updateProfile(mariaId, {
       name: MARIA.name,
       phone: "(11) 98765-4321",
       pixKey: "maria@emdia.dev",
     });
-    repos.households.insert({
+    await r.households.insert({
       id: householdId,
       ownerId: anaId,
       name: "Casa da Ana",
@@ -539,21 +623,24 @@ async function seed(): Promise<void> {
       createdAt: "2026-07-20T12:00:00.000Z",
     });
 
-    fillContract(MARIA_CONTRACT, insertContract(MARIA_CONTRACT, { id: mariaId }), mariaId);
-    for (const seed of OTHER_CONTRACTS) fillContract(seed, insertContract(seed, null), null);
+    const maria = await insertContract(r, MARIA_CONTRACT, { id: mariaId });
+    await fillContract(r, MARIA_CONTRACT, maria, mariaId);
+    for (const seed of OTHER_CONTRACTS) {
+      await fillContract(r, seed, await insertContract(r, seed, null), null);
+    }
   });
 }
 
 async function main(): Promise<void> {
   const wipe = process.argv.includes("--reset");
   if (wipe) await reset();
-  else if (repos.users.findByEmail(ANA.email)) {
-    logger.info("already seeded; run with --reset to recreate", { database: config.databasePath });
+  else if (await repos.users.findByEmail(ANA.email)) {
+    logger.info("already seeded; run with --reset to recreate", { database: db.driver });
     return;
   }
   await seed();
   logger.info("seeded", {
-    database: config.databasePath,
+    database: db.driver,
     employer: ANA.email,
     worker: MARIA.email,
     loginWith: `password ${PASSWORD}`,
@@ -563,5 +650,5 @@ async function main(): Promise<void> {
 try {
   await main();
 } finally {
-  db.close();
+  await db.close();
 }

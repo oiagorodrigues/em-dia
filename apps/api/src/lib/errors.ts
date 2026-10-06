@@ -55,3 +55,11 @@ export function formError(message: string): AppError {
 export const notFound = (message = "Não encontrado") => new AppError("NOT_FOUND", message);
 export const forbidden = (message = "Você não tem permissão para isso") =>
   new AppError("FORBIDDEN", message);
+
+export function receiptTooLarge(maxBytes: number): AppError {
+  const mb = Math.round((maxBytes / (1024 * 1024)) * 10) / 10;
+  return new AppError(
+    "PAYLOAD_TOO_LARGE",
+    `O comprovante deve ter no máximo ${String(mb).replace(".", ",")} MB`,
+  );
+}

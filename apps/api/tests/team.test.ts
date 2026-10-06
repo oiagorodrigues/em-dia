@@ -8,7 +8,7 @@ let employer: TestUser;
 const as = { type: "bearer" } as const;
 
 beforeEach(async () => {
-  t = setup();
+  t = await setup();
   employer = await t.register("employer", { name: "Ana Souza" });
 });
 afterEach(() => t.cleanup());
@@ -133,19 +133,19 @@ describe("invite delivery on create", () => {
 
 describe("mail transport", () => {
   test("production without SMTP_URL reports emailSent=false", async () => {
-    const prod = setup({ NODE_ENV: "production" });
+    const prod = await setup({ NODE_ENV: "production" });
     const boss = await prod.register("employer");
     const res = await create(prod, boss, { contactEmail: "joana@exemplo.com" });
-    prod.cleanup();
+    await prod.cleanup();
     expect(res.status).toBe(201);
     expect(res.body.invite.emailSent).toBe(false);
   });
 
   test("an SMTP failure does not fail the request", async () => {
-    const broken = setup({ SMTP_URL: "smtp://127.0.0.1:1" });
+    const broken = await setup({ SMTP_URL: "smtp://127.0.0.1:1" });
     const boss = await broken.register("employer");
     const res = await create(broken, boss, { contactEmail: "joana@exemplo.com" });
-    broken.cleanup();
+    await broken.cleanup();
     expect(res.status).toBe(201);
     expect(res.body.invite.emailSent).toBe(false);
   });

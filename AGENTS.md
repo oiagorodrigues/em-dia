@@ -28,6 +28,7 @@ Toolchain is Vite+ (`vp`). No ESLint, no Prettier.
 - Web `.vue` type check: `bun run --cwd apps/web typecheck` (vue-tsc on TypeScript 6; it is part of the web build)
 - See the UI yourself: with `bun run dev` up, `node tools/e2e/scripts/screens.ts` (needs `bun run seed -- --reset`) and `node tools/e2e/scripts/flows.ts`. Read the PNGs and `report.txt`. See [e2e README](tools/e2e/README.md)
 - Production locally: `bun run build && bun run start` (API serves `apps/web/dist`); container: `Dockerfile`
+- Deploy on Vercel (Turso + private Blob, `vercel.json`, `bun run build:vercel`): [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md)
 
 ## Golden principles
 

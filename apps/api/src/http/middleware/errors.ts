@@ -1,16 +1,16 @@
 import type { ApiErrorBody } from "@emdia/shared";
 import type { ErrorRequestHandler, RequestHandler } from "express";
 import multer from "multer";
-import { AppError } from "../../lib/errors.ts";
+import { AppError, receiptTooLarge } from "../../lib/errors.ts";
 import type { Logger } from "../../lib/logger.ts";
 import { requestIdOf } from "../context.ts";
 
 /** body-parser errors carry a `type`; anything else unexpected becomes a 500. */
-function toAppError(err: unknown): AppError {
+function toAppError(err: unknown, receiptMaxBytes: number): AppError {
   if (err instanceof AppError) return err;
   if (err instanceof multer.MulterError) {
     return err.code === "LIMIT_FILE_SIZE"
-      ? new AppError("PAYLOAD_TOO_LARGE", "O comprovante deve ter no máximo 5 MB")
+      ? receiptTooLarge(receiptMaxBytes)
       : new AppError("VALIDATION", "Envio de arquivo inválido");
   }
   const type = (err as { type?: unknown } | null)?.type;
@@ -22,9 +22,9 @@ function toAppError(err: unknown): AppError {
   return new AppError("INTERNAL", "Algo deu errado do nosso lado. Tente de novo.");
 }
 
-export function errorHandler(logger: Logger): ErrorRequestHandler {
+export function errorHandler(logger: Logger, receiptMaxBytes: number): ErrorRequestHandler {
   return (err, _req, res, next) => {
-    const appError = toAppError(err);
+    const appError = toAppError(err, receiptMaxBytes);
     const requestId = requestIdOf(res);
     if (appError.status >= 500) logger.error("unhandled error", { requestId, err });
     if (res.headersSent) return next(err);

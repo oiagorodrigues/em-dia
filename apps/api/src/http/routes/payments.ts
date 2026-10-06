@@ -6,15 +6,16 @@ import { actorOf } from "../context.ts";
 import { receiptUpload, uploadedFile } from "../middleware/upload.ts";
 import { parse } from "../validate.ts";
 
-export function paymentRoutes({ payments }: Services): Router {
+export function paymentRoutes({ payments }: Services, receiptMaxBytes: number): Router {
   const router = Router();
+  const upload = receiptUpload(receiptMaxBytes);
 
-  router.get("/contracts/:id/payments", (req, res) => {
+  router.get("/contracts/:id/payments", async (req, res) => {
     const { year } = parse(yearQuerySchema.partial(), req.query);
-    res.json({ payments: payments.list(actorOf(res), req.params.id, year) });
+    res.json({ payments: await payments.list(actorOf(res), req.params.id, year) });
   });
 
-  router.post<{ id: string }>("/contracts/:id/payments", receiptUpload, async (req, res) => {
+  router.post<{ id: string }>("/contracts/:id/payments", upload, async (req, res) => {
     const input = parse(createPaymentSchema, req.body);
     const payment = await payments.create(actorOf(res), req.params.id, input, uploadedFile(req));
     res.status(201).json({ payment });
@@ -22,7 +23,7 @@ export function paymentRoutes({ payments }: Services): Router {
 
   router.put<{ id: string; pid: string }>(
     "/contracts/:id/payments/:pid/receipt",
-    receiptUpload,
+    upload,
     async (req, res) => {
       const file = uploadedFile(req);
       if (!file) throw new AppError("VALIDATION", "Envie o arquivo do comprovante");
@@ -32,8 +33,8 @@ export function paymentRoutes({ payments }: Services): Router {
     },
   );
 
-  router.get("/contracts/:id/payments/:pid/receipt", (req, res, next) => {
-    const receipt = payments.openReceipt(actorOf(res), req.params.id, req.params.pid);
+  router.get("/contracts/:id/payments/:pid/receipt", async (req, res, next) => {
+    const receipt = await payments.openReceipt(actorOf(res), req.params.id, req.params.pid);
     res.setHeader("Content-Type", receipt.mimeType);
     res.setHeader("Content-Length", String(receipt.sizeBytes));
     res.setHeader("Content-Disposition", `inline; filename="${receipt.filename}"`);
@@ -47,8 +48,8 @@ export function paymentRoutes({ payments }: Services): Router {
     res.status(204).end();
   });
 
-  router.post("/contracts/:id/payments/:pid/acknowledge", (req, res) => {
-    res.json({ payment: payments.acknowledge(actorOf(res), req.params.id, req.params.pid) });
+  router.post("/contracts/:id/payments/:pid/acknowledge", async (req, res) => {
+    res.json({ payment: await payments.acknowledge(actorOf(res), req.params.id, req.params.pid) });
   });
 
   return router;

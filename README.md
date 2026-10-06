@@ -44,6 +44,8 @@ docker run -p 3000:3000 -v emdia-data:/data -e JWT_SECRET=<32+ caracteres> emdia
 
 O banco SQLite e os comprovantes ficam em `/data`; faça backup dos dois juntos (veja [docs/RELIABILITY.md](docs/RELIABILITY.md)). `JWT_SECRET` é obrigatório em produção. A imagem tem healthcheck em `/api/health`.
 
+Para publicar na Vercel (banco no Turso, comprovantes no Vercel Blob), siga [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md).
+
 ## Testes de navegador
 
 `tools/e2e` guia o app com o Chrome do sistema (`playwright-core`, rodando com node): `screens` tira capturas de todas as telas e `flows` roda 25 jornadas de usuário. Precisa de `bun run dev` ativo. Detalhes em [tools/e2e/README.md](tools/e2e/README.md).

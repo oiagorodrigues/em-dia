@@ -1,82 +1,60 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import { DatabaseSync, type SQLInputValue, type StatementSync } from "node:sqlite";
+import { createLibsqlDatabase } from "./libsql.ts";
 import { migrations, type Migration } from "./migrations/index.ts";
+import { createNodeSqliteDatabase } from "./node-sqlite.ts";
+import type { Database } from "./driver.ts";
 
-export type Db = DatabaseSync;
-export type Param = SQLInputValue;
+export type { Database, Executor, Param } from "./driver.ts";
 
-export function openDatabase(path: string): Db {
-  if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
-  const db = new DatabaseSync(path);
-  db.exec("PRAGMA journal_mode = WAL");
-  db.exec("PRAGMA synchronous = NORMAL");
-  db.exec("PRAGMA foreign_keys = ON");
-  db.exec("PRAGMA busy_timeout = 5000");
-  migrate(db);
-  return db;
+const REMOTE_SCHEMES = /^(libsql|https?|wss?):\/\//;
+
+export const isRemoteDatabaseUrl = (url: string) => REMOTE_SCHEMES.test(url);
+
+/** `libsql://…` (Turso) uses libSQL; a path, `file:` path or `:memory:` uses node:sqlite. */
+export function openDatabase(url: string, authToken?: string): Database {
+  if (isRemoteDatabaseUrl(url)) return createLibsqlDatabase(url, authToken);
+  return createNodeSqliteDatabase(url.replace(/^file:/, ""));
 }
 
-export function migrate(db: Db, list: readonly Migration[] = migrations): void {
-  db.exec(
+/**
+ * Applies pending migrations, each in its own write transaction that re-checks
+ * the migrations table first, so concurrent runs (two deploys building at once)
+ * apply each migration exactly once. Returns the ids applied by this run.
+ */
+export async function migrate(
+  db: Database,
+  list: readonly Migration[] = migrations,
+): Promise<string[]> {
+  await db.exec(
     "CREATE TABLE IF NOT EXISTS migrations (id TEXT PRIMARY KEY, applied_at TEXT NOT NULL) STRICT",
   );
-  const applied = new Set(
-    db
-      .prepare("SELECT id FROM migrations")
-      .all()
-      .map((r) => String(r.id)),
-  );
+  const applied: string[] = [];
   for (const m of list) {
-    if (applied.has(m.id)) continue;
-    transaction(db, () => {
-      db.exec(m.sql);
-      db.prepare("INSERT INTO migrations (id, applied_at) VALUES (?, ?)").run(
+    const ran = await db.transaction(async (tx) => {
+      if (await tx.get("SELECT 1 AS hit FROM migrations WHERE id = ?", m.id)) return false;
+      await tx.exec(m.sql);
+      await tx.run(
+        "INSERT INTO migrations (id, applied_at) VALUES (?, ?)",
         m.id,
         new Date().toISOString(),
       );
+      return true;
     });
+    if (ran) applied.push(m.id);
   }
+  return applied;
 }
 
-/** Synchronous by design: node:sqlite is sync, so nothing can interleave inside `fn`. */
-export function transaction<T>(db: Db, fn: () => T): T {
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const result = fn();
-    db.exec("COMMIT");
-    return result;
-  } catch (err) {
-    db.exec("ROLLBACK");
-    throw err;
-  }
-}
-
-const cache = new WeakMap<Db, Map<string, StatementSync>>();
-
-function stmt(db: Db, sql: string): StatementSync {
-  let byDb = cache.get(db);
-  if (!byDb) {
-    byDb = new Map();
-    cache.set(db, byDb);
-  }
-  let s = byDb.get(sql);
-  if (!s) {
-    s = db.prepare(sql);
-    byDb.set(sql, s);
-  }
-  return s;
-}
-
-/** Row typing is the caller's contract with its own SQL. */
-export function queryOne<T>(db: Db, sql: string, ...params: Param[]): T | undefined {
-  return stmt(db, sql).get(...params) as T | undefined;
-}
-
-export function queryAll<T>(db: Db, sql: string, ...params: Param[]): T[] {
-  return stmt(db, sql).all(...params) as T[];
-}
-
-export function execute(db: Db, sql: string, ...params: Param[]): number {
-  return Number(stmt(db, sql).run(...params).changes);
+/** Migrations not yet applied; the serverless entry refuses to guess and reports them. */
+export async function pendingMigrations(
+  db: Database,
+  list: readonly Migration[] = migrations,
+): Promise<string[]> {
+  const table = await db.get(
+    "SELECT 1 AS hit FROM sqlite_master WHERE type = 'table' AND name = 'migrations'",
+  );
+  if (!table) return list.map((m) => m.id);
+  const done = new Set(
+    (await db.all<{ id: string }>("SELECT id FROM migrations")).map((r) => r.id),
+  );
+  return list.map((m) => m.id).filter((id) => !done.has(id));
 }

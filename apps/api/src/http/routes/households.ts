@@ -7,19 +7,23 @@ import { parse } from "../validate.ts";
 export function householdRoutes({ households }: Services): Router {
   const router = Router();
 
-  router.get("/households", (_req, res) => {
-    res.json({ households: households.list(actorOf(res)) });
+  router.get("/households", async (_req, res) => {
+    res.json({ households: await households.list(actorOf(res)) });
   });
 
-  router.post("/households", (req, res) => {
+  router.post("/households", async (req, res) => {
     res
       .status(201)
-      .json({ household: households.create(actorOf(res), parse(householdSchema, req.body)) });
+      .json({ household: await households.create(actorOf(res), parse(householdSchema, req.body)) });
   });
 
-  router.patch("/households/:id", (req, res) => {
+  router.patch("/households/:id", async (req, res) => {
     res.json({
-      household: households.update(actorOf(res), req.params.id, parse(householdSchema, req.body)),
+      household: await households.update(
+        actorOf(res),
+        req.params.id,
+        parse(householdSchema, req.body),
+      ),
     });
   });
 

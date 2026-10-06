@@ -3,16 +3,16 @@
 ## System diagram
 
 ```
-  Browser (PWA, Vue 3.6)                     Server (Node >= 22.18)
- +-------------------------+   HTTPS    +--------------------------------+
- | views                   |  /api/v1   | server.ts (composition root)   |
- |  components/{ui,feature}| ---------> |  http  (routes, middleware)    |
- |  composables            |  Bearer    |  services (business rules)     |
- |  stores (Pinia)         |  + cookie  |  repos (SQL)                   |
- |  api (fetch client)     | <--------- |  db (node:sqlite, migrations)  |
- | service worker (cache)  |            +---------------+----------------+
- +-------------------------+                            |
-            ^                                 SQLite file + uploads dir
+  Browser (PWA, Vue 3.6)                     Server (Node 24)
+ +-------------------------+   HTTPS    +--------------------------------------+
+ | views                   |  /api/v1   | server.ts | vercel.ts  (entries)     |
+ |  components/{ui,feature}| ---------> | runtime.ts (wiring, boot checks)     |
+ |  composables            |  Bearer    |  http  (routes, middleware)          |
+ |  stores (Pinia)         |  + cookie  |  services (business rules)           |
+ |  api (fetch client)     | <--------- |  repos (SQL)                         |
+ | service worker (cache)  |            |  db (driver: node:sqlite or libSQL)  |
+ +-------------------------+            +-------------------+------------------+
+            ^                     SQLite file + uploads dir  |  or  Turso + Vercel Blob
             |  both import types, schemas, RBAC, pay math
             +------------------ @emdia/shared ------------------+
 ```
@@ -33,21 +33,25 @@ Enforced by `tools/harness/tests/architecture.test.ts`.
 
 Source is under `apps/api/src`:
 
-| Dir         | Responsibility                                                    |
-| ----------- | ----------------------------------------------------------------- |
-| `config`    | Env parsing and validation, one frozen config object              |
-| `db`        | `node:sqlite` connection, migrations, transaction helper          |
-| `repos`     | SQL only. One repo per table group. Returns plain objects         |
-| `services`  | Business rules, RBAC checks, transactions, audit log writes       |
-| `http`      | Express routers, middleware, request parsing, error mapping       |
-| `lib`       | Pure helpers: ids, hashing, logger, mailer, errors, csv           |
-| `server.ts` | Builds the app, wires routes, starts listening, graceful shutdown |
+| Dir          | Responsibility                                                                                                   |
+| ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `config`     | Env parsing and validation, one frozen config object                                                             |
+| `db`         | Async `Database` driver (`node:sqlite` for files, libSQL for Turso), migrations                                  |
+| `repos`      | SQL only. One repo per table group. Returns plain objects                                                        |
+| `services`   | Business rules, RBAC checks, transactions, audit log writes                                                      |
+| `http`       | Express routers, middleware, request parsing, error mapping                                                      |
+| `lib`        | Pure helpers: ids, hashing, logger, mailer, errors, csv                                                          |
+| `runtime.ts` | Opens the database, migrates a local file (only reports pending migrations on Turso), wires services and the app |
+| `server.ts`  | Long-running entry: `startRuntime`, listen, graceful shutdown                                                    |
+| `vercel.ts`  | Vercel Function entry: one runtime per instance, restores the rewritten URL ([deploy](DEPLOY-VERCEL.md))         |
 
 Rules:
 
 - Imports flow `http -> services -> repos -> db`. A layer may skip down (http may call repos for trivial reads) but never up.
 - `config` and `lib` may be imported by any layer.
-- Nothing imports `http` except `server.ts`.
+- Entrypoints are `server.ts`, `runtime.ts`, `vercel.ts` and `scripts/`. They are composition roots and may import any layer, including `http`. No layer imports an entrypoint, and nothing else imports `http`. The harness enforces both.
+- Every database call is async. A write that spans statements runs in `repos.tx(async (r) => …)` and uses only the transaction's repositories `r`; the same SQL runs on both drivers (SQLite dialect). The app never relies on `ON DELETE` cascades at runtime: in libSQL foreign-key enforcement is a per-connection pragma, off by default, and HTTP requests may each get their own connection.
+- Receipts go through the `FileStore` interface: disk (`UPLOAD_DIR`) or a private Vercel Blob store. Both are streamed by the API after the auth check; storage URLs never reach the browser.
 - `repos`, `services`, `db` and `config` never import `express` or other HTTP libraries. Services take plain values and throw `AppError`; `http` maps errors to the `ApiErrorBody` shape.
 - Every route parses params, query and body with a schema from `@emdia/shared` before calling a service.
 

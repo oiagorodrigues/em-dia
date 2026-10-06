@@ -1,6 +1,5 @@
-import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
-import { migrate } from "../src/db/index.ts";
+import { migrate, openDatabase } from "../src/db/index.ts";
 import { migrations } from "../src/db/migrations/index.ts";
 import { createRepos } from "../src/repos/index.ts";
 import { setup, type ContractOverrides, type TestEnv, type TestUser } from "./helpers.ts";
@@ -10,7 +9,7 @@ let employer: TestUser;
 const as = { type: "bearer" } as const;
 
 beforeEach(async () => {
-  t = setup();
+  t = await setup();
   employer = await t.register("employer");
 });
 afterEach(() => t.cleanup());
@@ -225,11 +224,10 @@ describe("absence deduction", () => {
 });
 
 describe("migration 003", () => {
-  test("turns weekday lists into weekly schedules and empty lists into on_demand", () => {
-    const db = new DatabaseSync(":memory:");
-    db.exec("PRAGMA foreign_keys = ON");
-    migrate(db, migrations.slice(0, 2));
-    db.exec(`
+  test("turns weekday lists into weekly schedules and empty lists into on_demand", async () => {
+    const db = openDatabase(":memory:");
+    await migrate(db, migrations.slice(0, 2));
+    await db.exec(`
       INSERT INTO users (id, email, name, role, password_hash, created_at)
         VALUES ('u', 'a@b.co', 'Ana', 'employer', 'x', '2026-01-01');
       INSERT INTO households (id, owner_id, name, timezone, created_at)
@@ -239,10 +237,10 @@ describe("migration 003", () => {
         VALUES ('weekly', 'h', 'Maria', 'diarista', 'daily', 18000, '[1,3,5]', '2026-08-01', 'active', '2026-08-01'),
                ('empty', 'h', 'Rosa', 'passadeira', 'daily', 15000, '[]', '2026-08-01', 'active', '2026-08-01');
     `);
-    migrate(db);
+    await migrate(db);
 
     const repos = createRepos(db);
-    expect(repos.contracts.findById("weekly")?.contract).toMatchObject({
+    expect((await repos.contracts.findById("weekly"))?.contract).toMatchObject({
       schedule: {
         kind: "weekly",
         weekdays: [1, 3, 5],
@@ -252,12 +250,11 @@ describe("migration 003", () => {
       },
       deductAbsences: false,
     });
-    expect(repos.contracts.findById("empty")?.contract.schedule.kind).toBe("on_demand");
-    const columns = db
-      .prepare("SELECT name FROM pragma_table_info('contracts')")
-      .all()
-      .map((r) => r.name);
+    expect((await repos.contracts.findById("empty"))?.contract.schedule.kind).toBe("on_demand");
+    const columns = (
+      await db.all<{ name: string }>("SELECT name FROM pragma_table_info('contracts')")
+    ).map((r) => r.name);
     expect(columns).not.toContain("schedule_days");
-    db.close();
+    await db.close();
   });
 });

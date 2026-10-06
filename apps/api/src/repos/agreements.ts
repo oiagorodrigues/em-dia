@@ -1,5 +1,5 @@
 import type { Agreement } from "@emdia/shared";
-import { execute, queryAll, queryOne, type Db } from "../db/index.ts";
+import type { Executor } from "../db/index.ts";
 
 interface Row {
   id: string;
@@ -37,24 +37,24 @@ const toAgreement = (r: Row): Agreement => ({
 
 export type NewAgreement = Omit<Agreement, "settledCents" | "remainingCents">;
 
-export function agreementsRepo(db: Db) {
+export function agreementsRepo(db: Executor) {
   return {
-    list(contractId: string): Agreement[] {
-      return queryAll<Row>(
-        db,
-        `${SELECT} WHERE a.contract_id = ? ORDER BY a.created_at DESC, a.id`,
-        contractId,
+    async list(contractId: string): Promise<Agreement[]> {
+      return (
+        await db.all<Row>(
+          `${SELECT} WHERE a.contract_id = ? ORDER BY a.created_at DESC, a.id`,
+          contractId,
+        )
       ).map(toAgreement);
     },
 
-    find(contractId: string, id: string): Agreement | undefined {
-      const r = queryOne<Row>(db, `${SELECT} WHERE a.contract_id = ? AND a.id = ?`, contractId, id);
+    async find(contractId: string, id: string): Promise<Agreement | undefined> {
+      const r = await db.get<Row>(`${SELECT} WHERE a.contract_id = ? AND a.id = ?`, contractId, id);
       return r && toAgreement(r);
     },
 
-    insert(a: NewAgreement): void {
-      execute(
-        db,
+    async insert(a: NewAgreement): Promise<void> {
+      await db.run(
         `INSERT INTO agreements (id, contract_id, description, total_cents, installment_cents, start_month,
            accepted_at, cancelled_at, created_by, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -71,18 +71,16 @@ export function agreementsRepo(db: Db) {
       );
     },
 
-    accept(id: string, at: string): void {
-      execute(
-        db,
+    async accept(id: string, at: string): Promise<void> {
+      await db.run(
         "UPDATE agreements SET accepted_at = ? WHERE id = ? AND accepted_at IS NULL",
         at,
         id,
       );
     },
 
-    cancel(id: string, at: string): void {
-      execute(
-        db,
+    async cancel(id: string, at: string): Promise<void> {
+      await db.run(
         "UPDATE agreements SET cancelled_at = ? WHERE id = ? AND cancelled_at IS NULL",
         at,
         id,

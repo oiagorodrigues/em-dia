@@ -1,5 +1,5 @@
 import type { Payment, PaymentMethod, Receipt, ReceiptMimeType, YearMonth } from "@emdia/shared";
-import { execute, queryAll, queryOne, type Db } from "../db/index.ts";
+import type { Executor } from "../db/index.ts";
 
 /** `receiptFile` is the storage name; it never leaves the API. */
 export interface PaymentRecord extends Payment {
@@ -58,18 +58,16 @@ export function toPayment({ receiptFile: _file, ...payment }: PaymentRecord): Pa
 
 const NEWEST_FIRST = "ORDER BY paid_on DESC, created_at DESC, id";
 
-export function paymentsRepo(db: Db) {
+export function paymentsRepo(db: Executor) {
   return {
-    list(contractId: string, year: number | undefined): PaymentRecord[] {
+    async list(contractId: string, year: number | undefined): Promise<PaymentRecord[]> {
       const rows =
         year === undefined
-          ? queryAll<Row>(
-              db,
+          ? await db.all<Row>(
               `SELECT * FROM payments WHERE contract_id = ? ${NEWEST_FIRST}`,
               contractId,
             )
-          : queryAll<Row>(
-              db,
+          : await db.all<Row>(
               `SELECT * FROM payments WHERE contract_id = ? AND substr(reference_month, 1, 4) = ? ${NEWEST_FIRST}`,
               contractId,
               String(year),
@@ -77,27 +75,26 @@ export function paymentsRepo(db: Db) {
       return rows.map(toRecord);
     },
 
-    listByMonth(contractId: string, month: YearMonth): PaymentRecord[] {
-      return queryAll<Row>(
-        db,
-        `SELECT * FROM payments WHERE contract_id = ? AND reference_month = ? ${NEWEST_FIRST}`,
-        contractId,
-        month,
+    async listByMonth(contractId: string, month: YearMonth): Promise<PaymentRecord[]> {
+      return (
+        await db.all<Row>(
+          `SELECT * FROM payments WHERE contract_id = ? AND reference_month = ? ${NEWEST_FIRST}`,
+          contractId,
+          month,
+        )
       ).map(toRecord);
     },
 
-    latest(contractId: string): PaymentRecord | undefined {
-      const r = queryOne<Row>(
-        db,
+    async latest(contractId: string): Promise<PaymentRecord | undefined> {
+      const r = await db.get<Row>(
         `SELECT * FROM payments WHERE contract_id = ? ${NEWEST_FIRST} LIMIT 1`,
         contractId,
       );
       return r && toRecord(r);
     },
 
-    find(contractId: string, id: string): PaymentRecord | undefined {
-      const r = queryOne<Row>(
-        db,
+    async find(contractId: string, id: string): Promise<PaymentRecord | undefined> {
+      const r = await db.get<Row>(
         "SELECT * FROM payments WHERE contract_id = ? AND id = ?",
         contractId,
         id,
@@ -105,19 +102,19 @@ export function paymentsRepo(db: Db) {
       return r && toRecord(r);
     },
 
-    listReceiptFiles(contractIds: string[]): string[] {
+    async listReceiptFiles(contractIds: string[]): Promise<string[]> {
       if (contractIds.length === 0) return [];
-      return queryAll<{ receipt_file: string }>(
-        db,
-        `SELECT receipt_file FROM payments
+      return (
+        await db.all<{ receipt_file: string }>(
+          `SELECT receipt_file FROM payments
          WHERE receipt_file IS NOT NULL AND contract_id IN (${contractIds.map(() => "?").join(", ")})`,
-        ...contractIds,
+          ...contractIds,
+        )
       ).map((r) => r.receipt_file);
     },
 
-    insert(p: PaymentRecord): void {
-      execute(
-        db,
+    async insert(p: PaymentRecord): Promise<void> {
+      await db.run(
         `INSERT INTO payments (id, contract_id, reference_month, paid_on, amount_cents, method, note, receipt_file,
            receipt_mime, receipt_size, receipt_name, receipt_uploaded_at, acknowledged_at, agreement_id, created_by,
            created_at)
@@ -141,9 +138,8 @@ export function paymentsRepo(db: Db) {
       );
     },
 
-    setReceipt(id: string, file: string, receipt: Receipt): void {
-      execute(
-        db,
+    async setReceipt(id: string, file: string, receipt: Receipt): Promise<void> {
+      await db.run(
         `UPDATE payments SET receipt_file = ?, receipt_mime = ?, receipt_size = ?, receipt_name = ?,
            receipt_uploaded_at = ?
          WHERE id = ?`,
@@ -156,17 +152,16 @@ export function paymentsRepo(db: Db) {
       );
     },
 
-    acknowledge(id: string, at: string): void {
-      execute(
-        db,
+    async acknowledge(id: string, at: string): Promise<void> {
+      await db.run(
         "UPDATE payments SET acknowledged_at = ? WHERE id = ? AND acknowledged_at IS NULL",
         at,
         id,
       );
     },
 
-    delete(id: string): void {
-      execute(db, "DELETE FROM payments WHERE id = ?", id);
+    async delete(id: string): Promise<void> {
+      await db.run("DELETE FROM payments WHERE id = ?", id);
     },
   };
 }

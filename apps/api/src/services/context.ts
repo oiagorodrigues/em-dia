@@ -7,7 +7,7 @@ import type { AccessTokens } from "../lib/jwt.ts";
 import type { Logger } from "../lib/logger.ts";
 import type { Mailer } from "../lib/mailer.ts";
 import type { FileStore } from "../lib/storage.ts";
-import type { AuditEvent, Repos } from "../repos/index.ts";
+import type { AuditEvent, Repos, TxRepos } from "../repos/index.ts";
 
 export interface ServiceDeps {
   repos: Repos;
@@ -30,9 +30,11 @@ export function nowIso(deps: ServiceDeps): string {
   return deps.clock().toISOString();
 }
 
+/** Pass the transaction's repositories when the event belongs to a write in progress. */
 export function audit(
   deps: ServiceDeps,
   event: Omit<AuditEvent, "id" | "at" | "meta"> & { meta?: AuditEvent["meta"] },
-) {
-  deps.repos.audit.insert({ ...event, meta: event.meta ?? null, id: newId(), at: nowIso(deps) });
+  r: TxRepos = deps.repos,
+): Promise<void> {
+  return r.audit.insert({ ...event, meta: event.meta ?? null, id: newId(), at: nowIso(deps) });
 }

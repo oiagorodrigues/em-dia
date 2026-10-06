@@ -2,7 +2,7 @@ import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   pack: {
-    entry: ["src/server.ts"],
+    entry: ["src/server.ts", "src/vercel.ts"],
     format: "esm",
     platform: "node",
     target: "node24",

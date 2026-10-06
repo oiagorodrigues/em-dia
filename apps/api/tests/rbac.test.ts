@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import { setup, type TestEnv } from "./helpers.ts";
 
 let t: TestEnv;
-beforeEach(() => {
-  t = setup();
+beforeEach(async () => {
+  t = await setup();
 });
 afterEach(() => t.cleanup());
 

@@ -4,7 +4,8 @@ import { join } from "node:path";
 import type { CreateContractInput, PublicUser, Role, ScheduleInput } from "@emdia/shared";
 import request from "supertest";
 import { loadConfig } from "../src/config/index.ts";
-import { openDatabase } from "../src/db/index.ts";
+import { migrate, openDatabase } from "../src/db/index.ts";
+import { createLibsqlDatabase } from "../src/db/libsql.ts";
 import { createApp } from "../src/http/app.ts";
 import { createLogger } from "../src/lib/logger.ts";
 import { createMailer } from "../src/lib/mailer.ts";
@@ -34,7 +35,12 @@ export type ContractOverrides = Partial<Omit<CreateContractInput, "schedule">> &
 
 let seq = 0;
 
-export function setup(env: Record<string, string> = {}) {
+/**
+ * The suite runs on node:sqlite in memory. `EMDIA_TEST_DRIVER=libsql vp test`
+ * runs it against libSQL on a temp file instead (libSQL's `:memory:` gives
+ * each transaction connection its own empty database).
+ */
+export async function setup(env: Record<string, string> = {}) {
   const uploadDir = mkdtempSync(join(tmpdir(), "emdia-api-test-"));
   const config = loadConfig({
     NODE_ENV: "test",
@@ -47,7 +53,13 @@ export function setup(env: Record<string, string> = {}) {
     ...env,
   });
   let now = new Date(DEFAULT_NOW);
-  const db = openDatabase(":memory:");
+  const db =
+    process.env.EMDIA_TEST_DRIVER === "libsql"
+      ? createLibsqlDatabase(
+          `file:${join(mkdtempSync(join(tmpdir(), "emdia-libsql-")), "test.db")}`,
+        )
+      : openDatabase(":memory:");
+  await migrate(db);
   const logger = createLogger("silent");
   const mailer = createMailer(
     { isProduction: config.isProduction, smtpUrl: config.smtpUrl, from: config.mailFrom },
@@ -135,11 +147,11 @@ export function setup(env: Record<string, string> = {}) {
         now = new Date(now.getTime() + ms);
       },
     },
-    cleanup: () => {
-      db.close();
+    cleanup: async () => {
+      await db.close();
       rmSync(uploadDir, { recursive: true, force: true });
     },
   };
 }
 
-export type TestEnv = ReturnType<typeof setup>;
+export type TestEnv = Awaited<ReturnType<typeof setup>>;

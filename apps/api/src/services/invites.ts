@@ -3,7 +3,7 @@ import { nowInZone } from "@emdia/shared";
 import { randomCode, sha256 } from "../lib/crypto.ts";
 import { AppError, notFound } from "../lib/errors.ts";
 import type { MailMessage } from "../lib/mailer.ts";
-import type { LocatedContract } from "../repos/index.ts";
+import type { LocatedContract, TxRepos } from "../repos/index.ts";
 import { assertNotArchived } from "./access.ts";
 import { audit, nowIso, type Actor, type ServiceDeps } from "./context.ts";
 
@@ -14,9 +14,13 @@ export const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const hashInviteCode = (code: string) => sha256(code.toUpperCase());
 
 /** The contract a code points to, if the code is live and the contract can still be joined. */
-export function resolveInvite(deps: ServiceDeps, code: string): LocatedContract | undefined {
-  const contractId = deps.repos.invites.findContractId(hashInviteCode(code), nowIso(deps));
-  const located = contractId ? deps.repos.contracts.findById(contractId) : undefined;
+export async function resolveInvite(
+  deps: ServiceDeps,
+  code: string,
+  r: TxRepos = deps.repos,
+): Promise<LocatedContract | undefined> {
+  const contractId = await r.invites.findContractId(hashInviteCode(code), nowIso(deps));
+  const located = contractId ? await r.contracts.findById(contractId) : undefined;
   const { contract } = located ?? {};
   if (
     !contract ||
@@ -29,20 +33,29 @@ export function resolveInvite(deps: ServiceDeps, code: string): LocatedContract 
   return located;
 }
 
-/** Must run inside the caller's transaction. Codes are single use. */
-export function linkWorkerByCode(deps: ServiceDeps, workerId: string, code: string): string {
-  const located = resolveInvite(deps, code);
+/** Runs on the caller's transaction (`r`). Codes are single use. */
+export async function linkWorkerByCode(
+  deps: ServiceDeps,
+  r: TxRepos,
+  workerId: string,
+  code: string,
+): Promise<string> {
+  const located = await resolveInvite(deps, code, r);
   if (!located) throw notFound("Código de convite inválido ou expirado");
   const contractId = located.contract.id;
-  deps.repos.contracts.linkWorker(contractId, workerId);
-  deps.repos.invites.deleteForContract(contractId);
-  audit(deps, {
-    actorId: workerId,
-    contractId,
-    action: "contract.join",
-    entity: "contract",
-    entityId: contractId,
-  });
+  await r.contracts.linkWorker(contractId, workerId);
+  await r.invites.deleteForContract(contractId);
+  await audit(
+    deps,
+    {
+      actorId: workerId,
+      contractId,
+      action: "contract.join",
+      entity: "contract",
+      entityId: contractId,
+    },
+    r,
+  );
   return contractId;
 }
 
@@ -108,7 +121,7 @@ export async function issueInvite(
 
   const code = randomCode(INVITE_ALPHABET, INVITE_LENGTH);
   const expiresAt = new Date(deps.clock().getTime() + INVITE_TTL_MS).toISOString();
-  deps.repos.invites.upsert(contract.id, hashInviteCode(code), expiresAt, nowIso(deps));
+  await deps.repos.invites.upsert(contract.id, hashInviteCode(code), expiresAt, nowIso(deps));
 
   const signupUrl = `${deps.config.webOrigin}/criar-conta?convite=${code}`;
   const text: InviteText = {
@@ -128,7 +141,7 @@ export async function issueInvite(
       deps.logger.error("failed to send invite mail", { err, contractId: contract.id });
     }
   }
-  audit(deps, {
+  await audit(deps, {
     actorId: actor.id,
     contractId: contract.id,
     action: "contract.invite_sent",

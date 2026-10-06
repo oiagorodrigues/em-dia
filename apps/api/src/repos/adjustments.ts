@@ -1,5 +1,5 @@
 import type { Adjustment, AdjustmentKind, YearMonth } from "@emdia/shared";
-import { execute, queryAll, queryOne, type Db } from "../db/index.ts";
+import type { Executor } from "../db/index.ts";
 
 interface Row {
   id: string;
@@ -23,20 +23,20 @@ const toAdjustment = (r: Row): Adjustment => ({
   createdAt: r.created_at,
 });
 
-export function adjustmentsRepo(db: Db) {
+export function adjustmentsRepo(db: Executor) {
   return {
-    listByMonth(contractId: string, month: YearMonth): Adjustment[] {
-      return queryAll<Row>(
-        db,
-        "SELECT * FROM adjustments WHERE contract_id = ? AND month = ? ORDER BY created_at, id",
-        contractId,
-        month,
+    async listByMonth(contractId: string, month: YearMonth): Promise<Adjustment[]> {
+      return (
+        await db.all<Row>(
+          "SELECT * FROM adjustments WHERE contract_id = ? AND month = ? ORDER BY created_at, id",
+          contractId,
+          month,
+        )
       ).map(toAdjustment);
     },
 
-    find(contractId: string, id: string): Adjustment | undefined {
-      const r = queryOne<Row>(
-        db,
+    async find(contractId: string, id: string): Promise<Adjustment | undefined> {
+      const r = await db.get<Row>(
         "SELECT * FROM adjustments WHERE contract_id = ? AND id = ?",
         contractId,
         id,
@@ -44,9 +44,8 @@ export function adjustmentsRepo(db: Db) {
       return r && toAdjustment(r);
     },
 
-    insert(a: Adjustment): void {
-      execute(
-        db,
+    async insert(a: Adjustment): Promise<void> {
+      await db.run(
         `INSERT INTO adjustments (id, contract_id, month, kind, amount_cents, description, created_by, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         a.id,
@@ -60,8 +59,8 @@ export function adjustmentsRepo(db: Db) {
       );
     },
 
-    delete(id: string): void {
-      execute(db, "DELETE FROM adjustments WHERE id = ?", id);
+    async delete(id: string): Promise<void> {
+      await db.run("DELETE FROM adjustments WHERE id = ?", id);
     },
   };
 }

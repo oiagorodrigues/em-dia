@@ -1,5 +1,5 @@
 import type { EntryStatus, IsoDate, Role, WorkEntry, YearMonth } from "@emdia/shared";
-import { execute, queryAll, queryOne, type Db } from "../db/index.ts";
+import type { Executor } from "../db/index.ts";
 
 interface Row {
   id: string;
@@ -35,20 +35,20 @@ const toEntry = (r: Row): WorkEntry => ({
   updatedAt: r.updated_at,
 });
 
-export function entriesRepo(db: Db) {
+export function entriesRepo(db: Executor) {
   return {
-    listByMonth(contractId: string, month: YearMonth): WorkEntry[] {
-      return queryAll<Row>(
-        db,
-        "SELECT * FROM work_entries WHERE contract_id = ? AND substr(date, 1, 7) = ? ORDER BY date",
-        contractId,
-        month,
+    async listByMonth(contractId: string, month: YearMonth): Promise<WorkEntry[]> {
+      return (
+        await db.all<Row>(
+          "SELECT * FROM work_entries WHERE contract_id = ? AND substr(date, 1, 7) = ? ORDER BY date",
+          contractId,
+          month,
+        )
       ).map(toEntry);
     },
 
-    find(contractId: string, date: IsoDate): WorkEntry | undefined {
-      const r = queryOne<Row>(
-        db,
+    async find(contractId: string, date: IsoDate): Promise<WorkEntry | undefined> {
+      const r = await db.get<Row>(
         "SELECT * FROM work_entries WHERE contract_id = ? AND date = ?",
         contractId,
         date,
@@ -57,9 +57,8 @@ export function entriesRepo(db: Db) {
     },
 
     /** Insert or full replace of the (contract, date) row. */
-    save(e: WorkEntry): void {
-      execute(
-        db,
+    async save(e: WorkEntry): Promise<void> {
+      await db.run(
         `INSERT INTO work_entries (id, contract_id, date, status, check_in, check_out, break_minutes, minutes, note,
            created_by, created_by_role, confirmed_by, confirmed_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -84,8 +83,8 @@ export function entriesRepo(db: Db) {
       );
     },
 
-    delete(contractId: string, date: IsoDate): void {
-      execute(db, "DELETE FROM work_entries WHERE contract_id = ? AND date = ?", contractId, date);
+    async delete(contractId: string, date: IsoDate): Promise<void> {
+      await db.run("DELETE FROM work_entries WHERE contract_id = ? AND date = ?", contractId, date);
     },
   };
 }

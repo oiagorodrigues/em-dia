@@ -26,61 +26,68 @@ export function reportsService(deps: ServiceDeps) {
   const { repos } = deps;
   const todayIn = (timezone: string) => nowInZone(timezone, deps.clock()).date;
 
-  function summarize({ contract, timezone }: LocatedContract, month: YearMonth) {
-    const entries = repos.entries.listByMonth(contract.id, month);
+  /** Queries run concurrently: against a remote database each one is a round trip. */
+  async function summarize({ contract, timezone }: LocatedContract, month: YearMonth) {
+    const [entries, adjustments, payments] = await Promise.all([
+      repos.entries.listByMonth(contract.id, month),
+      repos.adjustments.listByMonth(contract.id, month),
+      repos.payments.listByMonth(contract.id, month),
+    ]);
     const summary = computeMonthSummary({
       contract,
       month,
       entries,
-      adjustments: repos.adjustments.listByMonth(contract.id, month),
-      payments: repos.payments.listByMonth(contract.id, month),
+      adjustments,
+      payments,
       today: todayIn(timezone),
     });
-    return { summary, entries };
+    return { summary, entries, payments };
   }
 
-  function teamItem(located: LocatedContract, month: YearMonth): DashboardItem {
+  async function teamItem(located: LocatedContract, month: YearMonth): Promise<DashboardItem> {
     const { contract } = located;
-    const latest = repos.payments.latest(contract.id);
+    const [{ summary }, latest, today] = await Promise.all([
+      summarize(located, month),
+      repos.payments.latest(contract.id),
+      repos.entries.find(contract.id, todayIn(located.timezone)),
+    ]);
     return {
       contract,
-      summary: summarize(located, month).summary,
+      summary,
       estimate: estimateMonthCost(contract, month),
-      today: repos.entries.find(contract.id, todayIn(located.timezone)) ?? null,
+      today: today ?? null,
       lastPayment: latest ? toPayment(latest) : null,
     };
   }
 
   return {
-    summary(actor: Actor, contractId: string, month: YearMonth): MonthSummary {
-      return summarize(loadContract(deps, actor, contractId), month).summary;
+    async summary(actor: Actor, contractId: string, month: YearMonth): Promise<MonthSummary> {
+      return (await summarize(await loadContract(deps, actor, contractId), month)).summary;
     },
 
-    statement(
+    async statement(
       actor: Actor,
       contractId: string,
       month: YearMonth,
-    ): { filename: string; csv: string } {
-      const located = loadContract(deps, actor, contractId);
+    ): Promise<{ filename: string; csv: string }> {
+      const located = await loadContract(deps, actor, contractId);
       const { contract } = located;
-      const { summary, entries } = summarize(located, month);
-      const agreementNames = new Map(
-        repos.agreements.list(contract.id).map((a) => [a.id, a.description]),
-      );
-      const payments = repos.payments
-        .listByMonth(contract.id, month)
-        .reverse()
-        .map((p) => {
-          const agreement = p.agreementId ? agreementNames.get(p.agreementId) : undefined;
-          const method = PAYMENT_METHOD_LABEL[p.method];
-          return [
-            brDate(p.paidOn),
-            agreement ? `${method}: ${agreement}` : method,
-            centsToDecimal(p.amountCents),
-            p.acknowledgedAt ? "Sim" : "Não",
-            p.note ?? "",
-          ];
-        });
+      const [{ summary, entries, payments: monthPayments }, agreements] = await Promise.all([
+        summarize(located, month),
+        repos.agreements.list(contract.id),
+      ]);
+      const agreementNames = new Map(agreements.map((a) => [a.id, a.description]));
+      const payments = [...monthPayments].reverse().map((p) => {
+        const agreement = p.agreementId ? agreementNames.get(p.agreementId) : undefined;
+        const method = PAYMENT_METHOD_LABEL[p.method];
+        return [
+          brDate(p.paidOn),
+          agreement ? `${method}: ${agreement}` : method,
+          centsToDecimal(p.amountCents),
+          p.acknowledgedAt ? "Sim" : "Não",
+          p.note ?? "",
+        ];
+      });
       const byDate = new Map(entries.map((e) => [e.date, e]));
       const unrecorded = new Set(summary.unrecordedDates);
       const expected = new Set(summary.expectedDates);
@@ -146,33 +153,37 @@ export function reportsService(deps: ServiceDeps) {
       return { filename: `extrato-${month}.csv`, csv };
     },
 
-    activity(actor: Actor, contractId: string, limit: number): ActivityItem[] {
-      loadContract(deps, actor, contractId);
+    async activity(actor: Actor, contractId: string, limit: number): Promise<ActivityItem[]> {
+      await loadContract(deps, actor, contractId);
       requirePermission(actor, "activity:read");
       return repos.audit.listByContract(contractId, limit);
     },
 
     /** Active contracts; `month` defaults to each household's current month. */
-    dashboard(
+    async dashboard(
       actor: Actor,
       month: YearMonth | undefined,
-    ): { items: DashboardItem[]; month: YearMonth; today: IsoDate } {
-      const items = listContracts(deps, actor)
-        .filter((l) => l.contract.status === "active")
-        .map((located) => teamItem(located, month ?? toYearMonth(todayIn(located.timezone))));
+    ): Promise<{ items: DashboardItem[]; month: YearMonth; today: IsoDate }> {
+      const active = (await listContracts(deps, actor)).filter(
+        (l) => l.contract.status === "active",
+      );
+      const items = await Promise.all(
+        active.map((l) => teamItem(l, month ?? toYearMonth(todayIn(l.timezone)))),
+      );
       const today = todayIn(DEFAULT_TIMEZONE);
       return { items, month: month ?? toYearMonth(today), today };
     },
 
     /** Every contract the actor can see, ended ones included, with `month`'s numbers. */
-    team(
+    async team(
       actor: Actor,
       month: YearMonth | undefined,
       includeArchived: boolean,
-    ): { items: DashboardItem[]; month: YearMonth; today: IsoDate } {
+    ): Promise<{ items: DashboardItem[]; month: YearMonth; today: IsoDate }> {
       const today = todayIn(DEFAULT_TIMEZONE);
       const target = month ?? toYearMonth(today);
-      const items = listContracts(deps, actor, includeArchived).map((l) => teamItem(l, target));
+      const contracts = await listContracts(deps, actor, includeArchived);
+      const items = await Promise.all(contracts.map((l) => teamItem(l, target)));
       return { items, month: target, today };
     },
   };

@@ -13,7 +13,10 @@ const ALLOWED: Record<string, string[]> = {
   services: ["repos", "config", "lib"],
   http: ["services", "config", "lib"],
   scripts: ["db", "repos", "services", "config", "lib"],
-  "server.ts": ["db", "http", "services", "config", "lib"],
+  // Process entries: the long-running server and the Vercel Function share the runtime wiring.
+  "runtime.ts": ["db", "http", "services", "config", "lib"],
+  "server.ts": ["runtime.ts", "config", "lib"],
+  "vercel.ts": ["runtime.ts", "config", "lib"],
 };
 
 function sourceFiles(dir: string): string[] {
@@ -50,7 +53,7 @@ describe("layering", () => {
 
   test("express stays in the http layer", () => {
     for (const file of files) {
-      if (["http", "server.ts"].includes(layerOf(file))) continue;
+      if (["http", "runtime.ts", "vercel.ts"].includes(layerOf(file))) continue;
       expect(readFileSync(file, "utf8"), relative(SRC, file)).not.toMatch(
         /from "(express|multer|helmet)"/,
       );

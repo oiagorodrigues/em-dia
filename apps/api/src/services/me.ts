@@ -5,13 +5,13 @@ import type { Actor, ServiceDeps } from "./context.ts";
 
 export function meService(deps: ServiceDeps) {
   return {
-    update(actor: Actor, input: UpdateMeInput): PublicUser {
-      deps.repos.users.updateProfile(actor.id, {
+    async update(actor: Actor, input: UpdateMeInput): Promise<PublicUser> {
+      await deps.repos.users.updateProfile(actor.id, {
         name: input.name ?? actor.name,
         phone: input.phone === undefined ? actor.phone : input.phone || null,
         pixKey: input.pixKey === undefined ? actor.pixKey : input.pixKey || null,
       });
-      const user = deps.repos.users.findById(actor.id);
+      const user = await deps.repos.users.findById(actor.id);
       if (!user) throw notFound();
       return toPublicUser(user);
     },

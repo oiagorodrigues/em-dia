@@ -1,5 +1,5 @@
 import type { ActivityItem } from "@emdia/shared";
-import { execute, queryAll, type Db } from "../db/index.ts";
+import type { Executor } from "../db/index.ts";
 
 export interface AuditEvent {
   id: string;
@@ -23,11 +23,10 @@ interface Row {
   at: string;
 }
 
-export function auditRepo(db: Db) {
+export function auditRepo(db: Executor) {
   return {
-    insert(e: AuditEvent): void {
-      execute(
-        db,
+    async insert(e: AuditEvent): Promise<void> {
+      await db.run(
         `INSERT INTO audit_log (id, actor_id, contract_id, action, entity, entity_id, meta, at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         e.id,
@@ -41,13 +40,14 @@ export function auditRepo(db: Db) {
       );
     },
 
-    listByContract(contractId: string, limit: number): ActivityItem[] {
-      return queryAll<Row>(
-        db,
-        `SELECT a.*, u.name AS actor_name FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
+    async listByContract(contractId: string, limit: number): Promise<ActivityItem[]> {
+      return (
+        await db.all<Row>(
+          `SELECT a.*, u.name AS actor_name FROM audit_log a LEFT JOIN users u ON u.id = a.actor_id
          WHERE a.contract_id = ? ORDER BY a.at DESC, a.rowid DESC LIMIT ?`,
-        contractId,
-        limit,
+          contractId,
+          limit,
+        )
       ).map((r) => ({
         id: r.id,
         actorId: r.actor_id,

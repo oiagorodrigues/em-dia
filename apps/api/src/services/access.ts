@@ -4,8 +4,12 @@ import type { LocatedContract } from "../repos/index.ts";
 import type { Actor, ServiceDeps } from "./context.ts";
 
 /** 404 for contracts the actor is not a party to, so their existence is not leaked. */
-export function loadContract(deps: ServiceDeps, actor: Actor, contractId: string): LocatedContract {
-  const located = deps.repos.contracts.findById(contractId);
+export async function loadContract(
+  deps: ServiceDeps,
+  actor: Actor,
+  contractId: string,
+): Promise<LocatedContract> {
+  const located = await deps.repos.contracts.findById(contractId);
   if (!located) throw notFound("Vínculo não encontrado");
   const { contract } = located;
   const isParty =
@@ -20,12 +24,12 @@ export function assertNotArchived(contract: Contract): void {
 }
 
 /** Loads a contract the actor is a party to and that still accepts writes. */
-export function loadWritableContract(
+export async function loadWritableContract(
   deps: ServiceDeps,
   actor: Actor,
   contractId: string,
-): LocatedContract {
-  const located = loadContract(deps, actor, contractId);
+): Promise<LocatedContract> {
+  const located = await loadContract(deps, actor, contractId);
   assertNotArchived(located.contract);
   return located;
 }
@@ -34,7 +38,7 @@ export function listContracts(
   deps: ServiceDeps,
   actor: Actor,
   includeArchived = false,
-): LocatedContract[] {
+): Promise<LocatedContract[]> {
   return actor.role === "employer"
     ? deps.repos.contracts.listForEmployer(actor.id, includeArchived)
     : deps.repos.contracts.listForWorker(actor.id, includeArchived);

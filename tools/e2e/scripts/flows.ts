@@ -633,11 +633,25 @@ function personRow(table: Locator, name: string): Locator {
   return table.getByRole("row").filter({ hasText: name });
 }
 
+/** Submits the payment form and waits for the POST to succeed and the form to close, so a later goto cannot abort it. */
+async function submitPayment(page: Page): Promise<void> {
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (r) =>
+        r.request().method() === "POST" &&
+        /\/contracts\/[^/]+\/payments$/.test(new URL(r.url()).pathname),
+    ),
+    action(page, /^registrar pagamento$/).click(),
+  ]);
+  if (!response.ok()) throw new Error(`creating the payment returned ${response.status()}`);
+  await page.waitForURL((url) => !url.pathname.endsWith("/pagamentos/novo"));
+}
+
 async function registerPayment(page: Page, contractId: string, digits: string): Promise<void> {
   await page.goto(`${BASE}/pagamentos/novo?vinculo=${contractId}`);
   await page.getByLabel("Valor", { exact: true }).fill(digits);
   await choose(page, "Como pagou", "Dinheiro");
-  await action(page, /^registrar pagamento$/).click();
+  await submitPayment(page);
   await page.waitForURL(/\/equipe\/[^/]+\/pagamentos/);
 }
 
@@ -914,7 +928,7 @@ async function agreement(state: State): Promise<void> {
       el instanceof HTMLInputElement ? el.checked : (el.textContent ?? "").includes("Compensação"),
     );
   if (!selected) throw new Error("the payment method is not preselected as Compensação");
-  await action(page, /^registrar pagamento$/).click();
+  await submitPayment(page);
 
   await page.goto(`${BASE}/equipe/${id}/acordos`);
   await poll("the agreement to show abatido R$ 200 and falta R$ 400", async () => {

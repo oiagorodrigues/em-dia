@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 import { setup, type TestEnv } from "./helpers.ts";
 
 let t: TestEnv;
-beforeEach(() => {
-  t = setup();
+beforeEach(async () => {
+  t = await setup();
 });
 afterEach(() => t.cleanup());
 
@@ -62,9 +62,9 @@ describe("http hardening", () => {
   });
 
   test("dev outbox is not mounted in production", async () => {
-    const prod = setup({ NODE_ENV: "production" });
+    const prod = await setup({ NODE_ENV: "production" });
     const res = await prod.http().get("/api/v1/dev/outbox");
-    prod.cleanup();
+    await prod.cleanup();
     expect(res.status).toBe(401);
   });
 });

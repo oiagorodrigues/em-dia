@@ -1,4 +1,4 @@
-import { queryOne, transaction, type Db } from "../db/index.ts";
+import type { Database, Executor } from "../db/index.ts";
 import { adjustmentsRepo } from "./adjustments.ts";
 import { agreementsRepo } from "./agreements.ts";
 import { auditRepo } from "./audit.ts";
@@ -11,10 +11,8 @@ import { paymentsRepo } from "./payments.ts";
 import { refreshTokensRepo } from "./refresh-tokens.ts";
 import { usersRepo } from "./users.ts";
 
-export function createRepos(db: Db) {
+function bind(db: Executor) {
   return {
-    tx: <T>(fn: () => T): T => transaction(db, fn),
-    ping: (): boolean => queryOne<{ ok: number }>(db, "SELECT 1 AS ok")?.ok === 1,
     users: usersRepo(db),
     households: householdsRepo(db),
     contracts: contractsRepo(db),
@@ -29,6 +27,18 @@ export function createRepos(db: Db) {
   };
 }
 
+/** The same repositories bound to an open transaction. */
+export type TxRepos = ReturnType<typeof bind>;
+
+export function createRepos(db: Database) {
+  return {
+    ...bind(db),
+    /** Repositories used inside `fn` share one atomic write transaction. */
+    tx: <T>(fn: (r: TxRepos) => Promise<T>): Promise<T> => db.transaction((ex) => fn(bind(ex))),
+    ping: async (): Promise<boolean> => (await db.get<{ ok: number }>("SELECT 1 AS ok"))?.ok === 1,
+  };
+}
+
 export type Repos = ReturnType<typeof createRepos>;
 
 export { toPublicUser, type UserRecord } from "./users.ts";
@@ -36,4 +46,4 @@ export { toPayment, type PaymentRecord } from "./payments.ts";
 export type { LocatedContract, ContractFields } from "./contracts.ts";
 export type { AuditEvent } from "./audit.ts";
 export type { RefreshTokenRecord } from "./refresh-tokens.ts";
-export type { Db } from "../db/index.ts";
+export type { Database } from "../db/index.ts";

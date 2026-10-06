@@ -2,12 +2,22 @@
 
 ## Data and backups
 
-State is one SQLite file plus one uploads directory (`DATA_DIR`). Back up both together.
+State is a database plus receipt files. Two deployments exist:
+
+| Deployment                         | Database                          | Receipts                  |
+| ---------------------------------- | --------------------------------- | ------------------------- |
+| Docker / `bun run start`           | SQLite file via `node:sqlite`     | `UPLOAD_DIR` on disk      |
+| Vercel ([guide](DEPLOY-VERCEL.md)) | Turso (libSQL) via `DATABASE_URL` | private Vercel Blob store |
+
+SQLite file deployments: back up the file and the uploads directory together.
 
 - Use `VACUUM INTO 'backup.db'` or the SQLite online backup API for a consistent copy while the server runs. Do not `cp` a live WAL database.
-- Copy the uploads directory after the database snapshot; a missing file for a recorded receipt must show as "comprovante indisponível", not crash.
+- Copy the uploads directory after the database snapshot; a missing file for a recorded receipt answers 404 "Comprovante indisponível", it does not crash.
 - Keep at least 7 daily copies. Test a restore by starting the api against the copy and calling `/api/health`.
-- Migrations run on startup inside a transaction, in order, once each (tracked in a migrations table). Never edit a shipped migration; add a new one.
+
+Turso and Blob: Turso keeps point-in-time recovery (window depends on the plan); keep your own `.dump` too. Blob has no built-in backup; copy `receipts/` with `vercel blob list`/`get`. Commands are in [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md#backups).
+
+Migrations are SQL scripts applied in order, once each, each in its own write transaction that re-checks the `migrations` table, so concurrent runs are safe. A local SQLite file migrates at startup. A remote (Turso) database is migrated only by `bun run db:migrate`, which the Vercel build runs; at boot the API logs an error listing pending migrations instead of migrating from many instances at once. Never edit a shipped migration; add a new one.
 
 ## Health
 
@@ -26,14 +36,19 @@ On `SIGTERM` and `SIGINT`: stop accepting connections, wait for in-flight reques
 
 ## Failure modes
 
-| Failure                  | Expected behavior                                                                    |
-| ------------------------ | ------------------------------------------------------------------------------------ |
-| Database locked          | `busy_timeout` set; request fails with 500 after timeout, logged                     |
-| Uploads dir not writable | Payment creation fails with 500 before inserting the row                             |
-| Clock skew               | Server time is the only source for clock in/out                                      |
-| Mailer unavailable       | Forgot-password still returns 204; invites return `emailSent: false`; failure logged |
+| Failure                  | Expected behavior                                                                                                                            |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Database locked          | SQLite file: `busy_timeout`, then 500. Turso: write transactions are queued per instance and retried on `SQLITE_BUSY` with backoff, then 500 |
+| Schema behind (Turso)    | Boot logs `database schema is behind` with the pending ids; run `bun run db:migrate`                                                         |
+| Blob store unavailable   | Payment with receipt fails with 500 and no row is written; downloads return 500                                                              |
+| Upstash unavailable      | Rate limiting lets requests through (`passOnStoreError`) instead of failing them                                                             |
+| Uploads dir not writable | Payment creation fails with 500 before inserting the row                                                                                     |
+| Clock skew               | Server time is the only source for clock in/out                                                                                              |
+| Mailer unavailable       | Forgot-password still returns 204; invites return `emailSent: false`; failure logged                                                         |
 
 ## Deploy
+
+Vercel (serverless, Turso, Blob): see [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md). The rest of this section is the single-process deployment.
 
 One process serves the API and the built PWA from the same origin. Same origin is what lets the refresh cookie (`SameSite=Strict`) and the service worker work without CORS.
 
