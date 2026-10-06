@@ -1,189 +1,172 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
-import { migrate, openDatabase, pendingMigrations, type Database } from "../src/db/index.ts";
-import { createLibsqlDatabase, retryWhileBusy } from "../src/db/libsql.ts";
-import { migrations } from "../src/db/migrations/index.ts";
+import { eq, sql } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { openDatabase, pendingMigrations, type Database } from "../src/db/index.ts";
+import { households, users, workEntries, contracts } from "../src/db/schema.ts";
+import { createRepos, isDuplicateEmail } from "../src/repos/index.ts";
+import journal from "../drizzle/meta/_journal.json" with { type: "json" };
 
 /**
- * Both drivers must behave identically. libSQL runs on a local file; set
- * EMDIA_TEST_LIBSQL_URL (e.g. a `sqld` container at http://127.0.0.1:8080) to
- * also run the contract over the HTTP protocol Turso speaks. That database is
- * wiped before each test.
+ * The same contract for every driver. PGlite always runs; set
+ * EMDIA_TEST_POSTGRES_URL (e.g. a postgres:latest container) to also run it on
+ * node-postgres. That database is dropped and recreated (schema `public`).
  */
-const remoteUrl = process.env.EMDIA_TEST_LIBSQL_URL;
-const drivers: [string, (dir: string) => Database][] = [
-  ["node-sqlite", () => openDatabase(":memory:")],
-  ["libsql", (dir) => createLibsqlDatabase(`file:${join(dir, "contract.db")}`)],
-  ...(remoteUrl
-    ? [["libsql (remote)", () => createLibsqlDatabase(remoteUrl)] as [string, () => Database]]
+const postgresUrl = process.env.EMDIA_TEST_POSTGRES_URL;
+const drivers: [string, () => Promise<Database>][] = [
+  ["pglite", () => openDatabase("pglite:memory")],
+  ...(postgresUrl
+    ? [["node-postgres", () => openDatabase(postgresUrl)] as [string, () => Promise<Database>]]
     : []),
 ];
 
-async function wipe(db: Database) {
-  const tables = await db.all<{ name: string }>(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream%'",
-  );
-  if (tables.length === 0) return;
-  // One script: over HTTP each separate statement may run on its own connection, and the pragma is per connection.
-  await db.exec(
-    [
-      "PRAGMA foreign_keys = OFF",
-      ...tables.map(({ name }) => `DROP TABLE IF EXISTS "${name}"`),
-    ].join(";\n"),
-  );
+async function wipe(database: Database) {
+  await database.db.execute(sql`DROP SCHEMA IF EXISTS drizzle CASCADE`);
+  await database.db.execute(sql`DROP SCHEMA IF EXISTS public CASCADE`);
+  await database.db.execute(sql`CREATE SCHEMA public`);
 }
 
-describe.each(drivers)("%s driver", (name, open) => {
-  let dir: string;
-  let db: Database;
+describe.each(drivers)("%s", (driver, open) => {
+  let database: Database;
+  const others: Database[] = [];
 
-  beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), "emdia-driver-"));
-    db = open(dir);
-    await wipe(db);
-    await db.exec(`
-      CREATE TABLE things (id TEXT PRIMARY KEY, n INTEGER NOT NULL, note TEXT) STRICT;
-      CREATE TABLE uniq (email TEXT NOT NULL UNIQUE) STRICT;
-    `);
+  beforeAll(async () => {
+    database = await open();
+    await wipe(database);
   });
-  afterEach(async () => {
-    await db.close();
-    rmSync(dir, { recursive: true, force: true });
+  afterAll(async () => {
+    for (const d of [database, ...others]) await d.close();
   });
 
-  test("reports its driver", () => {
-    expect(db.driver).toBe(name.split(" ")[0]);
+  test("reports its driver and starts with every migration pending", async () => {
+    expect(database.driver).toBe(driver);
+    expect((await pendingMigrations(database.db)).length).toBeGreaterThan(0);
   });
 
-  test("get / all / run with parameters, nulls and change counts", async () => {
-    expect(
-      await db.run(
-        "INSERT INTO things (id, n, note) VALUES (?, ?, ?), (?, ?, ?)",
-        "a",
-        1,
-        null,
-        "b",
-        2,
-        "x",
-      ),
-    ).toBe(2);
-    expect(await db.get("SELECT * FROM things WHERE id = ?", "a")).toEqual({
-      id: "a",
-      n: 1,
+  test("migrations apply once, also when several runs race", async () => {
+    // PGlite is single-process, so its race happens on one instance; Postgres races separate pools.
+    const runners =
+      driver === "pglite"
+        ? [database, database, database]
+        : [database, ...(await Promise.all([open(), open()]))];
+    others.push(...runners.filter((r) => r !== database));
+    const applied = await Promise.all(runners.map((r) => r.migrate()));
+    expect(applied.flat()).toEqual(journal.entries.map((e) => e.tag));
+    expect(await database.migrate()).toEqual([]);
+    expect(await pendingMigrations(database.db)).toEqual([]);
+  });
+
+  test("timestamps, dates and jsonb round-trip as the domain expects", async () => {
+    const repos = createRepos(database);
+    await repos.users.insert({
+      id: "u1",
+      email: "ana@test.dev",
+      name: "Ana",
+      role: "employer",
+      passwordHash: "x",
+      createdAt: "2026-10-06T15:00:00.123Z",
+    });
+    expect((await repos.users.findById("u1"))?.createdAt).toBe("2026-10-06T15:00:00.123Z");
+
+    await repos.households.insert({
+      id: "h1",
+      ownerId: "u1",
+      name: "Casa",
+      timezone: "America/Sao_Paulo",
+      createdAt: "2026-10-06T15:00:00.000Z",
+    });
+    await repos.contracts.insert({
+      id: "c1",
+      householdId: "h1",
+      createdAt: "2026-10-06T15:00:00.000Z",
+      workerName: "Maria",
+      occupation: "diarista",
+      payType: "daily",
+      rateCents: 18000,
+      schedule: {
+        kind: "weekly",
+        weekdays: [2, 5],
+        everyWeeks: 2,
+        monthDays: [],
+        visitsPerMonth: null,
+      },
+      deductAbsences: true,
+      contactEmail: null,
+      contactPhone: null,
+      expectedStart: "08:00",
+      expectedEnd: "16:00",
+      startedOn: "2026-08-01",
+    });
+    const located = await repos.contracts.findById("c1");
+    expect(located?.contract).toMatchObject({
+      schedule: { kind: "weekly", weekdays: [2, 5], everyWeeks: 2 },
+      startedOn: "2026-08-01",
+      employerName: "Ana",
+      workerPhone: null,
+    });
+
+    await repos.entries.save({
+      id: "e1",
+      contractId: "c1",
+      date: "2026-09-30",
+      status: "worked",
+      checkIn: "08:00",
+      checkOut: "16:00",
+      breakMinutes: 60,
+      minutes: 420,
       note: null,
+      createdBy: "u1",
+      createdByRole: "employer",
+      confirmedBy: null,
+      confirmedAt: null,
+      updatedAt: "2026-09-30T20:00:00.000Z",
     });
-    expect(await db.get("SELECT * FROM things WHERE id = ?", "zzz")).toBeUndefined();
-    expect(await db.all<{ id: string }>("SELECT id FROM things ORDER BY id")).toEqual([
-      { id: "a" },
-      { id: "b" },
+    expect((await repos.entries.listByMonth("c1", "2026-09")).map((e) => e.date)).toEqual([
+      "2026-09-30",
     ]);
-    expect(await db.run("UPDATE things SET n = n + 1 WHERE n > ?", 0)).toBe(2);
-    expect(await db.get("UPDATE things SET n = 10 WHERE id = ? RETURNING n", "b")).toEqual({
-      n: 10,
-    });
+    expect(await repos.entries.listByMonth("c1", "2026-10")).toEqual([]);
   });
 
   test("a transaction commits everything or nothing", async () => {
-    await db.transaction(async (tx) => {
-      await tx.run("INSERT INTO things (id, n) VALUES ('ok', 1)");
-      await tx.run("INSERT INTO things (id, n) VALUES ('ok2', 2)");
-    });
+    const repos = createRepos(database);
     await expect(
-      db.transaction(async (tx) => {
-        await tx.run("INSERT INTO things (id, n) VALUES ('lost', 3)");
+      repos.tx(async (r) => {
+        await r.households.update("h1", { name: "Mudou", timezone: "UTC" });
         throw new Error("boom");
       }),
     ).rejects.toThrow("boom");
-    const ids = (await db.all<{ id: string }>("SELECT id FROM things ORDER BY id")).map(
-      (r) => r.id,
-    );
-    expect(ids).toEqual(["ok", "ok2"]);
-  });
+    expect((await repos.households.findById("h1"))?.name).toBe("Casa");
 
-  test("a constraint error inside a transaction rolls it back with SQLite's message", async () => {
-    await db.run("INSERT INTO uniq (email) VALUES ('a@b.co')");
-    const failure = db.transaction(async (tx) => {
-      await tx.run("INSERT INTO things (id, n) VALUES ('half', 1)");
-      await tx.run("INSERT INTO uniq (email) VALUES ('a@b.co')");
+    await repos.tx(async (r) => {
+      await r.households.update("h1", { name: "Casa nova", timezone: "America/Sao_Paulo" });
+      await r.contracts.end("c1", "2026-12-31");
     });
-    await expect(failure).rejects.toThrow(/UNIQUE constraint failed: uniq\.email/);
-    expect(await db.get("SELECT id FROM things WHERE id = 'half'")).toBeUndefined();
+    expect((await repos.households.findById("h1"))?.name).toBe("Casa nova");
+    expect((await repos.contracts.findById("c1"))?.contract.status).toBe("ended");
   });
 
-  test("concurrent transactions are serialised, not interleaved", async () => {
-    await db.run("INSERT INTO things (id, n) VALUES ('counter', 0)");
-    const bump = () =>
-      db.transaction(async (tx) => {
-        const row = await tx.get<{ n: number }>("SELECT n FROM things WHERE id = 'counter'");
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        await tx.run("UPDATE things SET n = ? WHERE id = 'counter'", (row?.n ?? 0) + 1);
-      });
-    await Promise.all([bump(), bump(), bump(), bump()]);
-    expect(await db.get("SELECT n FROM things WHERE id = 'counter'")).toEqual({ n: 4 });
-  });
+  test("constraints from the schema are enforced", async () => {
+    const repos = createRepos(database);
+    const duplicate = repos.users.insert({
+      id: "u2",
+      email: "ana@test.dev",
+      name: "Outra",
+      role: "worker",
+      passwordHash: "x",
+      createdAt: "2026-10-06T15:00:00.000Z",
+    });
+    const err = await duplicate.catch((e: unknown) => e);
+    expect(isDuplicateEmail(err)).toBe(true);
 
-  test("migrations apply once, also when two runs race", async () => {
-    const [first, second] = await Promise.all([migrate(db), migrate(db)]);
-    expect([...first, ...second].sort()).toEqual(migrations.map((m) => m.id).sort());
-    expect(await migrate(db)).toEqual([]);
-    expect(await pendingMigrations(db)).toEqual([]);
-  });
-
-  test("pending migrations are listed before migrating", async () => {
-    expect(await pendingMigrations(db)).toEqual(migrations.map((m) => m.id));
-    await migrate(db, migrations.slice(0, 2));
-    expect(await pendingMigrations(db)).toEqual(migrations.slice(2).map((m) => m.id));
-  });
-});
-
-test("openDatabase picks libSQL for remote URLs and node:sqlite for paths", async () => {
-  const local = openDatabase(":memory:");
-  expect(local.driver).toBe("node-sqlite");
-  await local.close();
-  const remote = openDatabase("libsql://example-org.turso.io", "token");
-  expect(remote.driver).toBe("libsql");
-  await remote.close();
-});
-
-describe("retryWhileBusy", () => {
-  const busy = () => Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY" });
-
-  test("retries SQLITE_BUSY until the transaction gets through", async () => {
-    let calls = 0;
-    const result = await retryWhileBusy(
-      async () => {
-        calls++;
-        if (calls < 3) throw busy();
-        return "committed";
-      },
-      { backoffMs: 1 },
-    );
-    expect(result).toBe("committed");
-    expect(calls).toBe(3);
-  });
-
-  test("gives up after the retry budget and never retries other errors", async () => {
-    let calls = 0;
     await expect(
-      retryWhileBusy(
-        async () => {
-          calls++;
-          throw busy();
-        },
-        { retries: 2, backoffMs: 1 },
-      ),
-    ).rejects.toThrow("database is locked");
-    expect(calls).toBe(3);
-
-    let other = 0;
+      database.db.update(contracts).set({ rateCents: 0 }).where(eq(contracts.id, "c1")),
+    ).rejects.toThrow();
     await expect(
-      retryWhileBusy(async () => {
-        other++;
-        throw new Error("UNIQUE constraint failed: users.email");
-      }),
-    ).rejects.toThrow(/UNIQUE/);
-    expect(other).toBe(1);
+      database.db.update(workEntries).set({ checkIn: "25:00" }).where(eq(workEntries.id, "e1")),
+    ).rejects.toThrow();
+  });
+
+  test("foreign keys cascade from a household to its contracts and their history", async () => {
+    await database.db.delete(households).where(eq(households.id, "h1"));
+    expect(await database.db.select().from(workEntries)).toEqual([]);
+    await database.db.delete(users).where(eq(users.id, "u1"));
   });
 });

@@ -7,7 +7,7 @@ Operating principles for working in this repo, mostly for agents.
 - Enforce with machines, not with prose. If a rule matters, a test in `tools/harness` checks it, and its failure message says WHAT is wrong, HOW to FIX it and where the REFerence doc is.
 - Fix the rule's cause, not the rule. When a harness test fails, follow the FIX text. Weaken a rule only with a decision-log entry explaining why.
 - Contract first. Shapes live in `@emdia/shared`; api and web follow.
-- Boring technology. Prefer what the platform ships (`node:sqlite`, `fetch`, `<dialog>`) over a new dependency.
+- Boring technology. Prefer what the platform ships (`fetch`, `<dialog>`) and proven tools (PostgreSQL, Drizzle) over a new dependency.
 - Small, verifiable steps. Run `vp check` and the tests after each change; do not stack unverified work.
 - Plans are artifacts. Work is tracked in `docs/exec-plans`, with checkboxes and a decision log.
 - Measure the gaps. [QUALITY_SCORE](../QUALITY_SCORE.md) is updated with every change that moves a grade.

@@ -19,6 +19,8 @@ import {
 } from "@emdia/shared";
 import { loadConfig } from "../config/index.ts";
 import { openDatabase } from "../db/index.ts";
+import { contracts, households, users } from "../db/schema.ts";
+import { eq, inArray } from "drizzle-orm";
 import { hashPassword } from "../lib/crypto.ts";
 import { newId } from "../lib/ids.ts";
 import { createLogger } from "../lib/logger.ts";
@@ -38,56 +40,29 @@ const MONTHS: YearMonth[] = ["2026-08", "2026-09", "2026-10"];
 
 const config = loadConfig();
 const logger = createLogger(config.logLevel === "silent" ? "silent" : "info", { script: "seed" });
-const db = openDatabase(config.databaseUrl, config.databaseAuthToken ?? undefined);
-const repos = createRepos(db);
+const database = await openDatabase(config.databaseUrl);
+if (database.driver === "pglite") await database.migrate();
+const repos = createRepos(database);
 const files = createReceiptStore(config);
 
-const placeholders = (n: number) => Array.from({ length: n }, () => "?").join(", ");
-
-/**
- * Deletes children before parents explicitly: Turso does not enforce foreign
- * keys, so cascades can't be relied on to clean up.
- */
+/** Postgres enforces the foreign keys: households cascade to contracts and their history, users to sessions. */
 async function reset(): Promise<void> {
-  const userIds = (
-    await db.all<{ id: string }>(
-      "SELECT id FROM users WHERE email IN (?, ?)",
-      ANA.email,
-      MARIA.email,
-    )
-  ).map((u) => u.id);
-  if (userIds.length === 0) return;
-  const users = placeholders(userIds.length);
-  const contractIds = (
-    await db.all<{ id: string }>(
-      `SELECT c.id FROM contracts c JOIN households h ON h.id = c.household_id WHERE h.owner_id IN (${users})`,
-      ...userIds,
-    )
-  ).map((c) => c.id);
-  const receipts = await repos.payments.listReceiptFiles(contractIds);
+  const seedUsers = await database.db
+    .select({ id: users.id })
+    .from(users)
+    .where(inArray(users.email, [ANA.email, MARIA.email]));
+  const ids = seedUsers.map((u) => u.id);
+  if (ids.length === 0) return;
+  const owned = await database.db
+    .select({ id: contracts.id })
+    .from(contracts)
+    .innerJoin(households, eq(households.id, contracts.householdId))
+    .where(inArray(households.ownerId, ids));
+  const receipts = await repos.payments.listReceiptFiles(owned.map((c) => c.id));
 
-  await db.transaction(async (tx) => {
-    if (contractIds.length > 0) {
-      const contracts = placeholders(contractIds.length);
-      for (const table of [
-        "audit_log",
-        "payments",
-        "agreements",
-        "adjustments",
-        "work_entries",
-        "invites",
-      ]) {
-        await tx.run(`DELETE FROM ${table} WHERE contract_id IN (${contracts})`, ...contractIds);
-      }
-      await tx.run(`DELETE FROM contracts WHERE id IN (${contracts})`, ...contractIds);
-    }
-    await tx.run(`UPDATE contracts SET worker_id = NULL WHERE worker_id IN (${users})`, ...userIds);
-    await tx.run(`UPDATE audit_log SET actor_id = NULL WHERE actor_id IN (${users})`, ...userIds);
-    for (const table of ["refresh_tokens", "password_resets"]) {
-      await tx.run(`DELETE FROM ${table} WHERE user_id IN (${users})`, ...userIds);
-    }
-    await tx.run(`DELETE FROM households WHERE owner_id IN (${users})`, ...userIds);
-    await tx.run(`DELETE FROM users WHERE id IN (${users})`, ...userIds);
+  await database.transaction(async (tx) => {
+    await tx.delete(households).where(inArray(households.ownerId, ids));
+    await tx.delete(users).where(inArray(users.id, ids));
   });
   await Promise.all(receipts.map((name) => files.remove(name)));
 }
@@ -635,12 +610,12 @@ async function main(): Promise<void> {
   const wipe = process.argv.includes("--reset");
   if (wipe) await reset();
   else if (await repos.users.findByEmail(ANA.email)) {
-    logger.info("already seeded; run with --reset to recreate", { database: db.driver });
+    logger.info("already seeded; run with --reset to recreate", { database: database.driver });
     return;
   }
   await seed();
   logger.info("seeded", {
-    database: db.driver,
+    database: database.driver,
     employer: ANA.email,
     worker: MARIA.email,
     loginWith: `password ${PASSWORD}`,
@@ -650,5 +625,5 @@ async function main(): Promise<void> {
 try {
   await main();
 } finally {
-  await db.close();
+  await database.close();
 }

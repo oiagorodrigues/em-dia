@@ -1,90 +1,56 @@
-import type { EntryStatus, IsoDate, Role, WorkEntry, YearMonth } from "@emdia/shared";
+import type { IsoDate, WorkEntry, YearMonth } from "@emdia/shared";
+import { and, asc, eq, gte, lt } from "drizzle-orm";
 import type { Executor } from "../db/index.ts";
+import { workEntries } from "../db/schema.ts";
+import { date, dateOrNull, iso, isoOrNull } from "./convert.ts";
+import { monthRange } from "./month.ts";
 
-interface Row {
-  id: string;
-  contract_id: string;
-  date: string;
-  status: EntryStatus;
-  check_in: string | null;
-  check_out: string | null;
-  break_minutes: number;
-  minutes: number;
-  note: string | null;
-  created_by: string;
-  created_by_role: Role;
-  confirmed_by: string | null;
-  confirmed_at: string | null;
-  updated_at: string;
-}
-
-const toEntry = (r: Row): WorkEntry => ({
-  id: r.id,
-  contractId: r.contract_id,
-  date: r.date,
-  status: r.status,
-  checkIn: r.check_in,
-  checkOut: r.check_out,
-  breakMinutes: r.break_minutes,
-  minutes: r.minutes,
-  note: r.note,
-  createdBy: r.created_by,
-  createdByRole: r.created_by_role,
-  confirmedBy: r.confirmed_by,
-  confirmedAt: r.confirmed_at,
-  updatedAt: r.updated_at,
+const toEntry = (r: typeof workEntries.$inferSelect): WorkEntry => ({
+  ...r,
+  confirmedAt: isoOrNull(r.confirmedAt),
+  updatedAt: iso(r.updatedAt),
 });
 
 export function entriesRepo(db: Executor) {
   return {
     async listByMonth(contractId: string, month: YearMonth): Promise<WorkEntry[]> {
-      return (
-        await db.all<Row>(
-          "SELECT * FROM work_entries WHERE contract_id = ? AND substr(date, 1, 7) = ? ORDER BY date",
-          contractId,
-          month,
+      const [from, to] = monthRange(month);
+      const rows = await db
+        .select()
+        .from(workEntries)
+        .where(
+          and(
+            eq(workEntries.contractId, contractId),
+            gte(workEntries.date, from),
+            lt(workEntries.date, to),
+          ),
         )
-      ).map(toEntry);
+        .orderBy(asc(workEntries.date));
+      return rows.map(toEntry);
     },
 
-    async find(contractId: string, date: IsoDate): Promise<WorkEntry | undefined> {
-      const r = await db.get<Row>(
-        "SELECT * FROM work_entries WHERE contract_id = ? AND date = ?",
-        contractId,
-        date,
-      );
+    async find(contractId: string, day: IsoDate): Promise<WorkEntry | undefined> {
+      const [r] = await db
+        .select()
+        .from(workEntries)
+        .where(and(eq(workEntries.contractId, contractId), eq(workEntries.date, day)));
       return r && toEntry(r);
     },
 
     /** Insert or full replace of the (contract, date) row. */
     async save(e: WorkEntry): Promise<void> {
-      await db.run(
-        `INSERT INTO work_entries (id, contract_id, date, status, check_in, check_out, break_minutes, minutes, note,
-           created_by, created_by_role, confirmed_by, confirmed_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (contract_id, date) DO UPDATE SET status = excluded.status, check_in = excluded.check_in,
-           check_out = excluded.check_out, break_minutes = excluded.break_minutes, minutes = excluded.minutes,
-           note = excluded.note, created_by = excluded.created_by, created_by_role = excluded.created_by_role,
-           confirmed_by = excluded.confirmed_by, confirmed_at = excluded.confirmed_at, updated_at = excluded.updated_at`,
-        e.id,
-        e.contractId,
-        e.date,
-        e.status,
-        e.checkIn,
-        e.checkOut,
-        e.breakMinutes,
-        e.minutes,
-        e.note,
-        e.createdBy,
-        e.createdByRole,
-        e.confirmedBy,
-        e.confirmedAt,
-        e.updatedAt,
-      );
+      const row = { ...e, confirmedAt: dateOrNull(e.confirmedAt), updatedAt: date(e.updatedAt) };
+      const { id: _id, contractId: _contract, date: _date, ...changes } = row;
+      await db
+        .insert(workEntries)
+        .values(row)
+        .onConflictDoUpdate({ target: [workEntries.contractId, workEntries.date], set: changes });
     },
 
-    async delete(contractId: string, date: IsoDate): Promise<void> {
-      await db.run("DELETE FROM work_entries WHERE contract_id = ? AND date = ?", contractId, date);
+    async delete(contractId: string, day: IsoDate): Promise<void> {
+      await db
+        .delete(workEntries)
+        .where(and(eq(workEntries.contractId, contractId), eq(workEntries.date, day)));
     },
   };
 }

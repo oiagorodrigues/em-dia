@@ -1,14 +1,11 @@
-import type {
-  ClockTime,
-  Contract,
-  ContractStatus,
-  IsoDate,
-  Occupation,
-  PayType,
-  Schedule,
-  ScheduleKind,
-} from "@emdia/shared";
-import type { Executor, Param } from "../db/index.ts";
+import type { ClockTime, Contract, IsoDate, Occupation, PayType, Schedule } from "@emdia/shared";
+import { and, asc, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import { createSelectSchema } from "drizzle-zod";
+import { z } from "zod";
+import type { Executor } from "../db/index.ts";
+import { contracts, households, users } from "../db/schema.ts";
+import { date, dateOrNull, iso, isoOrNull } from "./convert.ts";
 
 /** A contract plus the timezone of its household, which every "today" computation needs. */
 export interface LocatedContract {
@@ -30,177 +27,142 @@ export interface ContractFields {
   startedOn: IsoDate;
 }
 
-interface Row {
-  id: string;
-  household_id: string;
-  household_name: string;
-  employer_id: string;
-  employer_name: string;
-  worker_phone: string | null;
-  worker_pix_key: string | null;
-  timezone: string;
-  worker_id: string | null;
-  worker_name: string;
-  occupation: Occupation;
-  pay_type: PayType;
-  rate_cents: number;
-  schedule_kind: ScheduleKind;
-  schedule_weekdays: string;
-  every_weeks: number;
-  month_days: string;
-  visits_per_month: number | null;
-  deduct_absences: number;
-  contact_email: string | null;
-  contact_phone: string | null;
-  archived_at: string | null;
-  expected_start: string | null;
-  expected_end: string | null;
-  started_on: string;
-  ended_on: string | null;
-  status: ContractStatus;
-  created_at: string;
-}
+/** jsonb columns are typed by declaration only; the read path checks their shape. */
+const contractRow = createSelectSchema(contracts, {
+  scheduleWeekdays: z.array(z.number().int().min(0).max(6)),
+  monthDays: z.array(z.number().int().min(1).max(31)),
+});
 
-const SELECT = `
-  SELECT c.*, h.name AS household_name, h.owner_id AS employer_id, u.name AS employer_name, h.timezone,
-    w.phone AS worker_phone, w.pix_key AS worker_pix_key
-  FROM contracts c
-  JOIN households h ON h.id = c.household_id
-  JOIN users u ON u.id = h.owner_id
-  LEFT JOIN users w ON w.id = c.worker_id`;
+const owner = alias(users, "owner");
+const worker = alias(users, "worker");
 
-const NOT_ARCHIVED = "AND c.archived_at IS NULL";
-const ORDER = "ORDER BY c.status = 'ended', c.created_at, c.id";
-
-function scheduleParams(f: ContractFields): Param[] {
-  return [
-    f.schedule.kind,
-    JSON.stringify(f.schedule.weekdays),
-    f.schedule.everyWeeks,
-    JSON.stringify(f.schedule.monthDays),
-    f.schedule.visitsPerMonth,
-    f.deductAbsences ? 1 : 0,
-    f.contactEmail,
-    f.contactPhone,
-  ];
-}
-
-function toLocated(r: Row): LocatedContract {
+function columnsOf(f: ContractFields) {
   return {
-    timezone: r.timezone,
-    contract: {
-      id: r.id,
-      householdId: r.household_id,
-      householdName: r.household_name,
-      employerId: r.employer_id,
-      employerName: r.employer_name,
-      workerId: r.worker_id,
-      workerName: r.worker_name,
-      workerPhone: r.worker_phone,
-      workerPixKey: r.worker_pix_key,
-      occupation: r.occupation,
-      payType: r.pay_type,
-      rateCents: r.rate_cents,
-      schedule: {
-        kind: r.schedule_kind,
-        weekdays: JSON.parse(r.schedule_weekdays) as number[],
-        everyWeeks: r.every_weeks,
-        monthDays: JSON.parse(r.month_days) as number[],
-        visitsPerMonth: r.visits_per_month,
-      },
-      deductAbsences: r.deduct_absences === 1,
-      contactEmail: r.contact_email,
-      contactPhone: r.contact_phone,
-      archivedAt: r.archived_at,
-      expectedStart: r.expected_start,
-      expectedEnd: r.expected_end,
-      startedOn: r.started_on,
-      endedOn: r.ended_on,
-      status: r.status,
-      createdAt: r.created_at,
-    },
+    workerName: f.workerName,
+    occupation: f.occupation,
+    payType: f.payType,
+    rateCents: f.rateCents,
+    scheduleKind: f.schedule.kind,
+    scheduleWeekdays: f.schedule.weekdays,
+    everyWeeks: f.schedule.everyWeeks,
+    monthDays: f.schedule.monthDays,
+    visitsPerMonth: f.schedule.visitsPerMonth,
+    deductAbsences: f.deductAbsences,
+    contactEmail: f.contactEmail,
+    contactPhone: f.contactPhone,
+    expectedStart: f.expectedStart,
+    expectedEnd: f.expectedEnd,
+    startedOn: f.startedOn,
   };
 }
 
 export function contractsRepo(db: Executor) {
+  async function select(where: SQL | undefined): Promise<LocatedContract[]> {
+    const rows = await db
+      .select({
+        c: contracts,
+        householdName: households.name,
+        timezone: households.timezone,
+        employerId: owner.id,
+        employerName: owner.name,
+        workerPhone: worker.phone,
+        workerPixKey: worker.pixKey,
+      })
+      .from(contracts)
+      .innerJoin(households, eq(households.id, contracts.householdId))
+      .innerJoin(owner, eq(owner.id, households.ownerId))
+      .leftJoin(worker, eq(worker.id, contracts.workerId))
+      .where(where)
+      .orderBy(sql`${contracts.status} = 'ended'`, asc(contracts.createdAt), asc(contracts.id));
+
+    return rows.map(({ c: raw, ...joined }) => {
+      const c = contractRow.parse(raw);
+      return {
+        timezone: joined.timezone,
+        contract: {
+          id: c.id,
+          householdId: c.householdId,
+          householdName: joined.householdName,
+          employerId: joined.employerId,
+          employerName: joined.employerName,
+          workerId: c.workerId,
+          workerName: c.workerName,
+          workerPhone: joined.workerPhone,
+          workerPixKey: joined.workerPixKey,
+          contactEmail: c.contactEmail,
+          contactPhone: c.contactPhone,
+          occupation: c.occupation,
+          payType: c.payType,
+          rateCents: c.rateCents,
+          schedule: {
+            kind: c.scheduleKind,
+            weekdays: c.scheduleWeekdays,
+            everyWeeks: c.everyWeeks,
+            monthDays: c.monthDays,
+            visitsPerMonth: c.visitsPerMonth,
+          },
+          deductAbsences: c.deductAbsences,
+          expectedStart: c.expectedStart,
+          expectedEnd: c.expectedEnd,
+          startedOn: c.startedOn,
+          endedOn: c.endedOn,
+          status: c.status,
+          archivedAt: isoOrNull(c.archivedAt),
+          createdAt: iso(c.createdAt),
+        },
+      };
+    });
+  }
+
+  const visible = (includeArchived: boolean) =>
+    includeArchived ? undefined : isNull(contracts.archivedAt);
+
   return {
     async findById(id: string): Promise<LocatedContract | undefined> {
-      const r = await db.get<Row>(`${SELECT} WHERE c.id = ?`, id);
-      return r && toLocated(r);
+      return (await select(eq(contracts.id, id)))[0];
     },
 
-    async listForEmployer(ownerId: string, includeArchived = false): Promise<LocatedContract[]> {
-      return (
-        await db.all<Row>(
-          `${SELECT} WHERE h.owner_id = ? ${includeArchived ? "" : NOT_ARCHIVED} ${ORDER}`,
-          ownerId,
-        )
-      ).map(toLocated);
+    listForEmployer(ownerId: string, includeArchived = false): Promise<LocatedContract[]> {
+      return select(and(eq(households.ownerId, ownerId), visible(includeArchived)));
     },
 
-    async listForWorker(workerId: string, includeArchived = false): Promise<LocatedContract[]> {
-      return (
-        await db.all<Row>(
-          `${SELECT} WHERE c.worker_id = ? ${includeArchived ? "" : NOT_ARCHIVED} ${ORDER}`,
-          workerId,
-        )
-      ).map(toLocated);
+    listForWorker(workerId: string, includeArchived = false): Promise<LocatedContract[]> {
+      return select(and(eq(contracts.workerId, workerId), visible(includeArchived)));
     },
 
     async insert(
       c: { id: string; householdId: string; createdAt: string } & ContractFields,
     ): Promise<void> {
-      await db.run(
-        `INSERT INTO contracts (id, household_id, worker_name, occupation, pay_type, rate_cents, schedule_kind,
-           schedule_weekdays, every_weeks, month_days, visits_per_month, deduct_absences, contact_email,
-           contact_phone, expected_start, expected_end, started_on, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
-        c.id,
-        c.householdId,
-        c.workerName,
-        c.occupation,
-        c.payType,
-        c.rateCents,
-        ...scheduleParams(c),
-        c.expectedStart,
-        c.expectedEnd,
-        c.startedOn,
-        c.createdAt,
-      );
+      await db.insert(contracts).values({
+        id: c.id,
+        householdId: c.householdId,
+        createdAt: date(c.createdAt),
+        status: "active",
+        ...columnsOf(c),
+      });
     },
 
     async update(id: string, f: ContractFields): Promise<void> {
-      await db.run(
-        `UPDATE contracts SET worker_name = ?, occupation = ?, pay_type = ?, rate_cents = ?, schedule_kind = ?,
-           schedule_weekdays = ?, every_weeks = ?, month_days = ?, visits_per_month = ?, deduct_absences = ?,
-           contact_email = ?, contact_phone = ?, expected_start = ?, expected_end = ?, started_on = ?
-         WHERE id = ?`,
-        f.workerName,
-        f.occupation,
-        f.payType,
-        f.rateCents,
-        ...scheduleParams(f),
-        f.expectedStart,
-        f.expectedEnd,
-        f.startedOn,
-        id,
-      );
+      await db.update(contracts).set(columnsOf(f)).where(eq(contracts.id, id));
     },
 
     async end(id: string, endedOn: IsoDate): Promise<void> {
-      await db.run("UPDATE contracts SET ended_on = ?, status = 'ended' WHERE id = ?", endedOn, id);
+      await db.update(contracts).set({ endedOn, status: "ended" }).where(eq(contracts.id, id));
     },
 
     async setArchivedAt(id: string, archivedAt: string | null): Promise<void> {
-      await db.run("UPDATE contracts SET archived_at = ? WHERE id = ?", archivedAt, id);
+      await db
+        .update(contracts)
+        .set({ archivedAt: dateOrNull(archivedAt) })
+        .where(eq(contracts.id, id));
     },
 
     async unlinkWorker(workerId: string): Promise<void> {
-      await db.run("UPDATE contracts SET worker_id = NULL WHERE worker_id = ?", workerId);
+      await db.update(contracts).set({ workerId: null }).where(eq(contracts.workerId, workerId));
     },
 
     async linkWorker(id: string, workerId: string): Promise<void> {
-      await db.run("UPDATE contracts SET worker_id = ? WHERE id = ?", workerId, id);
+      await db.update(contracts).set({ workerId }).where(eq(contracts.id, id));
     },
   };
 }

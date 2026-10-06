@@ -1,22 +1,22 @@
 import { loadDatabaseConfig } from "../config/index.ts";
-import { migrate, openDatabase } from "../db/index.ts";
+import { openDatabase } from "../db/index.ts";
 import { createLogger } from "../lib/logger.ts";
 
 /**
- * `bun run db:migrate`: applies pending migrations to DATABASE_URL (or
- * DATABASE_PATH). Safe to run on every deploy and from concurrent builds.
- * With `--if-configured` it does nothing when no DATABASE_URL is set, so the
- * Vercel build can always call it.
+ * `bun run db:migrate`: applies pending Drizzle migrations (`drizzle/`) to
+ * DATABASE_URL_UNPOOLED or DATABASE_URL. Concurrent runs (two deploys
+ * building at once) wait on a Postgres advisory lock. With `--if-configured`
+ * it does nothing when no database URL is set, so the Vercel build can always call it.
  */
 const logger = createLogger("info", { script: "migrate" });
-const { url, authToken, explicit } = loadDatabaseConfig();
+const { url, explicit } = loadDatabaseConfig();
 
 if (!explicit && process.argv.includes("--if-configured")) {
   logger.info("DATABASE_URL not set, skipping migrations");
 } else {
-  const db = openDatabase(url, authToken ?? undefined);
+  const db = await openDatabase(url);
   try {
-    const applied = await migrate(db);
+    const applied = await db.migrate();
     logger.info(applied.length ? "migrations applied" : "database already up to date", {
       driver: db.driver,
       applied,

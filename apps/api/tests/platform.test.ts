@@ -1,6 +1,7 @@
 import { Readable } from "node:stream";
 import { describe, expect, test, vi } from "vite-plus/test";
-import { loadConfig } from "../src/config/index.ts";
+import { loadConfig, loadDatabaseConfig, withoutNeonPooler } from "../src/config/index.ts";
+import { DEFAULT_PGLITE_DIR, parseDatabaseUrl } from "../src/db/index.ts";
 import { createBlobStore, type BlobClient } from "../src/lib/blob-store.ts";
 import { upstashCommand } from "../src/lib/upstash.ts";
 import { restoreOriginalUrl } from "../src/lib/vercel-url.ts";
@@ -9,7 +10,8 @@ const VERCEL_ENV = {
   VERCEL: "1",
   NODE_ENV: "production",
   JWT_SECRET: "x".repeat(40),
-  DATABASE_URL: "libsql://emdia-org.turso.io",
+  DATABASE_URL:
+    "postgresql://app:secret@ep-quiet-sky-123456-pooler.sa-east-1.aws.neon.tech/neondb?sslmode=require",
   BLOB_READ_WRITE_TOKEN: "vercel_blob_rw_test",
 };
 
@@ -27,9 +29,11 @@ describe("restoreOriginalUrl", () => {
 });
 
 describe("Vercel config", () => {
-  test("requires a remote database and a Blob store", () => {
-    expect(() => loadConfig({ ...VERCEL_ENV, DATABASE_URL: "" })).toThrow(/libsql/);
-    expect(() => loadConfig({ ...VERCEL_ENV, DATABASE_URL: "./data/emdia.db" })).toThrow(/libsql/);
+  test("requires a Postgres database and a Blob store", () => {
+    expect(() => loadConfig({ ...VERCEL_ENV, DATABASE_URL: "" })).toThrow(/postgres/);
+    expect(() => loadConfig({ ...VERCEL_ENV, DATABASE_URL: "pglite:./data/pglite" })).toThrow(
+      /postgres/,
+    );
     expect(() => loadConfig({ ...VERCEL_ENV, BLOB_READ_WRITE_TOKEN: "" })).toThrow(/Blob/);
   });
 
@@ -39,7 +43,7 @@ describe("Vercel config", () => {
       onVercel: true,
       trustProxy: 1,
       webOrigin: "https://emdia.app",
-      databaseUrl: "libsql://emdia-org.turso.io",
+      databaseUrl: VERCEL_ENV.DATABASE_URL,
       blob: { token: "vercel_blob_rw_test" },
       receiptMaxBytes: 4 * 1024 * 1024,
     });
@@ -63,7 +67,7 @@ describe("Vercel config", () => {
       upstash: null,
       receiptMaxBytes: 5 * 1024 * 1024,
     });
-    expect(config.databaseUrl).toBe("./data/emdia.db");
+    expect(config.databaseUrl).toBeUndefined();
   });
 
   test("Upstash needs both URL and token", () => {
@@ -72,6 +76,31 @@ describe("Vercel config", () => {
       loadConfig({ UPSTASH_REDIS_REST_URL: "https://x.upstash.io", UPSTASH_REDIS_REST_TOKEN: "t" })
         .upstash,
     ).toEqual({ url: "https://x.upstash.io", token: "t" });
+  });
+});
+
+describe("database URLs", () => {
+  test("pick the driver from DATABASE_URL", () => {
+    expect(parseDatabaseUrl(undefined)).toEqual({ kind: "pglite", dir: DEFAULT_PGLITE_DIR });
+    expect(parseDatabaseUrl("pglite:memory")).toEqual({ kind: "pglite", dir: null });
+    expect(parseDatabaseUrl("pglite:/tmp/x")).toEqual({ kind: "pglite", dir: "/tmp/x" });
+    expect(parseDatabaseUrl("postgres://u:p@db:5432/emdia")).toEqual({
+      kind: "postgres",
+      url: "postgres://u:p@db:5432/emdia",
+    });
+    expect(() => parseDatabaseUrl("libsql://old.turso.io")).toThrow(/DATABASE_URL/);
+  });
+
+  test("migrations use a direct connection: the unpooled URL, or the pooler host without -pooler", () => {
+    const pooled = VERCEL_ENV.DATABASE_URL;
+    expect(withoutNeonPooler(pooled)).toBe(
+      "postgresql://app:secret@ep-quiet-sky-123456.sa-east-1.aws.neon.tech/neondb?sslmode=require",
+    );
+    expect(
+      loadDatabaseConfig({ DATABASE_URL: pooled, DATABASE_URL_UNPOOLED: "postgres://direct/db" }),
+    ).toEqual({ url: "postgres://direct/db", explicit: true });
+    expect(loadDatabaseConfig({})).toEqual({ url: undefined, explicit: false });
+    expect(withoutNeonPooler("pglite:./data/pglite")).toBe("pglite:./data/pglite");
   });
 });
 

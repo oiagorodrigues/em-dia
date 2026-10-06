@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import type { Config } from "./config/index.ts";
-import { migrate, openDatabase, pendingMigrations, type Database } from "./db/index.ts";
+import { attachDatabasePool } from "@vercel/functions";
+import { openDatabase, pendingMigrations, type Database } from "./db/index.ts";
 import { createApp } from "./http/app.ts";
 import type { Logger } from "./lib/logger.ts";
 import { createMailer } from "./lib/mailer.ts";
@@ -13,8 +14,9 @@ export interface Runtime {
 
 /**
  * Wires the app for both entries (long-running server and Vercel Function).
- * A local SQLite file migrates itself; a remote database is migrated by the
- * build (`db:migrate`), never by a function instance racing other instances.
+ * Embedded PGlite migrates itself; a real Postgres is migrated by
+ * `db:migrate` (the Vercel build, Docker's entrypoint), never by app
+ * instances racing each other at boot.
  */
 export async function startRuntime(config: Config, logger: Logger): Promise<Runtime> {
   if (config.jwtSecretEphemeral) {
@@ -27,11 +29,14 @@ export async function startRuntime(config: Config, logger: Logger): Promise<Runt
     logger.warn("UPSTASH_REDIS_REST_URL not set: rate limits are counted per function instance");
   }
 
-  const db = openDatabase(config.databaseUrl, config.databaseAuthToken ?? undefined);
-  if (db.driver === "node-sqlite") {
-    await migrate(db);
+  // On Fluid compute, Vercel releases idle pool clients before an instance is suspended.
+  const db = await openDatabase(config.databaseUrl, {
+    onPool: config.onVercel ? attachDatabasePool : undefined,
+  });
+  if (db.driver === "pglite") {
+    await db.migrate();
   } else {
-    const pending = await pendingMigrations(db);
+    const pending = await pendingMigrations(db.db);
     if (pending.length > 0) {
       logger.error("database schema is behind: run `bun run db:migrate`", { pending });
     }

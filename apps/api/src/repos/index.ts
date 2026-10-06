@@ -10,6 +10,7 @@ import { passwordResetsRepo } from "./password-resets.ts";
 import { paymentsRepo } from "./payments.ts";
 import { refreshTokensRepo } from "./refresh-tokens.ts";
 import { usersRepo } from "./users.ts";
+import { sql } from "drizzle-orm";
 
 function bind(db: Executor) {
   return {
@@ -30,18 +31,22 @@ function bind(db: Executor) {
 /** The same repositories bound to an open transaction. */
 export type TxRepos = ReturnType<typeof bind>;
 
-export function createRepos(db: Database) {
+export function createRepos(database: Database) {
   return {
-    ...bind(db),
-    /** Repositories used inside `fn` share one atomic write transaction. */
-    tx: <T>(fn: (r: TxRepos) => Promise<T>): Promise<T> => db.transaction((ex) => fn(bind(ex))),
-    ping: async (): Promise<boolean> => (await db.get<{ ok: number }>("SELECT 1 AS ok"))?.ok === 1,
+    ...bind(database.db),
+    /** Repositories used inside `fn` share one atomic transaction. */
+    tx: <T>(fn: (r: TxRepos) => Promise<T>): Promise<T> =>
+      database.transaction((tx) => fn(bind(tx))),
+    ping: async (): Promise<boolean> => {
+      await database.db.execute(sql`SELECT 1`);
+      return true;
+    },
   };
 }
 
 export type Repos = ReturnType<typeof createRepos>;
 
-export { toPublicUser, type UserRecord } from "./users.ts";
+export { isDuplicateEmail, toPublicUser, type UserRecord } from "./users.ts";
 export { toPayment, type PaymentRecord } from "./payments.ts";
 export type { LocatedContract, ContractFields } from "./contracts.ts";
 export type { AuditEvent } from "./audit.ts";

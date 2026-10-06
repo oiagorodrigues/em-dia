@@ -1,54 +1,38 @@
-import type { Payment, PaymentMethod, Receipt, ReceiptMimeType, YearMonth } from "@emdia/shared";
+import type { Payment, Receipt, YearMonth } from "@emdia/shared";
+import { and, desc, asc, eq, inArray, isNotNull, isNull, like, type SQL } from "drizzle-orm";
 import type { Executor } from "../db/index.ts";
+import { payments } from "../db/schema.ts";
+import { date, dateOrNull, iso, isoOrNull } from "./convert.ts";
 
 /** `receiptFile` is the storage name; it never leaves the API. */
 export interface PaymentRecord extends Payment {
   receiptFile: string | null;
 }
 
-interface Row {
-  id: string;
-  contract_id: string;
-  reference_month: string;
-  paid_on: string;
-  amount_cents: number;
-  method: PaymentMethod;
-  note: string | null;
-  receipt_file: string | null;
-  receipt_mime: ReceiptMimeType | null;
-  receipt_size: number | null;
-  receipt_name: string | null;
-  receipt_uploaded_at: string | null;
-  acknowledged_at: string | null;
-  agreement_id: string | null;
-  created_by: string;
-  created_at: string;
-}
-
-function toRecord(r: Row): PaymentRecord {
+function toRecord(r: typeof payments.$inferSelect): PaymentRecord {
   const receipt: Receipt | null =
-    r.receipt_file && r.receipt_mime
+    r.receiptFile && r.receiptMime
       ? {
-          mimeType: r.receipt_mime,
-          sizeBytes: r.receipt_size ?? 0,
-          originalName: r.receipt_name ?? "",
-          uploadedAt: r.receipt_uploaded_at ?? r.created_at,
+          mimeType: r.receiptMime,
+          sizeBytes: r.receiptSize ?? 0,
+          originalName: r.receiptName ?? "",
+          uploadedAt: iso(r.receiptUploadedAt ?? r.createdAt),
         }
       : null;
   return {
     id: r.id,
-    contractId: r.contract_id,
-    referenceMonth: r.reference_month,
-    paidOn: r.paid_on,
-    amountCents: r.amount_cents,
+    contractId: r.contractId,
+    referenceMonth: r.referenceMonth,
+    paidOn: r.paidOn,
+    amountCents: r.amountCents,
     method: r.method,
     note: r.note,
     receipt,
-    acknowledgedAt: r.acknowledged_at,
-    agreementId: r.agreement_id,
-    createdBy: r.created_by,
-    createdAt: r.created_at,
-    receiptFile: r.receipt_file,
+    acknowledgedAt: isoOrNull(r.acknowledgedAt),
+    agreementId: r.agreementId,
+    createdBy: r.createdBy,
+    createdAt: iso(r.createdAt),
+    receiptFile: r.receiptFile,
   };
 }
 
@@ -56,112 +40,90 @@ export function toPayment({ receiptFile: _file, ...payment }: PaymentRecord): Pa
   return payment;
 }
 
-const NEWEST_FIRST = "ORDER BY paid_on DESC, created_at DESC, id";
-
 export function paymentsRepo(db: Executor) {
+  const select = async (where: SQL | undefined, limit?: number) => {
+    const query = db
+      .select()
+      .from(payments)
+      .where(where)
+      .orderBy(desc(payments.paidOn), desc(payments.createdAt), asc(payments.id));
+    return (await (limit ? query.limit(limit) : query)).map(toRecord);
+  };
+
   return {
-    async list(contractId: string, year: number | undefined): Promise<PaymentRecord[]> {
-      const rows =
-        year === undefined
-          ? await db.all<Row>(
-              `SELECT * FROM payments WHERE contract_id = ? ${NEWEST_FIRST}`,
-              contractId,
-            )
-          : await db.all<Row>(
-              `SELECT * FROM payments WHERE contract_id = ? AND substr(reference_month, 1, 4) = ? ${NEWEST_FIRST}`,
-              contractId,
-              String(year),
-            );
-      return rows.map(toRecord);
+    list(contractId: string, year: number | undefined): Promise<PaymentRecord[]> {
+      return select(
+        and(
+          eq(payments.contractId, contractId),
+          year === undefined ? undefined : like(payments.referenceMonth, `${year}-%`),
+        ),
+      );
     },
 
-    async listByMonth(contractId: string, month: YearMonth): Promise<PaymentRecord[]> {
-      return (
-        await db.all<Row>(
-          `SELECT * FROM payments WHERE contract_id = ? AND reference_month = ? ${NEWEST_FIRST}`,
-          contractId,
-          month,
-        )
-      ).map(toRecord);
+    listByMonth(contractId: string, month: YearMonth): Promise<PaymentRecord[]> {
+      return select(and(eq(payments.contractId, contractId), eq(payments.referenceMonth, month)));
     },
 
     async latest(contractId: string): Promise<PaymentRecord | undefined> {
-      const r = await db.get<Row>(
-        `SELECT * FROM payments WHERE contract_id = ? ${NEWEST_FIRST} LIMIT 1`,
-        contractId,
-      );
-      return r && toRecord(r);
+      return (await select(eq(payments.contractId, contractId), 1))[0];
     },
 
     async find(contractId: string, id: string): Promise<PaymentRecord | undefined> {
-      const r = await db.get<Row>(
-        "SELECT * FROM payments WHERE contract_id = ? AND id = ?",
-        contractId,
-        id,
-      );
-      return r && toRecord(r);
+      return (await select(and(eq(payments.contractId, contractId), eq(payments.id, id))))[0];
     },
 
     async listReceiptFiles(contractIds: string[]): Promise<string[]> {
       if (contractIds.length === 0) return [];
-      return (
-        await db.all<{ receipt_file: string }>(
-          `SELECT receipt_file FROM payments
-         WHERE receipt_file IS NOT NULL AND contract_id IN (${contractIds.map(() => "?").join(", ")})`,
-          ...contractIds,
-        )
-      ).map((r) => r.receipt_file);
+      const rows = await db
+        .select({ file: payments.receiptFile })
+        .from(payments)
+        .where(and(inArray(payments.contractId, contractIds), isNotNull(payments.receiptFile)));
+      return rows.flatMap((r) => (r.file ? [r.file] : []));
     },
 
     async insert(p: PaymentRecord): Promise<void> {
-      await db.run(
-        `INSERT INTO payments (id, contract_id, reference_month, paid_on, amount_cents, method, note, receipt_file,
-           receipt_mime, receipt_size, receipt_name, receipt_uploaded_at, acknowledged_at, agreement_id, created_by,
-           created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        p.id,
-        p.contractId,
-        p.referenceMonth,
-        p.paidOn,
-        p.amountCents,
-        p.method,
-        p.note,
-        p.receiptFile,
-        p.receipt?.mimeType ?? null,
-        p.receipt?.sizeBytes ?? null,
-        p.receipt?.originalName ?? null,
-        p.receipt?.uploadedAt ?? null,
-        p.acknowledgedAt,
-        p.agreementId,
-        p.createdBy,
-        p.createdAt,
-      );
+      await db.insert(payments).values({
+        id: p.id,
+        contractId: p.contractId,
+        referenceMonth: p.referenceMonth,
+        paidOn: p.paidOn,
+        amountCents: p.amountCents,
+        method: p.method,
+        note: p.note,
+        receiptFile: p.receiptFile,
+        receiptMime: p.receipt?.mimeType ?? null,
+        receiptSize: p.receipt?.sizeBytes ?? null,
+        receiptName: p.receipt?.originalName ?? null,
+        receiptUploadedAt: dateOrNull(p.receipt?.uploadedAt ?? null),
+        acknowledgedAt: dateOrNull(p.acknowledgedAt),
+        agreementId: p.agreementId,
+        createdBy: p.createdBy,
+        createdAt: date(p.createdAt),
+      });
     },
 
     async setReceipt(id: string, file: string, receipt: Receipt): Promise<void> {
-      await db.run(
-        `UPDATE payments SET receipt_file = ?, receipt_mime = ?, receipt_size = ?, receipt_name = ?,
-           receipt_uploaded_at = ?
-         WHERE id = ?`,
-        file,
-        receipt.mimeType,
-        receipt.sizeBytes,
-        receipt.originalName,
-        receipt.uploadedAt,
-        id,
-      );
+      await db
+        .update(payments)
+        .set({
+          receiptFile: file,
+          receiptMime: receipt.mimeType,
+          receiptSize: receipt.sizeBytes,
+          receiptName: receipt.originalName,
+          receiptUploadedAt: date(receipt.uploadedAt),
+        })
+        .where(eq(payments.id, id));
     },
 
     async acknowledge(id: string, at: string): Promise<void> {
-      await db.run(
-        "UPDATE payments SET acknowledged_at = ? WHERE id = ? AND acknowledged_at IS NULL",
-        at,
-        id,
-      );
+      await db
+        .update(payments)
+        .set({ acknowledgedAt: date(at) })
+        .where(and(eq(payments.id, id), isNull(payments.acknowledgedAt)));
     },
 
     async delete(id: string): Promise<void> {
-      await db.run("DELETE FROM payments WHERE id = ?", id);
+      await db.delete(payments).where(eq(payments.id, id));
     },
   };
 }
