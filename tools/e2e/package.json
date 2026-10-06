@@ -1,0 +1,13 @@
+{
+  "name": "@ponto/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "screens": "node scripts/screens.ts",
+    "flows": "node scripts/flows.ts"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}

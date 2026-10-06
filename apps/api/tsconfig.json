@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["src", "tests", "vite.config.ts"]
+}

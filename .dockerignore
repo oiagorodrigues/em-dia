@@ -1,0 +1,15 @@
+.git
+.github
+.claude
+.vite-hooks
+**/node_modules
+**/dist
+**/dist-ssr
+**/*.log
+**/.env
+**/.env.*
+!**/.env.example
+apps/api/data
+tools/e2e/screens
+Dockerfile
+.dockerignore

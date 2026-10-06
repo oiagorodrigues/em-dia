@@ -1,0 +1,26 @@
+import { createAdjustmentSchema, monthQuerySchema } from "@ponto/shared";
+import { Router } from "express";
+import type { Services } from "../../services/index.ts";
+import { actorOf } from "../context.ts";
+import { parse } from "../validate.ts";
+
+export function adjustmentRoutes({ adjustments }: Services): Router {
+  const router = Router();
+
+  router.get("/contracts/:id/adjustments", (req, res) => {
+    const { month } = parse(monthQuerySchema, req.query);
+    res.json({ adjustments: adjustments.list(actorOf(res), req.params.id, month) });
+  });
+
+  router.post("/contracts/:id/adjustments", (req, res) => {
+    const input = parse(createAdjustmentSchema, req.body);
+    res.status(201).json({ adjustment: adjustments.create(actorOf(res), req.params.id, input) });
+  });
+
+  router.delete("/contracts/:id/adjustments/:adjId", (req, res) => {
+    adjustments.remove(actorOf(res), req.params.id, req.params.adjId);
+    res.status(204).end();
+  });
+
+  return router;
+}

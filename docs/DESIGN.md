@@ -1,0 +1,80 @@
+# Design: "ponto."
+
+The product is called **ponto.** (lowercase, the period is the logo, always in stamp red). It comes from "bater ponto", punching the clock. The visual language is a reinterpretation of the Brazilian _cartão de ponto_ (mechanical time card) and the _caderneta_ (small notebook where families write down the diarista's days and payments), drawn with two inks on paper: **ballpoint blue** for what people write and **stamp red** for what the clock stamps.
+
+This is deliberately not the usual generated-app look. Banned: purple/indigo, gradients, glassmorphism, blurred blobs, soft drop shadows, pill-shaped everything, emoji, Inter/Roboto/system-ui as the display face, "cream + Fraunces + JetBrains Mono + ochre", card grids of identical rounded boxes with an icon in the top-left, hero illustrations.
+
+## Tokens
+
+Defined once as CSS custom properties in `apps/web/src/styles/tokens.css`. Components never use raw hex values.
+
+Light ("papel"):
+
+| token          | value     | use                                                            |
+| -------------- | --------- | -------------------------------------------------------------- |
+| `--paper`      | `#F2F1EC` | page background (cool, slightly gray paper, not cream)         |
+| `--sheet`      | `#FBFBF8` | raised sheets (time card, sheets, dialogs)                     |
+| `--ink`        | `#15171C` | text, rules                                                    |
+| `--ink-2`      | `#5B5F69` | secondary text                                                 |
+| `--ink-3`      | `#9A9DA5` | tertiary text, disabled                                        |
+| `--rule`       | `#D9D8D1` | hairlines                                                      |
+| `--blue`       | `#2340E8` | ballpoint blue: actions, links, user-entered values, focus     |
+| `--blue-wash`  | `#E4E8FD` | selected backgrounds                                           |
+| `--red`        | `#E0412B` | stamp red: the logo dot, absences, "FALTA" stamps, destructive |
+| `--red-wash`   | `#FBE5E1` |                                                                |
+| `--green`      | `#1C7C54` | confirmed / paid states only                                   |
+| `--green-wash` | `#DFF0E7` |                                                                |
+
+Dark ("carbono", carbon copy): `--paper #101217`, `--sheet #171A21`, `--ink #ECEBE6`, `--ink-2 #A3A7B2`, `--ink-3 #646976`, `--rule #2A2E38`, `--blue #8C9BFF`, `--blue-wash #1D2340`, `--red #FF6B55`, `--red-wash #3A1D1A`, `--green #4CC38A`, `--green-wash #15301F`. Theme follows `prefers-color-scheme` with a manual override stored in `localStorage` (`data-theme` on `<html>`).
+
+Radius: `--r-1: 3px` (inputs, buttons), `--r-2: 6px` (sheets). Nothing fully round except the clock button and status dots.
+
+Elevation: no blur shadows. A raised sheet is `--sheet` + 1px `--rule` border. The primary button and the clock button have a hard offset shadow `2px 2px 0 var(--ink)` that collapses to `0 0` on `:active` (physical press).
+
+Spacing: 4px base scale `--s-1 … --s-10` (4, 8, 12, 16, 20, 24, 32, 40, 56, 72).
+
+## Type
+
+Self-hosted via `@fontsource` (works offline in the PWA):
+
+- **Bricolage Grotesque Variable** for everything textual. Display sizes use `font-variation-settings: "opsz" 96` and weight 700 with tight tracking (`-0.03em`). Body 16px/1.5, weight 400.
+- **Martian Mono Variable** for every number, time, date and money value, with `font-variant-numeric: tabular-nums`. Width axis condensed (`"wdth" 87.5`) for tables. This is the "stamped by the clock" voice.
+
+Scale: 12 / 14 / 16 / 20 / 28 / 40 / 64 / 96. The dashboard hero number (hours this month, e.g. `86h40`) is Martian Mono at 64–96px.
+
+Labels above values are 12px uppercase Bricolage, `letter-spacing: 0.08em`, `--ink-2`, like printed form field labels.
+
+## Signature elements
+
+1. **The time card (cartão).** The month view is a vertical card on `--sheet` with a 2px top notch row (a row of small semicircle cut-outs made with a radial-gradient mask) like a perforated card. Each day is a row: weekday letter + day number on the left, then entrada / saída / pausa / total columns in Martian Mono. Values entered by people are in `--blue`. Absences get a rotated (-4deg) red outlined stamp "FALTA" / "FOLGA" / "FERIADO" / "JUSTIF." in uppercase mono, slightly translucent like real ink. Scheduled days with nothing recorded show a dotted placeholder "— registrar". Today's row has a 3px blue left bar. Weekends dimmed. Unconfirmed entries show a small hollow circle; confirmed ones a filled green dot.
+2. **The clock (bater ponto).** On the worker's home and on the employer's contract page: a large circular button (min 168px) with an analog-clock tick ring drawn in SVG, current time in Martian Mono in the centre, label "bater entrada" / "bater saída". Pressing it plays a short stamp animation (scale 0.96 → 1 + a red ring ink-splash that fades), then the new time appears in the card row with a typewriter reveal.
+3. **Receipts as stubs.** Payments are listed as receipt stubs: a sheet with a dashed perforation line and two half-circle notches on the sides separating the main part (month, amount large in mono, method, date) from the stub (receipt thumbnail or "sem comprovante", acknowledgement state "recebido ✓" in green once the worker taps "recebi").
+4. **Ledger totals.** Month totals are a two-column ledger with dotted leaders between label and value (`Horas ........ 86h40`), a double rule above the final "a receber" line, like a hand-written account.
+5. **Month switcher.** Big lowercase month name ("outubro") with the year small in mono, flanked by ← → arrow buttons; swipe left/right on touch devices.
+
+## Layout
+
+Mobile-first, 16px side gutter, max content width 720px centred on desktop. Navigation: on mobile a bottom bar with 4 text+icon items (Início, Cartão, Pagamentos, Perfil), icons are simple 1.5px-stroke SVGs drawn in-house (no icon fonts). At ≥960px the nav becomes a left rail with the "ponto." wordmark at top. Respect `env(safe-area-inset-*)`.
+
+Screens:
+
+- `/entrar`, `/criar-conta`, `/esqueci-senha`, `/redefinir-senha` — split layout on desktop: left a big typographic panel ("bata o ponto de quem cuida da sua casa." in display type with a sample stamped card row), right the form. On mobile only the form with the wordmark.
+- `/` dashboard. Employer: hero with total hours and total to pay this month across contracts, then one "time card stub" per contract (name, occupation, today's status, hours, balance, unrecorded-days warning in red). Empty state invites to "adicionar profissional". Worker: the clock button, today's entry, this month's hours and amount to receive, last payment stub with "recebi" button.
+- `/vinculos/novo` (employer) multi-step-free single form: name, occupation (segmented chips), pay type (segmented), rate (money input with R$ prefix, mono), scheduled weekdays (7 toggles D S T Q Q S S), expected times, start date. Then shows invite code in large mono letters with "copiar" and "compartilhar" (Web Share API) and a link `/criar-conta?convite=CODE`.
+- `/vinculos/:id` contract detail with tabs: Cartão (month time card), Pagamentos, Extras, Histórico (activity), Ajustes (edit/encerrar/convite).
+- Day editor: a bottom sheet (dialog element) with status segmented control, time inputs, pause stepper, note; shows who recorded it and a "confirmar" button for the other party.
+- `/pagamentos/novo?vinculo=` form with reference month, date, amount prefilled with the balance, method chips, receipt upload drop zone with preview (images) or PDF icon.
+- `/perfil`: name, phone, Pix key (worker; employer sees it with copy button on contract page), password change, theme toggle, "sair de todos os dispositivos", install-app button when `beforeinstallprompt` is available.
+- `/entrar-no-vinculo` (worker): enter 8-char invite code in 8 separate mono boxes.
+
+## Motion
+
+Short and physical: 120–180ms, `cubic-bezier(.2,.8,.2,1)`. Stamp animation 260ms. Bottom sheet slides up 220ms. Respect `prefers-reduced-motion` (disable all but opacity).
+
+## Writing
+
+pt-BR, informal, short. Lowercase headings in the app chrome ("cartão de outubro"). Numbers always in mono. Money as `R$ 1.234,56`. Durations as `86h40`. Never "Usuário"; say "você".
+
+## Accessibility
+
+WCAG AA contrast for text on both themes. Every control reachable by keyboard, visible focus ring `2px solid var(--blue)` with 2px offset. Stamps have `aria-label` with the full status. Bottom sheets are `<dialog>` with focus trap and Esc to close. Touch targets ≥ 44px. `lang="pt-BR"`.
