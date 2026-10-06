@@ -49,7 +49,7 @@ function onSubmit(): void {
     const next = safeNext(route.query.next);
     if (next) await router.replace(next);
     else if (data.role === "worker" && !data.inviteCode) await router.replace("/entrar-no-vinculo");
-    else if (data.role === "employer") await router.replace("/vinculos/novo");
+    else if (data.role === "employer") await router.replace("/equipe/novo");
     else await router.replace("/");
   }, input);
 }
@@ -179,7 +179,7 @@ function onSubmit(): void {
   gap: var(--s-1);
   padding: var(--s-4);
   padding-top: var(--s-7);
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
   cursor: pointer;

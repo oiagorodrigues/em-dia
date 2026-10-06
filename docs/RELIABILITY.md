@@ -26,12 +26,12 @@ On `SIGTERM` and `SIGINT`: stop accepting connections, wait for in-flight reques
 
 ## Failure modes
 
-| Failure                  | Expected behavior                                                |
-| ------------------------ | ---------------------------------------------------------------- |
-| Database locked          | `busy_timeout` set; request fails with 500 after timeout, logged |
-| Uploads dir not writable | Payment creation fails with 500 before inserting the row         |
-| Clock skew               | Server time is the only source for clock in/out                  |
-| Mailer unavailable       | Forgot-password still returns 204; failure logged                |
+| Failure                  | Expected behavior                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| Database locked          | `busy_timeout` set; request fails with 500 after timeout, logged                     |
+| Uploads dir not writable | Payment creation fails with 500 before inserting the row                             |
+| Clock skew               | Server time is the only source for clock in/out                                      |
+| Mailer unavailable       | Forgot-password still returns 204; invites return `emailSent: false`; failure logged |
 
 ## Deploy
 
@@ -40,6 +40,7 @@ One process serves the API and the built PWA from the same origin. Same origin i
 - Local production run: `bun run build`, then `bun run start` (sets `WEB_DIST_DIR=../web/dist` and runs `apps/api/dist/server.mjs`).
 - Container: `docker build -t emdia .` then `docker run -p 3000:3000 -v emdia-data:/data -e JWT_SECRET=… -e WEB_ORIGIN=https://your.host -e TRUST_PROXY=1 emdia`. It runs as the non-root `node` user, keeps state in the `/data` volume (`DATABASE_PATH=/data/emdia.db`, `UPLOAD_DIR=/data/uploads`) and reports health from `/api/health`.
 - Required in production: `JWT_SECRET` (≥ 32 chars; the process refuses to start without it). Set `WEB_ORIGIN` to the public URL (reset links) and `TRUST_PROXY` to the number of proxies in front so rate limits see client IPs.
+- Mail: set `SMTP_URL` (`smtps://user:pass@host:465`) and `MAIL_FROM` for invites and password resets. Without `SMTP_URL` the production server logs a warning at boot, drops mail, and invites come back with `emailSent: false` (the employer can still share the link or WhatsApp). Outside production every message is also kept in `GET /api/v1/dev/outbox`.
 - Terminate TLS at the proxy. HSTS is sent in production.
 - Caching: `/assets/*` is fingerprinted and served `immutable` for a year. `index.html`, `sw.js`, `workbox-*.js` and `manifest.webmanifest` are `no-cache`, so a deploy reaches clients on their next load. API responses are `no-store`.
 - Navigations (`Accept: text/html`) outside `/api` fall back to `index.html`. Other misses are 404.

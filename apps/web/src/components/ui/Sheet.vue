@@ -117,7 +117,8 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
 }
 
 .sheet-dlg::backdrop {
-  background: color-mix(in srgb, var(--ink) 40%, transparent);
+  /* Not tied to --ink: in dark mode --ink is light and would wash the page out. */
+  background: rgb(12 14 18 / 0.45);
   animation: fade-in var(--d-sheet) var(--ease);
 }
 
@@ -127,10 +128,11 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
   max-height: min(92dvh, 100%);
   display: flex;
   flex-direction: column;
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-bottom: 0;
-  border-radius: var(--r-2) var(--r-2) 0 0;
+  border-radius: var(--r-3) var(--r-3) 0 0;
+  box-shadow: var(--shadow-2);
   padding-bottom: env(safe-area-inset-bottom);
   animation: sheet-up var(--d-sheet) var(--ease);
 }
@@ -175,7 +177,7 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
 
 .sheet-dlg__close:hover {
   color: var(--ink);
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .sheet-dlg__body {
@@ -201,7 +203,7 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
   }
   .sheet-dlg__panel {
     border-bottom: 1px solid var(--rule);
-    border-radius: var(--r-2);
+    border-radius: var(--r-3);
     max-height: 86dvh;
     animation-name: sheet-in;
   }

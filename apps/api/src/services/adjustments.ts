@@ -1,7 +1,7 @@
 import type { Adjustment, CreateAdjustmentInput, YearMonth } from "@emdia/shared";
 import { notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
-import { loadContract } from "./access.ts";
+import { loadContract, loadWritableContract } from "./access.ts";
 import { audit, nowIso, requirePermission, type Actor, type ServiceDeps } from "./context.ts";
 
 export function adjustmentsService(deps: ServiceDeps) {
@@ -13,7 +13,7 @@ export function adjustmentsService(deps: ServiceDeps) {
     },
 
     create(actor: Actor, contractId: string, input: CreateAdjustmentInput): Adjustment {
-      loadContract(deps, actor, contractId);
+      loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "adjustment:write");
       const adjustment: Adjustment = {
         id: newId(),
@@ -44,7 +44,7 @@ export function adjustmentsService(deps: ServiceDeps) {
     },
 
     remove(actor: Actor, contractId: string, adjustmentId: string): void {
-      loadContract(deps, actor, contractId);
+      loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "adjustment:write");
       const adjustment = repos.adjustments.find(contractId, adjustmentId);
       if (!adjustment) throw notFound("Lançamento não encontrado");

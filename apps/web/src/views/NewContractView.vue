@@ -1,25 +1,28 @@
 <script setup lang="ts">
-import type { Contract, CreateContractInput } from "@emdia/shared";
+import type { Contract, CreateContractInput, InviteDelivery } from "@emdia/shared";
 import { ref } from "vue";
 import { contractsApi, errorMessage } from "@/api";
 import ContractForm from "@/components/feature/ContractForm.vue";
-import InviteCard from "@/components/feature/InviteCard.vue";
+import InviteSuccess from "@/components/feature/InviteSuccess.vue";
 import Button from "@/components/ui/Button.vue";
+import Skeleton from "@/components/ui/Skeleton.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
 import { firstName } from "@/lib/format.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
 const toast = useToastStore();
 const created = ref<Contract | null>(null);
-const invite = ref<{ code: string; expiresAt: string } | null>(null);
+const invite = ref<InviteDelivery | null>(null);
 const inviteError = ref<string | null>(null);
 const inviting = ref(false);
+const formKey = ref(0);
 
 async function save(data: CreateContractInput): Promise<void> {
-  const { contract } = await contractsApi.create(data);
-  created.value = contract;
+  const res = await contractsApi.create(data);
+  created.value = res.contract;
   window.scrollTo({ top: 0 });
-  await generateInvite();
+  if (res.invite) invite.value = res.invite;
+  else await generateInvite();
 }
 
 async function generateInvite(): Promise<void> {
@@ -27,7 +30,7 @@ async function generateInvite(): Promise<void> {
   inviting.value = true;
   inviteError.value = null;
   try {
-    invite.value = await contractsApi.invite(created.value.id);
+    invite.value = (await contractsApi.invite(created.value.id)).invite;
   } catch (e) {
     inviteError.value = errorMessage(e);
     toast.error(inviteError.value);
@@ -35,40 +38,60 @@ async function generateInvite(): Promise<void> {
     inviting.value = false;
   }
 }
+
+function addAnother(): void {
+  created.value = null;
+  invite.value = null;
+  inviteError.value = null;
+  formKey.value++;
+  window.scrollTo({ top: 0 });
+}
 </script>
 
 <template>
   <div class="nc">
     <template v-if="created">
-      <PageHeader back="/" :title="`cadastro de ${firstName(created.workerName)} feito.`" />
-      <p class="muted">
-        Agora mande o código para a pessoa criar a conta no celular. Enquanto isso, você já pode
-        anotar os dias por aqui.
-      </p>
-      <InviteCard
-        v-if="invite"
-        :code="invite.code"
-        :expires-at="invite.expiresAt"
-        :worker-name="created.workerName"
+      <PageHeader
+        back="/equipe"
+        back-label="equipe"
+        :title="`cadastro de ${firstName(created.workerName)} feito.`"
+        subtitle="Agora mande o convite para a pessoa criar a conta no celular. Enquanto isso, você já pode anotar os dias por aqui."
       />
-      <div v-else-if="inviteError" class="form-error" role="alert">
-        {{ inviteError }}
-        <Button variant="ghost" :loading="inviting" @click="generateInvite">tentar de novo</Button>
-      </div>
-      <div class="nc__next">
-        <Button :to="`/vinculos/${created.id}`" variant="secondary" icon-right="arrow-right"
-          >abrir o cartão</Button
+      <InviteSuccess v-if="invite" :contract="created" :invite="invite">
+        <Button :to="`/equipe/${created.id}`" variant="primary" icon-right="arrow-right"
+          >ir para o profissional</Button
         >
-        <Button to="/" variant="ghost">voltar ao início</Button>
-      </div>
+        <Button variant="ghost" icon="plus" @click="addAnother">adicionar outra pessoa</Button>
+      </InviteSuccess>
+      <template v-else>
+        <div v-if="inviteError" class="form-error" role="alert">
+          {{ inviteError }}
+          <Button variant="ghost" :loading="inviting" @click="generateInvite"
+            >tentar de novo</Button
+          >
+        </div>
+        <Skeleton v-else h="320px" />
+        <div class="nc__next">
+          <Button :to="`/equipe/${created.id}`" variant="primary" icon-right="arrow-right"
+            >ir para o profissional</Button
+          >
+        </div>
+      </template>
     </template>
     <template v-else>
       <PageHeader
-        back="/"
+        back="/equipe"
+        back-label="equipe"
         title="adicionar profissional"
-        lede="Os dados do combinado. Dá para mudar depois."
+        subtitle="Os dados do combinado. Dá para mudar depois."
       />
-      <ContractForm submit-label="cadastrar e gerar convite" :save="save" />
+      <ContractForm
+        :key="formKey"
+        submit-label="cadastrar e gerar convite"
+        :save="save"
+        contact
+        summary
+      />
     </template>
   </div>
 </template>

@@ -1,6 +1,7 @@
 import { initial } from "./001-initial.ts";
 import { refreshRevokeReason } from "./002-refresh-revoke-reason.ts";
 import { flexibleSchedule } from "./003-flexible-schedule.ts";
+import { teamManagement } from "./004-team-management.ts";
 
 export interface Migration {
   id: string;
@@ -8,4 +9,9 @@ export interface Migration {
 }
 
 /** Append only. Never edit a migration that has shipped. */
-export const migrations: Migration[] = [initial, refreshRevokeReason, flexibleSchedule];
+export const migrations: Migration[] = [
+  initial,
+  refreshRevokeReason,
+  flexibleSchedule,
+  teamManagement,
+];

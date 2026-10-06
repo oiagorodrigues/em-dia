@@ -15,6 +15,10 @@ export interface ContractContext {
   currentMonth: YearMonth;
   setMonth: (month: YearMonth) => void;
   replaceContract: (next: Contract) => void;
+  /** Opens the removal confirmation owned by ContractView. */
+  askRemove: () => void;
+  restore: () => Promise<void>;
+  restoring: Readonly<Ref<boolean>>;
 }
 
 const KEY: InjectionKey<ContractContext> = Symbol("contract");

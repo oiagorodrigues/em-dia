@@ -22,11 +22,10 @@ function apply(next: ThemeMode): void {
   if (next === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", next);
   // The media-scoped theme-color metas only follow the OS; a manual override must win.
-  const paper = getComputedStyle(root).getPropertyValue("--paper").trim();
+  const bg = getComputedStyle(root).getPropertyValue("--bg").trim();
   for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
     if (!originalMetaColor.has(meta)) originalMetaColor.set(meta, meta.content);
-    meta.content =
-      next === "system" || !paper ? (originalMetaColor.get(meta) ?? meta.content) : paper;
+    meta.content = next === "system" || !bg ? (originalMetaColor.get(meta) ?? meta.content) : bg;
   }
 }
 

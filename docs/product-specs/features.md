@@ -71,8 +71,65 @@ Acceptance criteria:
 
 ## Dashboard
 
-- E: total hours and total to pay this month across contracts, one card per contract with today's status and a warning for unrecorded scheduled days; empty state invites to add a professional.
+Layout and columns: [DESIGN](../DESIGN.md#screens).
+
+- E: four KPI cards for the month (horas no mês, a pagar, pago no mês, pendências) with a context caption each. Pendências adds days without record, entries waiting for confirmation and payments without "recebi".
+- E: below the KPIs, the team table (profissional, frequência, hoje, horas, dias, a pagar, status). Each row has quick actions: bater ponto, registrar pagamento, ver cartão and a menu (copiar convite, editar, remover). The row opens the person's page.
+- E: column "hoje" shows who is expected today with their status; "pendências" lists actionable items, each linking to the right screen.
+- E: with no team, an empty state invites to add a professional.
 - W: clock button, today's entry, month hours and amount, last payment with "recebi".
+
+## Team module (/equipe)
+
+- E sees status tabs with counts (ativos, convites pendentes, encerrados, removidos), a search box (name and text columns, accent-insensitive), filters (função, forma de pagamento) and sortable columns.
+- Search, filters, tab and sort are in the URL query; reloading or sharing the link keeps them.
+- Removed people show "restaurar". "Convites pendentes" are contracts with no linked worker.
+- W has no /equipe; the route redirects to Início.
+
+## Profissional page (/equipe/:id)
+
+- Header: avatar, name, função and frequência, status chip, WhatsApp, ligar and copiar Pix (when known), registrar pagamento, editar, remover. `/vinculos/:id` redirects here.
+- Tabs: Visão geral, Cartão, Pagamentos, Extras, Histórico, Ajustes.
+- Visão geral: month KPIs, estimated vs. actual cost, the agreement (frequência, horários, valor, desconto de faltas), contact, latest entries and payments.
+- W sees the same page without employer-only actions and without Ajustes.
+
+## Quadro do mês (/cartao)
+
+- E sees one row per person and one column per day of the month. Worked, falta, justificada/folga/feriado, expected-but-unrecorded and today are visually distinct and each cell has a text label for assistive tech.
+- Row totals show horas, dias and a pagar; clicking a row opens that person's Cartão.
+- Below `md` the board becomes a list of people with a week strip.
+- W's Cartão is their own time card.
+
+## Payments across the team (/pagamentos)
+
+- E sees all payments of all contracts in one table (pessoa, referência, pago em, valor, forma, comprovante, recebido) with filters (pessoa, ano/mês, forma, recebido) and totals.
+- W sees their own payments. Receipts open from either view.
+
+## Logical removal and restore
+
+- E removes a professional from the row menu or the person's page after a confirmation dialog. Nothing is deleted: the contract gets `archivedAt` and any pending invite is dropped. An undo toast shows for a few seconds.
+- Archived contracts are read-only for both parties: writes to entries, clock, adjustments and payments fail with "Este vínculo foi removido". History stays readable; W sees the contract marked as removed.
+- Archived contracts are missing from the dashboard and from lists unless asked (Equipe tab "removidos").
+- E can restore from the removidos tab or the person's page; the contract becomes editable again.
+
+## Invites by e-mail and WhatsApp
+
+- On creation E may type the worker's e-mail and phone (both optional). If either is given, an invite is created at once.
+- With an e-mail, the link is sent by mail; the success view says "e-mail enviado para …". If sending fails, the invite still exists and the view shows the code.
+- With a phone, the success view has a WhatsApp button opening a `wa.me` link with the message already written. The app does not send WhatsApp messages itself.
+- The success view always shows the code, the link and "copiar link". Regenerating the invite invalidates the old code and re-sends the e-mail when one is known.
+
+## Cost estimate in the form
+
+- While E fills the "adicionar profissional" form, a resumo panel shows the schedule in words and the estimated cost for the month (daily: days × rate; hourly: days × hours × rate; monthly: the salary) plus the 12-month average.
+- When it cannot be priced (on demand, or hourly without times) the panel says what to fill in.
+
+## Layout rules
+
+- Every collection is a table on `md` and wider and a list of cards below, from one column definition.
+- Tables have a toolbar (search, filters, count, primary action), sortable headers, empty and "nenhum resultado" states, and URL-synced state.
+- The sidebar (`lg` and wider) has the user card with a "sair" button; below `lg`, "sair" is in Perfil and the top-bar account menu.
+- Employer navigation: Início, Equipe, Cartão, Pagamentos, Perfil. Worker: Início, Cartão, Pagamentos, Perfil.
 
 ## PWA and dark mode
 

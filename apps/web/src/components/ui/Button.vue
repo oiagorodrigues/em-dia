@@ -99,13 +99,15 @@ const attrs = computed(() => {
 }
 
 .btn--secondary {
-  background: var(--sheet);
+  background: var(--surface);
   color: var(--ink);
-  border: 1px solid var(--ink);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-1);
 }
 
 .btn--secondary:hover:not(:disabled) {
-  background: var(--paper);
+  background: var(--surface-2);
+  border-color: var(--ink-3);
 }
 
 .btn--ghost {

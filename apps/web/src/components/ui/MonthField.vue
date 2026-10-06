@@ -92,7 +92,7 @@ function onKey(e: KeyboardEvent): void {
   grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: center;
   min-height: 48px;
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-bottom-color: var(--ink-2);
   border-radius: var(--r-1);

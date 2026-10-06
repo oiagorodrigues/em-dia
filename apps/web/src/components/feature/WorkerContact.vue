@@ -99,7 +99,7 @@ async function copyPix(): Promise<void> {
 
 .wc--compact {
   padding: var(--s-1) var(--s-1) var(--s-1) var(--s-3);
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
 }

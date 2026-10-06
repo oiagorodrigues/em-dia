@@ -45,5 +45,9 @@ export const useToastStore = defineStore("toast", () => {
   const success = (message: string) => show(message, { tone: "success" });
   const error = (message: string) => show(message, { tone: "error", timeout: 6000 });
 
-  return { toasts, show, success, error, dismiss };
+  /** Confirms a reversible action and offers "desfazer" for a few seconds. */
+  const undoable = (message: string, undo: () => void, timeout = 6000) =>
+    show(message, { tone: "success", timeout, action: { label: "desfazer", run: undo } });
+
+  return { toasts, show, success, error, undoable, dismiss };
 });

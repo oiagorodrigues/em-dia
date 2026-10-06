@@ -61,8 +61,11 @@ interface DayPlan {
 }
 
 interface SeedContract {
-  fields: ContractFields;
+  fields: Omit<ContractFields, "contactEmail" | "contactPhone"> &
+    Partial<Pick<ContractFields, "contactEmail" | "contactPhone">>;
   createdAt: string;
+  /** Removed contracts: the last day worked and when the employer archived it. */
+  archived?: { lastDay: IsoDate; at: string };
   shift: { start: number; end: number; breakMinutes: number };
   /** per_month and on_demand have no expected dates, so their visits are listed. */
   visits?: IsoDate[];
@@ -140,6 +143,8 @@ const OTHER_CONTRACTS: SeedContract[] = [
   {
     fields: {
       workerName: "Joana",
+      contactEmail: "joana@exemplo.com",
+      contactPhone: "(11) 97777-1234",
       occupation: "baba",
       payType: "monthly",
       rateCents: 240000,
@@ -172,6 +177,7 @@ const OTHER_CONTRACTS: SeedContract[] = [
   {
     fields: {
       workerName: "Seu Antônio",
+      contactPhone: "(11) 96666-4321",
       occupation: "jardineiro",
       payType: "daily",
       rateCents: 25000,
@@ -240,6 +246,24 @@ const OTHER_CONTRACTS: SeedContract[] = [
       { month: "2026-08", paidOn: "2026-09-05", method: "pix" },
       { month: "2026-09", paidOn: "2026-10-05", method: "pix" },
     ],
+  },
+  {
+    fields: {
+      workerName: "Carla",
+      occupation: "faxineira",
+      payType: "daily",
+      rateCents: 17000,
+      schedule: weekly([3]),
+      deductAbsences: false,
+      expectedStart: "08:00",
+      expectedEnd: "15:00",
+      startedOn: "2026-08-05",
+    },
+    createdAt: "2026-08-01T12:00:00.000Z",
+    archived: { lastDay: "2026-09-16", at: "2026-09-20T13:00:00.000Z" },
+    shift: { start: 8 * 60, end: 15 * 60, breakMinutes: 60 },
+    exceptions: { "2026-09-02": { status: "absent", note: "Não avisou" } },
+    payments: [{ month: "2026-08", paidOn: "2026-09-02", method: "pix" }],
   },
 ];
 
@@ -334,7 +358,14 @@ async function seed(): Promise<void> {
 
   function insertContract(seed: SeedContract, worker: { id: string } | null): LocatedContract {
     const id = newId();
-    repos.contracts.insert({ id, householdId, createdAt: seed.createdAt, ...seed.fields });
+    repos.contracts.insert({
+      id,
+      householdId,
+      createdAt: seed.createdAt,
+      contactEmail: null,
+      contactPhone: null,
+      ...seed.fields,
+    });
     audit(seed.createdAt, anaId, id, "contract.create", "contract", id);
     if (worker) {
       repos.contracts.linkWorker(id, worker.id);
@@ -363,7 +394,7 @@ async function seed(): Promise<void> {
     )) {
       repos.entries.save(entry);
     }
-    if (scheduledDates(located).includes(FUTURE_HOLIDAY.date)) {
+    if (!seed.archived && scheduledDates(located).includes(FUTURE_HOLIDAY.date)) {
       repos.entries.save({
         id: newId(),
         contractId,
@@ -418,6 +449,10 @@ async function seed(): Promise<void> {
       if (p.acknowledgedAt && linkedWorkerId) {
         audit(p.acknowledgedAt, linkedWorkerId, contractId, "payment.acknowledge", "payment", id);
       }
+    }
+    if (seed.archived) {
+      repos.contracts.setArchivedAt(contractId, seed.archived.at);
+      audit(seed.archived.at, anaId, contractId, "contract.archive", "contract", contractId);
     }
   }
 

@@ -1,23 +1,42 @@
 :root {
-  --paper: #f2f1ec;
-  --sheet: #fbfbf8;
-  --ink: #15171c;
-  --ink-2: #5b5f69;
-  --ink-3: #9a9da5;
-  --rule: #d9d8d1;
-  --blue: #2340e8;
-  --blue-wash: #e4e8fd;
-  --red: #e0412b;
-  --red-wash: #fbe5e1;
-  /* --red is 3.9:1 on --sheet; small text needs this darker ink to reach AA */
-  --red-text: #b8321f;
-  --green: #1c7c54;
-  --green-wash: #dff0e7;
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface-2: #f4f0e8;
+  --sidebar: #d9efe3;
+  --sidebar-ink: #173b2c;
+  --sidebar-active: #ffffff;
+  --ink: #1b1d24;
+  --ink-2: #5a5f6b;
+  --ink-3: #9497a1;
+  --rule: #e8e2d8;
+  --blue: #3550f0;
+  --blue-wash: #e6eafe;
+  --red: #ef5b45;
+  --red-wash: #fde7e2;
+  /* --red is under 4.5:1 on --surface; small red text uses this darker ink to reach AA */
+  --red-text: #c2392a;
+  --green: #1e9467;
+  --green-wash: #ddf3e8;
   /* text on --blue / --red / --ink fills */
-  --on-ink: #fbfbf8;
+  --on-ink: #ffffff;
 
-  --r-1: 3px;
-  --r-2: 6px;
+  --tint-mint: #ddf3e8;
+  --tint-mint-ink: #1e6b4c;
+  --tint-peach: #ffe6d9;
+  --tint-peach-ink: #a0442a;
+  --tint-butter: #fff1c2;
+  --tint-butter-ink: #80600f;
+  --tint-sky: #ddebff;
+  --tint-sky-ink: #2b4f9a;
+  --tint-rose: #fce4ec;
+  --tint-rose-ink: #9e3459;
+
+  --shadow-1: 0 1px 2px rgb(27 29 36 / 0.06), 0 6px 20px rgb(27 29 36 / 0.05);
+  --shadow-2: 0 2px 6px rgb(27 29 36 / 0.08), 0 18px 48px rgb(27 29 36 / 0.16);
+
+  --r-1: 8px;
+  --r-2: 14px;
+  --r-3: 20px;
 
   --s-1: 4px;
   --s-2: 8px;
@@ -49,48 +68,87 @@
   --d-stamp: 260ms;
 
   --press: 2px 2px 0 var(--ink);
-  --gutter: 16px;
-  --content: 720px;
+  --gutter: clamp(16px, 3vw, 48px);
+  --content: 1440px;
+  /* forms keep a readable column even on wide screens */
+  --form: 640px;
   --nav-h: 64px;
-  --rail-w: 232px;
+  --topbar-h: 56px;
+  --sidebar-w: 264px;
 
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #101217;
-    --sheet: #171a21;
-    --ink: #ecebe6;
-    --ink-2: #a3a7b2;
-    --ink-3: #646976;
-    --rule: #2a2e38;
-    --blue: #8c9bff;
-    --blue-wash: #1d2340;
-    --red: #ff6b55;
-    --red-wash: #3a1d1a;
-    --red-text: #ff6b55;
-    --green: #4cc38a;
-    --green-wash: #15301f;
-    --on-ink: #101217;
+    --bg: #111318;
+    --surface: #191c23;
+    --surface-2: #20242d;
+    --sidebar: #15251e;
+    --sidebar-ink: #cdebdc;
+    --sidebar-active: #1f3329;
+    --ink: #eeede8;
+    --ink-2: #a5a9b4;
+    --ink-3: #676c78;
+    --rule: #2a2f39;
+    --blue: #8fa0ff;
+    --blue-wash: #1e2544;
+    --red: #ff7a66;
+    --red-wash: #3a1f1b;
+    --red-text: #ff9a8a;
+    --green: #4fcb94;
+    --green-wash: #16301f;
+    --on-ink: #111318;
+
+    --tint-mint: #16302a;
+    --tint-mint-ink: #8fe0bc;
+    --tint-peach: #3a2419;
+    --tint-peach-ink: #ffb899;
+    --tint-butter: #332a10;
+    --tint-butter-ink: #f2d27a;
+    --tint-sky: #1a2740;
+    --tint-sky-ink: #a9c5ff;
+    --tint-rose: #3a1c27;
+    --tint-rose-ink: #f5a8c2;
+
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25);
+    --shadow-2: 0 2px 6px rgb(0 0 0 / 0.4), 0 18px 48px rgb(0 0 0 / 0.5);
     color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --paper: #101217;
-  --sheet: #171a21;
-  --ink: #ecebe6;
-  --ink-2: #a3a7b2;
-  --ink-3: #646976;
-  --rule: #2a2e38;
-  --blue: #8c9bff;
-  --blue-wash: #1d2340;
-  --red: #ff6b55;
-  --red-wash: #3a1d1a;
-  --red-text: #ff6b55;
-  --green: #4cc38a;
-  --green-wash: #15301f;
-  --on-ink: #101217;
+  --bg: #111318;
+  --surface: #191c23;
+  --surface-2: #20242d;
+  --sidebar: #15251e;
+  --sidebar-ink: #cdebdc;
+  --sidebar-active: #1f3329;
+  --ink: #eeede8;
+  --ink-2: #a5a9b4;
+  --ink-3: #676c78;
+  --rule: #2a2f39;
+  --blue: #8fa0ff;
+  --blue-wash: #1e2544;
+  --red: #ff7a66;
+  --red-wash: #3a1f1b;
+  --red-text: #ff9a8a;
+  --green: #4fcb94;
+  --green-wash: #16301f;
+  --on-ink: #111318;
+
+  --tint-mint: #16302a;
+  --tint-mint-ink: #8fe0bc;
+  --tint-peach: #3a2419;
+  --tint-peach-ink: #ffb899;
+  --tint-butter: #332a10;
+  --tint-butter-ink: #f2d27a;
+  --tint-sky: #1a2740;
+  --tint-sky-ink: #a9c5ff;
+  --tint-rose: #3a1c27;
+  --tint-rose-ink: #f5a8c2;
+
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.25);
+  --shadow-2: 0 2px 6px rgb(0 0 0 / 0.4), 0 18px 48px rgb(0 0 0 / 0.5);
   color-scheme: dark;
 }

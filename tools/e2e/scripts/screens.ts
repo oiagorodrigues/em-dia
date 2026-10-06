@@ -18,7 +18,8 @@ const ONLY = args.includes("--only") ? args[args.indexOf("--only") + 1] : undefi
 
 const VIEWPORTS = {
   mobile: { width: 390, height: 844 },
-  desktop: { width: 1280, height: 860 },
+  desktop: { width: 1440, height: 900 },
+  wide: { width: 1920, height: 1080 },
 } as const;
 const THEMES = ["light", "dark"] as const;
 
@@ -116,11 +117,22 @@ async function main() {
           await login(page, "ana@emdia.dev");
           await shoot(page, `${p}-inicio`);
           if (!contractId) return;
-          for (const tab of ["", "/pagamentos", "/extras", "/historico", "/ajustes"]) {
-            await page.goto(`${BASE}/vinculos/${contractId}${tab}?mes=2026-09`);
+          for (const path of ["/equipe", "/cartao", "/pagamentos"]) {
+            await page.goto(`${BASE}${path}`);
+            await shoot(page, `${p}${path.replace("/", "-")}`);
+          }
+          for (const tab of [
+            "/visao-geral",
+            "",
+            "/pagamentos",
+            "/extras",
+            "/historico",
+            "/ajustes",
+          ]) {
+            await page.goto(`${BASE}/equipe/${contractId}${tab}?mes=2026-09`);
             await shoot(page, `${p}-vinculo${tab.replace("/", "-") || "-cartao"}`);
           }
-          await page.goto(`${BASE}/vinculos/novo`);
+          await page.goto(`${BASE}/equipe/novo`);
           await shoot(page, `${p}-novo-vinculo`);
           await page.goto(`${BASE}/pagamentos/novo?vinculo=${contractId}`);
           await shoot(page, `${p}-novo-pagamento`);
@@ -137,7 +149,7 @@ async function main() {
             await shoot(page, `${p}${path.replace("/", "-")}`);
           }
           if (workerContracts[0]) {
-            await page.goto(`${BASE}/vinculos/${workerContracts[0]}/ajustes`);
+            await page.goto(`${BASE}/equipe/${workerContracts[0]}/ajustes`);
             await page.waitForTimeout(900);
             if (page.url().includes("/ajustes"))
               problems.push(`[${p}] worker reached /ajustes (should be redirected)`);

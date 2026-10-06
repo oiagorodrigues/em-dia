@@ -46,7 +46,7 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
 
 <template>
   <div class="pk">
-    <PageHeader :title="title" :lede="auth.isEmployer ? 'De quem?' : 'De qual casa?'" />
+    <PageHeader :title="title" :subtitle="auth.isEmployer ? 'De quem?' : 'De qual casa?'" />
 
     <div v-if="loading || (data && data.length === 1)" aria-busy="true">
       <Skeleton h="72px" />
@@ -63,7 +63,7 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
       "
     >
       <template #actions>
-        <Button v-if="auth.isEmployer" to="/vinculos/novo" variant="primary" icon="plus"
+        <Button v-if="auth.isEmployer" to="/equipe/novo" variant="primary" icon="plus"
           >adicionar profissional</Button
         >
         <Button v-else to="/entrar-no-vinculo" variant="primary" icon="key">tenho um código</Button>
@@ -100,7 +100,7 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
 .pk__list {
   list-style: none;
   padding: 0;
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
 }
@@ -120,7 +120,7 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
 }
 
 .pk__item:hover {
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .pk__item:focus-visible {

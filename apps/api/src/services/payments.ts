@@ -5,7 +5,7 @@ import { fileTypeFromBuffer } from "file-type";
 import { AppError, notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
 import { toPayment, type PaymentRecord } from "../repos/index.ts";
-import { loadContract } from "./access.ts";
+import { loadContract, loadWritableContract } from "./access.ts";
 import { audit, nowIso, requirePermission, type Actor, type ServiceDeps } from "./context.ts";
 
 export interface UploadedFile {
@@ -95,7 +95,7 @@ export function paymentsService(deps: ServiceDeps) {
       input: CreatePaymentInput,
       file?: UploadedFile,
     ): Promise<Payment> {
-      loadContract(deps, actor, contractId);
+      loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "payment:write");
       const stored = file ? await storeReceipt(file) : undefined;
       const payment: PaymentRecord = {
@@ -141,7 +141,7 @@ export function paymentsService(deps: ServiceDeps) {
       paymentId: string,
       file: UploadedFile,
     ): Promise<Payment> {
-      loadContract(deps, actor, contractId);
+      loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "payment:write");
       const previous = findPayment(contractId, paymentId);
       const stored = await storeReceipt(file);
@@ -174,7 +174,7 @@ export function paymentsService(deps: ServiceDeps) {
     },
 
     async remove(actor: Actor, contractId: string, paymentId: string): Promise<void> {
-      loadContract(deps, actor, contractId);
+      loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "payment:write");
       const payment = findPayment(contractId, paymentId);
       repos.tx(() => {
@@ -192,7 +192,7 @@ export function paymentsService(deps: ServiceDeps) {
     },
 
     acknowledge(actor: Actor, contractId: string, paymentId: string): Payment {
-      loadContract(deps, actor, contractId);
+      loadWritableContract(deps, actor, contractId);
       requirePermission(actor, "payment:acknowledge");
       const payment = findPayment(contractId, paymentId);
       if (payment.acknowledgedAt) return toPayment(payment);

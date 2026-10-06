@@ -12,6 +12,21 @@ Visual rules are in [DESIGN](DESIGN.md). This file covers conventions and behavi
 - Format with `formatCents`, `formatDuration`, `formatYearMonth`. Numbers render in the mono face.
 - No `v-html`. No tokens in `localStorage` or `sessionStorage`. `localStorage` is allowed for the theme only.
 
+## Tables
+
+- Every collection renders through `components/ui/DataTable.vue`: a table on `md`+ and cards on `sm`, from one column definition (`lib/table.ts`). Views never write a raw `<table>`; the harness fails on it. Feature components with a genuinely tabular shape (time card, month board) live in `components/feature` and may use `<table>` or grids.
+- `composables/tableState.ts` (`useTableState`) mirrors search, filters, tab and sort in the route query. Pass it to `DataTable` as `state`; without it the table keeps local state.
+- Sorting, search and filtering run client-side on the rows already loaded. Columns declare how to read a sortable value and how to render the cell.
+- Money, hours and dates are right-aligned in the mono face; status is a `StatusChip`.
+
+## Breakpoints
+
+`sm` < 640, `md` 640 to 959, `lg` 960+ (sidebar), `xl` 1280+, `2xl` 1600+. Use the helpers in `lib/media.ts`, not ad hoc `matchMedia`. Content is fluid up to 1440px; forms use a readable column.
+
+## Layer rule for ui
+
+`components/ui` components (`DataTable`, `Sheet`, `Menu`, `KpiCard`, ...) receive everything by props and slots. They import no stores, no api client and no pinia, so they stay reusable and testable. Data loading belongs in views or feature components.
+
 ## State
 
 - The access token lives in the auth store (memory). On load, call `/auth/refresh` to restore the session.

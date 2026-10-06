@@ -17,6 +17,12 @@ const envSchema = z.object({
   RATE_LIMIT_GLOBAL: z.coerce.number().int().min(1).default(300),
   RATE_LIMIT_AUTH: z.coerce.number().int().min(1).default(10),
   WEB_DIST_DIR: z.string().trim().optional(),
+  SMTP_URL: z
+    .string()
+    .trim()
+    .optional()
+    .refine((v) => !v || /^smtps?:\/\//.test(v), "SMTP_URL must start with smtp:// or smtps://"),
+  MAIL_FROM: z.string().trim().min(3).default("em dia <nao-responda@localhost>"),
   REFRESH_REUSE_GRACE_MS: z.coerce.number().int().min(0).max(300_000).default(20_000),
 });
 
@@ -36,6 +42,8 @@ export interface Config {
   rateLimit: { global: number; auth: number };
   /** Built web app to serve next to the API (single-origin deploys); null when the API runs alone. */
   webDistDir: string | null;
+  smtpUrl: string | null;
+  mailFrom: string;
   /** How long a just-rotated refresh token may still be presented without counting as reuse. */
   refreshReuseGraceMs: number;
 }
@@ -79,5 +87,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     rateLimit: { global: e.RATE_LIMIT_GLOBAL, auth: e.RATE_LIMIT_AUTH },
     refreshReuseGraceMs: e.REFRESH_REUSE_GRACE_MS,
     webDistDir: e.WEB_DIST_DIR || null,
+    smtpUrl: e.SMTP_URL || null,
+    mailFrom: e.MAIL_FROM,
   };
 }

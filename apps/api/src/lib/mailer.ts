@@ -1,3 +1,4 @@
+import { createTransport } from "nodemailer";
 import type { Logger } from "./logger.ts";
 
 export interface MailMessage {
@@ -11,31 +12,45 @@ export interface SentMail extends MailMessage {
 }
 
 export interface Mailer {
-  send(message: MailMessage): Promise<void>;
-  /** Only the dev mailer keeps messages; exposed through GET /api/v1/dev/outbox. */
+  /**
+   * Resolves true when the message reached a transport (SMTP, or the dev outbox)
+   * and false when it was dropped for lack of one. Rejects on transport errors.
+   */
+  send(message: MailMessage): Promise<boolean>;
+  /** Messages kept outside production; exposed through GET /api/v1/dev/outbox. */
   outbox(): readonly SentMail[];
+}
+
+export interface MailerOptions {
+  isProduction: boolean;
+  /** smtp:// or smtps:// with credentials; null disables real delivery. */
+  smtpUrl: string | null;
+  from: string;
 }
 
 const OUTBOX_LIMIT = 50;
 
-export function createDevMailer(logger: Logger): Mailer {
-  const sent: SentMail[] = [];
+export function createMailer(
+  { isProduction, smtpUrl, from }: MailerOptions,
+  logger: Logger,
+): Mailer {
+  const transport = smtpUrl ? createTransport(smtpUrl) : null;
+  const outbox: SentMail[] | null = isProduction ? null : [];
   return {
     async send(message) {
-      sent.unshift({ ...message, sentAt: new Date().toISOString() });
-      sent.length = Math.min(sent.length, OUTBOX_LIMIT);
-      logger.info("dev mail", { to: message.to, subject: message.subject, body: message.text });
-    },
-    outbox: () => sent,
-  };
-}
-
-/** No transport is configured for production yet; mail is dropped with a warning. */
-export function createNullMailer(logger: Logger): Mailer {
-  return {
-    async send(message) {
+      if (outbox) {
+        outbox.unshift({ ...message, sentAt: new Date().toISOString() });
+        outbox.length = Math.min(outbox.length, OUTBOX_LIMIT);
+        logger.info("dev mail", { to: message.to, subject: message.subject, body: message.text });
+      }
+      if (transport) {
+        await transport.sendMail({ from, ...message });
+        return true;
+      }
+      if (outbox) return true;
       logger.warn("mail transport not configured, message dropped", { subject: message.subject });
+      return false;
     },
-    outbox: () => [],
+    outbox: () => outbox ?? [],
   };
 }

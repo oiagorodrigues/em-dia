@@ -6,6 +6,7 @@ Grades per domain and layer: A (done, tested, documented), B (works, minor gaps)
 | --------------------- | ------ | --- | ----- | -------- | ---- | ------ | ---------- | ----- | ----- | ---- |
 | Auth and RBAC         | A      | A   | B     | A        | A    | B      | B          | B     | A     | B    |
 | Contracts and invites | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Team management       | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
 | Time card and clock   | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
 | Adjustments           | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
 | Payments and receipts | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
@@ -16,7 +17,7 @@ Grades per domain and layer: A (done, tested, documented), B (works, minor gaps)
 | Security              | B      | A   | B     | A        | A    | B      | B          | -     | A     | B    |
 | Reliability           | -      | B   | -     | -        | B    | -      | -          | -     | C     | B    |
 
-Evidence at grading time (2026-10-06): api 147 tests (supertest, covering RBAC, auth, entries, payments, reports, static serving), web 34 tests plus `vue-tsc`, shared 13, harness 17, 10 browser journeys in `tools/e2e` passing, production CSP crawl clean. Repos are graded B because they are tested only through services and http.
+Evidence at grading time (2026-10-06): api 180 tests (supertest: RBAC, auth, entries, payments, reports, team, static serving), web 105 tests plus `vue-tsc`, shared 33, harness 17, 13+ browser journeys in `tools/e2e`. Repos are graded B because they are tested only through services and http.
 
 ## Gaps
 
@@ -25,8 +26,8 @@ List each gap under the grade that caused it. Keep entries short and link to the
 - Reliability tests (C): no backup or restore procedure is automated or tested. Planned in [0002](exec-plans/active/0002-next.md).
 - PWA tests (C): offline reads and the update prompt are checked by hand and by e2e navigation, with no unit tests for the service worker flow.
 - Activity tests (C): audit rows are asserted for some mutations, not every endpoint. Two controls stay at `implemented` in [SECURITY](SECURITY.md).
-- Web components (B): only `TimeCard`, the api client and the router guard have unit tests; forms are covered through the e2e journeys.
-- Mail: only the dev outbox exists; no real transport.
+- Web components (B): unit tests cover `DataTable`, `MoneyInput`, table state, `TimeCard`, the api client and the router guard; most forms are covered only through the e2e journeys.
+- Mail: SMTP transport exists but is only tested against the dev outbox, not a real server.
 - Accessibility: no automated audit (axe) yet; checked by design rules only.
 
 ## How to update

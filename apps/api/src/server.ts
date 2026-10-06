@@ -2,7 +2,7 @@ import { loadConfig } from "./config/index.ts";
 import { openDatabase } from "./db/index.ts";
 import { createApp } from "./http/app.ts";
 import { createLogger } from "./lib/logger.ts";
-import { createDevMailer, createNullMailer } from "./lib/mailer.ts";
+import { createMailer } from "./lib/mailer.ts";
 import { createServices } from "./services/index.ts";
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -14,7 +14,13 @@ if (config.jwtSecretEphemeral) {
 }
 
 const db = openDatabase(config.databasePath);
-const mailer = config.isProduction ? createNullMailer(logger) : createDevMailer(logger);
+if (config.isProduction && !config.smtpUrl) {
+  logger.warn("SMTP_URL not set: e-mails (invites, password resets) will not be sent");
+}
+const mailer = createMailer(
+  { isProduction: config.isProduction, smtpUrl: config.smtpUrl, from: config.mailFrom },
+  logger,
+);
 const services = createServices({ db, config, logger, mailer });
 const app = createApp({ config, logger, services });
 

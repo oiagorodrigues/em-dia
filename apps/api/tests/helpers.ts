@@ -7,7 +7,7 @@ import { loadConfig } from "../src/config/index.ts";
 import { openDatabase } from "../src/db/index.ts";
 import { createApp } from "../src/http/app.ts";
 import { createLogger } from "../src/lib/logger.ts";
-import { createDevMailer } from "../src/lib/mailer.ts";
+import { createMailer } from "../src/lib/mailer.ts";
 import { createServices } from "../src/services/index.ts";
 
 export const PASSWORD = "senha-forte-123";
@@ -49,7 +49,10 @@ export function setup(env: Record<string, string> = {}) {
   let now = new Date(DEFAULT_NOW);
   const db = openDatabase(":memory:");
   const logger = createLogger("silent");
-  const mailer = createDevMailer(logger);
+  const mailer = createMailer(
+    { isProduction: config.isProduction, smtpUrl: config.smtpUrl, from: config.mailFrom },
+    logger,
+  );
   const services = createServices({ db, config, logger, mailer, clock: () => now });
   const app = createApp({ config, logger, services });
   const http = () => request(app);
@@ -99,7 +102,7 @@ export function setup(env: Record<string, string> = {}) {
     const invite = await http()
       .post(`/api/v1/contracts/${contract.id}/invite`)
       .auth(employer.token, { type: "bearer" });
-    const worker = await register("worker", { inviteCode: invite.body.code });
+    const worker = await register("worker", { inviteCode: invite.body.invite.code });
     return { employer, worker, contractId: contract.id };
   }
 

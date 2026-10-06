@@ -20,11 +20,18 @@ import {
 import WeekdayToggles from "./WeekdayToggles.vue";
 
 const model = defineModel<Schedule>({ required: true });
-const { month, startedOn, error } = defineProps<{
+const {
+  month,
+  startedOn,
+  error,
+  legendHidden = false,
+} = defineProps<{
   /** Month used for the "~N dias em outubro" preview. */
   month: YearMonth;
   startedOn: string;
   error?: string | null;
+  /** The surrounding section already has a visible heading. */
+  legendHidden?: boolean;
 }>();
 
 const kindOptions = SCHEDULE_KINDS.map((k) => ({ value: k, label: SCHEDULE_KIND_LABEL[k] }));
@@ -60,7 +67,7 @@ const summary = computed(() => scheduleSummaryLine(model.value, month, startedOn
 
 <template>
   <fieldset class="sf">
-    <legend class="label">Frequência</legend>
+    <legend :class="legendHidden ? 'visually-hidden' : 'label'">Frequência</legend>
     <Segmented v-model="kind" :options="kindOptions" label="Frequência" wrap />
 
     <div v-if="model.kind === 'weekly'" class="sf__body">
@@ -134,7 +141,7 @@ const summary = computed(() => scheduleSummaryLine(model.value, month, startedOn
   display: grid;
   gap: var(--s-3);
   padding: var(--s-4);
-  background: var(--sheet);
+  background: var(--surface);
   border: 1px dashed var(--rule);
   border-radius: var(--r-2);
 }

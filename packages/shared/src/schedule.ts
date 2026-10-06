@@ -58,7 +58,7 @@ function inPeriod(date: IsoDate, { startedOn, endedOn }: Period): boolean {
   return date >= startedOn && (endedOn === null || date <= endedOn);
 }
 
-function overlapsMonth(month: YearMonth, { startedOn, endedOn }: Period): boolean {
+export function overlapsMonth(month: YearMonth, { startedOn, endedOn }: Period): boolean {
   const days = datesOfMonth(month);
   return startedOn <= days[days.length - 1]! && (endedOn === null || endedOn >= days[0]!);
 }

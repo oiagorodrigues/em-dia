@@ -58,7 +58,7 @@ function bump(delta: number): void {
   align-items: center;
   border: 1px solid var(--rule);
   border-radius: var(--r-1);
-  background: var(--sheet);
+  background: var(--surface);
   max-width: 260px;
 }
 
@@ -70,7 +70,7 @@ function bump(delta: number): void {
 }
 
 .stp__btn:hover:not(:disabled) {
-  background: var(--paper);
+  background: var(--bg);
 }
 
 .stp__btn:disabled {

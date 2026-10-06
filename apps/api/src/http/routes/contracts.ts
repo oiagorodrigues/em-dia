@@ -7,19 +7,19 @@ import {
 import { Router } from "express";
 import type { Services } from "../../services/index.ts";
 import { actorOf } from "../context.ts";
-import { parse } from "../validate.ts";
+import { includeQuerySchema, parse } from "../validate.ts";
 
 export function contractRoutes({ contracts }: Services): Router {
   const router = Router();
 
-  router.get("/contracts", (_req, res) => {
-    res.json({ contracts: contracts.list(actorOf(res)) });
+  router.get("/contracts", (req, res) => {
+    const { include } = parse(includeQuerySchema, req.query);
+    res.json({ contracts: contracts.list(actorOf(res), include === "archived") });
   });
 
-  router.post("/contracts", (req, res) => {
-    res
-      .status(201)
-      .json({ contract: contracts.create(actorOf(res), parse(createContractSchema, req.body)) });
+  router.post("/contracts", async (req, res) => {
+    const created = await contracts.create(actorOf(res), parse(createContractSchema, req.body));
+    res.status(201).json(created);
   });
 
   router.post("/contracts/join", (req, res) => {
@@ -45,8 +45,17 @@ export function contractRoutes({ contracts }: Services): Router {
     res.json({ contract: contracts.end(actorOf(res), req.params.id, endedOn) });
   });
 
-  router.post("/contracts/:id/invite", (req, res) => {
-    res.json(contracts.invite(actorOf(res), req.params.id));
+  router.delete("/contracts/:id", (req, res) => {
+    contracts.archive(actorOf(res), req.params.id);
+    res.status(204).end();
+  });
+
+  router.post("/contracts/:id/restore", (req, res) => {
+    res.json({ contract: contracts.restore(actorOf(res), req.params.id) });
+  });
+
+  router.post("/contracts/:id/invite", async (req, res) => {
+    res.json({ invite: await contracts.invite(actorOf(res), req.params.id) });
   });
 
   return router;

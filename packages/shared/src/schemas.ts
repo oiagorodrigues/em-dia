@@ -111,13 +111,32 @@ const contractBase = z.object({
   startedOn: isoDate,
 });
 
+const optionalEmail = z
+  .union([email, z.literal("")])
+  .nullable()
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v || null));
+const optionalPhone = z
+  .string()
+  .trim()
+  .max(30)
+  .refine((v) => v === "" || v.replace(/\D/g, "").length >= 10, "Telefone com DDD")
+  .nullable()
+  .optional()
+  .transform((v) => (v === undefined ? undefined : v || null));
+
 export const createContractSchema = contractBase.extend({
   deductAbsences: z.boolean().default(false),
+  contactEmail: optionalEmail,
+  contactPhone: optionalPhone,
   householdId: z.string().min(1).optional(),
 });
 export type CreateContractInput = z.infer<typeof createContractSchema>;
 
-export const updateContractSchema = contractBase.partial();
+export const updateContractSchema = contractBase.partial().extend({
+  contactEmail: optionalEmail,
+  contactPhone: optionalPhone,
+});
 export type UpdateContractInput = z.infer<typeof updateContractSchema>;
 
 export const endContractSchema = z.object({ endedOn: isoDate });

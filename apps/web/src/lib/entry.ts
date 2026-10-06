@@ -1,4 +1,4 @@
-import { ENTRY_STATUS_LABEL, type WorkEntry } from "@emdia/shared";
+import { ENTRY_STATUS_LABEL, type EntryStatus, type WorkEntry } from "@emdia/shared";
 
 export type ClockState = "in" | "out" | "done" | "off";
 
@@ -17,3 +17,12 @@ export function todayStatusText(today: WorkEntry | null): string {
   if (today.checkIn) return `entrou às ${today.checkIn}`;
   return "sem registro hoje";
 }
+
+/** Same colors as the month board: worked mint, falta coral, the excused kinds butter. */
+export const ENTRY_TONE: Record<EntryStatus, "mint" | "rose" | "butter"> = {
+  worked: "mint",
+  absent: "rose",
+  excused: "butter",
+  day_off: "butter",
+  holiday: "butter",
+};

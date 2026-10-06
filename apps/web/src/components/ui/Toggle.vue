@@ -41,7 +41,7 @@ const id = useId();
   margin-top: 1px;
   border: 1.5px solid var(--ink);
   border-radius: 13px;
-  background: var(--sheet);
+  background: var(--surface);
   transition: background-color var(--d-fast) var(--ease);
 }
 

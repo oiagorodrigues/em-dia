@@ -106,7 +106,7 @@ function press(): void {
   min-width: 168px;
   min-height: 168px;
   border-radius: 50%;
-  background: var(--sheet);
+  background: var(--surface);
   color: var(--ink);
   border: 2px solid var(--ink);
   box-shadow: 3px 3px 0 var(--ink);

@@ -5,6 +5,7 @@ import {
   ADJUSTMENT_SIGN,
   createAdjustmentSchema,
   formatCents,
+  formatYearMonth,
   shiftMonth,
   toYearMonth,
   type Adjustment,
@@ -14,18 +15,22 @@ import { computed, ref } from "vue";
 import { adjustmentsApi, errorMessage } from "@/api";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import Button from "@/components/ui/Button.vue";
+import DataTable from "@/components/ui/DataTable.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import Field from "@/components/ui/Field.vue";
-import Icon from "@/components/ui/Icon.vue";
+import IconButton from "@/components/ui/IconButton.vue";
 import MoneyInput from "@/components/ui/MoneyInput.vue";
 import Segmented from "@/components/ui/Segmented.vue";
-import Skeleton from "@/components/ui/Skeleton.vue";
+import StatusChip from "@/components/ui/StatusChip.vue";
 import { useContract } from "@/composables/contractContext.ts";
 import { useForm } from "@/composables/form.ts";
 import { useResource } from "@/composables/resource.ts";
+import { useTableState } from "@/composables/tableState.ts";
 import { formatRelative } from "@/lib/format.ts";
+import type { Column } from "@/lib/table.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
+import { isWritable } from "@/lib/contract.ts";
 
 const auth = useAuthStore();
 const toast = useToastStore();
@@ -45,7 +50,60 @@ const list = useResource(
 const net = computed(
   () => list.data.value?.reduce((s, a) => s + ADJUSTMENT_SIGN[a.kind] * a.amountCents, 0) ?? 0,
 );
-const canWrite = computed(() => auth.isEmployer && contract.value.status === "active");
+const canWrite = computed(() => auth.isEmployer && isWritable(contract.value));
+
+const { state, clear } = useTableState({
+  defaultSort: { key: "lancado", dir: "desc" },
+  filters: ["tipo"],
+  prefix: "ex_",
+});
+
+function signed(a: Adjustment): number {
+  return ADJUSTMENT_SIGN[a.kind] * a.amountCents;
+}
+
+const columns: Column<Adjustment>[] = [
+  {
+    key: "mes",
+    label: "Mês",
+    value: (a) => a.month,
+    format: (a) => formatYearMonth(a.month),
+    hideBelow: "lg",
+  },
+  {
+    key: "tipo",
+    label: "Tipo",
+    value: (a) => ADJUSTMENT_KIND_LABEL[a.kind],
+    sortable: true,
+    searchable: true,
+  },
+  { key: "descricao", label: "Descrição", value: (a) => a.description, searchable: true },
+  {
+    key: "lancado",
+    label: "Lançado",
+    value: (a) => a.createdAt,
+    format: (a) => formatRelative(a.createdAt),
+    sortable: true,
+    sortFirst: "desc",
+    mono: true,
+    hideBelow: "xl",
+  },
+  {
+    key: "valor",
+    label: "Valor",
+    value: signed,
+    sortable: true,
+    sortFirst: "desc",
+    align: "right",
+    mono: true,
+  },
+];
+
+function filter(a: Adjustment): boolean {
+  if (state.filters.tipo === "mais") return ADJUSTMENT_SIGN[a.kind] > 0;
+  if (state.filters.tipo === "menos") return ADJUSTMENT_SIGN[a.kind] < 0;
+  return true;
+}
 
 const kindOptions = ADJUSTMENT_KINDS.map((k) => ({ value: k, label: ADJUSTMENT_KIND_LABEL[k] }));
 const { values, errors, formError, submitting, submit, clearError } = useForm(
@@ -90,57 +148,105 @@ async function remove(a: Adjustment): Promise<void> {
 
 <template>
   <div class="ex">
-    <MonthSwitcher v-model="monthModel" :min="minMonth" :max="maxMonth" prefix="extras de" />
+    <div class="ex__main">
+      <MonthSwitcher v-model="monthModel" :min="minMonth" :max="maxMonth" prefix="extras de" />
 
-    <div v-if="list.loading.value && !list.data.value" aria-busy="true">
-      <Skeleton v-for="i in 3" :key="i" h="52px" :gap="i === 1 ? '0' : '8px'" />
-    </div>
-    <EmptyState v-else-if="list.error.value" tone="error" title="Não deu para carregar os extras.">
-      {{ list.error.value.message }}
-      <template #actions><Button @click="list.reload">tentar de novo</Button></template>
-    </EmptyState>
-    <EmptyState v-else-if="list.data.value?.length === 0" title="Nada lançado neste mês.">
-      Extras, vale-transporte, adiantamentos e descontos entram aqui e mudam o valor do mês.
-    </EmptyState>
-    <section v-else-if="list.data.value" class="ex__list" aria-label="Lançamentos do mês">
-      <ul>
-        <li v-for="a in list.data.value" :key="a.id" class="ex__item">
-          <div class="ex__what">
-            <p class="ex__kind">{{ ADJUSTMENT_KIND_LABEL[a.kind] }}</p>
-            <p v-if="a.description" class="ex__desc">{{ a.description }}</p>
-            <p class="ex__when">{{ formatRelative(a.createdAt) }}</p>
-          </div>
-          <p class="ex__amt mono" :class="ADJUSTMENT_SIGN[a.kind] < 0 ? 'is-minus' : 'is-plus'">
-            {{ ADJUSTMENT_SIGN[a.kind] < 0 ? "−" : "+" }} {{ formatCents(a.amountCents) }}
-          </p>
-          <button
-            v-if="canWrite"
-            type="button"
-            class="ex__rm"
-            :disabled="removing === a.id"
-            :aria-label="`Remover ${ADJUSTMENT_KIND_LABEL[a.kind]} de ${formatCents(a.amountCents)}`"
-            @click="remove(a)"
+      <EmptyState
+        v-if="list.error.value && !list.data.value"
+        tone="error"
+        title="Não deu para carregar os extras."
+      >
+        {{ list.error.value.message }}
+        <template #actions><Button @click="list.reload">tentar de novo</Button></template>
+      </EmptyState>
+
+      <DataTable
+        v-else
+        :rows="list.data.value ?? []"
+        :columns="columns"
+        :row-key="(a) => a.id"
+        :state="state"
+        :default-sort="{ key: 'lancado', dir: 'desc' }"
+        :filter="filter"
+        :filters-active="!!state.filters.tipo"
+        :loading="list.loading.value && !list.data.value"
+        label="Lançamentos do mês"
+        search-placeholder="Buscar tipo ou descrição"
+        :count-label="(n) => (n === 1 ? '1 lançamento' : `${n} lançamentos`)"
+        @clear-filters="clear"
+      >
+        <template #filters>
+          <label class="ex__select">
+            <span class="visually-hidden">Tipo</span>
+            <select v-model="state.filters.tipo" class="input">
+              <option value="">todos os tipos</option>
+              <option value="mais">somam (extras, vale-transporte)</option>
+              <option value="menos">descontam (vales, descontos)</option>
+            </select>
+          </label>
+        </template>
+
+        <template #empty>
+          <EmptyState title="Nada lançado neste mês.">
+            Extras, vale-transporte, adiantamentos e descontos entram aqui e mudam o valor do mês.
+          </EmptyState>
+        </template>
+
+        <template #cell-tipo="{ row }">
+          <StatusChip :tone="ADJUSTMENT_SIGN[row.kind] < 0 ? 'rose' : 'mint'">{{
+            ADJUSTMENT_KIND_LABEL[row.kind]
+          }}</StatusChip>
+        </template>
+
+        <template #cell-descricao="{ row }">
+          <span class="ex__desc">{{ row.description ?? "—" }}</span>
+        </template>
+
+        <template #cell-valor="{ row }">
+          <span :class="ADJUSTMENT_SIGN[row.kind] < 0 ? 'is-minus' : 'is-plus'"
+            >{{ ADJUSTMENT_SIGN[row.kind] < 0 ? "−" : "+" }}
+            {{ formatCents(row.amountCents) }}</span
           >
-            <Icon name="trash" :size="18" />
-          </button>
-        </li>
-      </ul>
-      <p class="ex__net">
+        </template>
+
+        <template #card="{ row }">
+          <div class="ex__what">
+            <p class="ex__kind">{{ ADJUSTMENT_KIND_LABEL[row.kind] }}</p>
+            <p v-if="row.description" class="ex__desc">{{ row.description }}</p>
+            <p class="ex__when">{{ formatRelative(row.createdAt) }}</p>
+          </div>
+          <p class="ex__amt mono" :class="ADJUSTMENT_SIGN[row.kind] < 0 ? 'is-minus' : 'is-plus'">
+            {{ ADJUSTMENT_SIGN[row.kind] < 0 ? "−" : "+" }} {{ formatCents(row.amountCents) }}
+          </p>
+        </template>
+
+        <template v-if="canWrite" #row-actions="{ row }">
+          <IconButton
+            icon="trash"
+            tone="danger"
+            :label="`Remover ${ADJUSTMENT_KIND_LABEL[row.kind]} de ${formatCents(row.amountCents)}`"
+            :loading="removing === row.id"
+            @click="remove(row)"
+          />
+        </template>
+      </DataTable>
+
+      <p v-if="list.data.value && list.data.value.length > 0" class="ex__net">
         <span>saldo dos lançamentos</span>
         <span class="mono" :class="{ 'is-minus': net < 0 }"
           >{{ net < 0 ? "−" : "+" }} {{ formatCents(Math.abs(net)) }}</span
         >
       </p>
-    </section>
+    </div>
 
-    <form v-if="canWrite" class="ex__form" novalidate @submit.prevent="onAdd">
-      <h2 class="section-title">lançar</h2>
-      <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
-      <fieldset class="ex__set">
-        <legend class="label">Tipo</legend>
-        <Segmented v-model="values.kind" :options="kindOptions" label="Tipo" wrap />
-      </fieldset>
-      <div class="ex__two">
+    <aside class="ex__aside">
+      <form v-if="canWrite" class="ex__form sheet" novalidate @submit.prevent="onAdd">
+        <h2 class="section-title">lançar</h2>
+        <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
+        <fieldset class="ex__set">
+          <legend class="label">Tipo</legend>
+          <Segmented v-model="values.kind" :options="kindOptions" label="Tipo" wrap />
+        </fieldset>
         <Field
           v-slot="{ id, invalid, describedBy }"
           label="Valor"
@@ -171,14 +277,14 @@ async function remove(a: Adjustment): Promise<void> {
             :aria-describedby="describedBy"
           />
         </Field>
-      </div>
-      <Button type="submit" variant="primary" icon="plus" :loading="submitting"
-        >lançar em {{ month.slice(5) }}/{{ month.slice(0, 4) }}</Button
-      >
-    </form>
-    <p v-else-if="auth.isWorker" class="ex__ro">
-      Só quem contrata lança extras e descontos. Você vê tudo aqui.
-    </p>
+        <Button type="submit" variant="primary" icon="plus" :loading="submitting"
+          >lançar em {{ month.slice(5) }}/{{ month.slice(0, 4) }}</Button
+        >
+      </form>
+      <p v-else-if="auth.isWorker" class="ex__ro">
+        Só quem contrata lança extras e descontos. Você vê tudo aqui.
+      </p>
+    </aside>
   </div>
 </template>
 
@@ -189,27 +295,21 @@ async function remove(a: Adjustment): Promise<void> {
   gap: var(--s-6);
 }
 
-.ex__list ul {
-  list-style: none;
-  padding: 0;
-  background: var(--sheet);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-2);
+.ex__main,
+.ex__aside {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
+  align-content: start;
 }
 
-.ex__item {
-  display: flex;
-  align-items: center;
-  gap: var(--s-3);
-  padding: var(--s-3) var(--s-2) var(--s-3) var(--s-4);
-}
-
-.ex__item + .ex__item {
-  border-top: 1px solid var(--rule);
+.ex__select .input {
+  color: var(--ink);
+  min-height: 44px;
+  width: auto;
 }
 
 .ex__what {
-  flex: 1;
   min-width: 0;
 }
 
@@ -238,24 +338,9 @@ async function remove(a: Adjustment): Promise<void> {
   color: var(--red-text);
 }
 
-.ex__rm {
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  color: var(--ink-2);
-  border-radius: var(--r-1);
-}
-
-.ex__rm:hover:not(:disabled) {
-  color: var(--red-text);
-  background: var(--red-wash);
-}
-
 .ex__net {
   display: flex;
   justify-content: space-between;
-  margin-top: var(--s-3);
   padding: var(--s-3) var(--s-4) 0;
   border-top: 3px double var(--ink);
   font-weight: 600;
@@ -265,8 +350,7 @@ async function remove(a: Adjustment): Promise<void> {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-5);
-  padding-top: var(--s-5);
-  border-top: 1px dashed var(--rule);
+  padding: var(--s-5);
 }
 
 .ex__set {
@@ -280,11 +364,6 @@ async function remove(a: Adjustment): Promise<void> {
   margin-bottom: var(--s-3);
 }
 
-.ex__two {
-  display: grid;
-  gap: var(--s-4);
-}
-
 .ex__form > :deep(.btn) {
   justify-self: start;
 }
@@ -294,9 +373,14 @@ async function remove(a: Adjustment): Promise<void> {
   color: var(--ink-2);
 }
 
-@media (min-width: 600px) {
-  .ex__two {
-    grid-template-columns: 220px 1fr;
+@media (min-width: 960px) {
+  .ex {
+    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+    align-items: start;
+  }
+  .ex__aside {
+    position: sticky;
+    top: var(--s-6);
   }
 }
 </style>
