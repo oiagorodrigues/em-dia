@@ -28,6 +28,18 @@ const server = app.listen(config.port, () => {
   logger.info("listening", { port: config.port, env: config.env, version: config.version });
 });
 
+server.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    logger.error(
+      `port ${config.port} is already in use: another API is probably running (stop it, or set PORT)`,
+      { port: config.port },
+    );
+  } else {
+    logger.error("server failed to start", { error: err.message });
+  }
+  process.exit(1);
+});
+
 let shuttingDown = false;
 
 function shutdown(signal: string) {
