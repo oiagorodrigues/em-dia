@@ -1,0 +1,96 @@
+:root {
+  --paper: #f2f1ec;
+  --sheet: #fbfbf8;
+  --ink: #15171c;
+  --ink-2: #5b5f69;
+  --ink-3: #9a9da5;
+  --rule: #d9d8d1;
+  --blue: #2340e8;
+  --blue-wash: #e4e8fd;
+  --red: #e0412b;
+  --red-wash: #fbe5e1;
+  /* --red is 3.9:1 on --sheet; small text needs this darker ink to reach AA */
+  --red-text: #b8321f;
+  --green: #1c7c54;
+  --green-wash: #dff0e7;
+  /* text on --blue / --red / --ink fills */
+  --on-ink: #fbfbf8;
+
+  --r-1: 3px;
+  --r-2: 6px;
+
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-7: 32px;
+  --s-8: 40px;
+  --s-9: 56px;
+  --s-10: 72px;
+
+  --t-12: 0.75rem;
+  --t-14: 0.875rem;
+  --t-16: 1rem;
+  --t-20: 1.25rem;
+  --t-28: 1.75rem;
+  --t-40: 2.5rem;
+  --t-64: 4rem;
+  --t-96: 6rem;
+
+  --font-text: "Bricolage Grotesque Variable", "Bricolage Grotesque", ui-sans-serif, sans-serif;
+  --font-mono: "Martian Mono Variable", "Martian Mono", ui-monospace, monospace;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --d-fast: 120ms;
+  --d-base: 180ms;
+  --d-sheet: 220ms;
+  --d-stamp: 260ms;
+
+  --press: 2px 2px 0 var(--ink);
+  --gutter: 16px;
+  --content: 720px;
+  --nav-h: 64px;
+  --rail-w: 232px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #101217;
+    --sheet: #171a21;
+    --ink: #ecebe6;
+    --ink-2: #a3a7b2;
+    --ink-3: #646976;
+    --rule: #2a2e38;
+    --blue: #8c9bff;
+    --blue-wash: #1d2340;
+    --red: #ff6b55;
+    --red-wash: #3a1d1a;
+    --red-text: #ff6b55;
+    --green: #4cc38a;
+    --green-wash: #15301f;
+    --on-ink: #101217;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #101217;
+  --sheet: #171a21;
+  --ink: #ecebe6;
+  --ink-2: #a3a7b2;
+  --ink-3: #646976;
+  --rule: #2a2e38;
+  --blue: #8c9bff;
+  --blue-wash: #1d2340;
+  --red: #ff6b55;
+  --red-wash: #3a1d1a;
+  --red-text: #ff6b55;
+  --green: #4cc38a;
+  --green-wash: #15301f;
+  --on-ink: #101217;
+  color-scheme: dark;
+}

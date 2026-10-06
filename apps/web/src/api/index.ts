@@ -1,0 +1,156 @@
+import type {
+  ActivityItem,
+  Adjustment,
+  Contract,
+  CreateAdjustmentInput,
+  CreateContractInput,
+  DashboardItem,
+  Household,
+  IsoDate,
+  LoginInput,
+  MonthSummary,
+  Payment,
+  PublicUser,
+  RegisterInput,
+  UpdateContractInput,
+  UpdateMeInput,
+  UpsertEntryInput,
+  WorkEntry,
+  YearMonth,
+} from "@ponto/shared";
+import { request, requestBlob, type Session } from "./client.ts";
+
+export { ApiError, errorMessage, type Session } from "./client.ts";
+
+const csrf = { "X-Requested-With": "ponto" };
+
+export const authApi = {
+  login: (body: LoginInput) =>
+    request<Session>("/auth/login", { method: "POST", body, auth: false }),
+  register: (body: RegisterInput) =>
+    request<Session>("/auth/register", { method: "POST", body, auth: false }),
+  logout: () => request<void>("/auth/logout", { method: "POST", auth: false, headers: csrf }),
+  logoutAll: () => request<void>("/auth/logout-all", { method: "POST", headers: csrf }),
+  forgotPassword: (email: string) =>
+    request<void>("/auth/forgot-password", { method: "POST", body: { email }, auth: false }),
+  resetPassword: (token: string, password: string) =>
+    request<void>("/auth/reset-password", {
+      method: "POST",
+      body: { token, password },
+      auth: false,
+    }),
+};
+
+export const meApi = {
+  get: () => request<{ user: PublicUser }>("/me"),
+  update: (body: UpdateMeInput) => request<{ user: PublicUser }>("/me", { method: "PATCH", body }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<{ accessToken?: string } | undefined>("/me/password", {
+      method: "POST",
+      body: { currentPassword, newPassword },
+    }),
+};
+
+export const householdsApi = {
+  list: () => request<{ households: Household[] }>("/households"),
+};
+
+export const contractsApi = {
+  list: () => request<{ contracts: Contract[] }>("/contracts"),
+  get: (id: string) => request<{ contract: Contract }>(`/contracts/${enc(id)}`),
+  create: (body: CreateContractInput) =>
+    request<{ contract: Contract }>("/contracts", { method: "POST", body }),
+  update: (id: string, body: UpdateContractInput) =>
+    request<{ contract: Contract }>(`/contracts/${enc(id)}`, { method: "PATCH", body }),
+  end: (id: string, endedOn: IsoDate) =>
+    request<{ contract: Contract }>(`/contracts/${enc(id)}/end`, {
+      method: "POST",
+      body: { endedOn },
+    }),
+  invite: (id: string) =>
+    request<{ code: string; expiresAt: string }>(`/contracts/${enc(id)}/invite`, {
+      method: "POST",
+    }),
+  join: (code: string) =>
+    request<{ contract: Contract }>("/contracts/join", { method: "POST", body: { code } }),
+  summary: (id: string, month: YearMonth) =>
+    request<{ summary: MonthSummary }>(`/contracts/${enc(id)}/summary`, { query: { month } }),
+  statementCsv: (id: string, month: YearMonth) =>
+    requestBlob(`/contracts/${enc(id)}/statement.csv`, { query: { month } }),
+  activity: (id: string, limit = 50) =>
+    request<{ activity: ActivityItem[] }>(`/contracts/${enc(id)}/activity`, { query: { limit } }),
+};
+
+export const entriesApi = {
+  list: (contractId: string, month: YearMonth) =>
+    request<{ entries: WorkEntry[] }>(`/contracts/${enc(contractId)}/entries`, {
+      query: { month },
+    }),
+  upsert: (contractId: string, date: IsoDate, body: UpsertEntryInput) =>
+    request<{ entry: WorkEntry }>(`/contracts/${enc(contractId)}/entries/${date}`, {
+      method: "PUT",
+      body,
+    }),
+  remove: (contractId: string, date: IsoDate) =>
+    request<void>(`/contracts/${enc(contractId)}/entries/${date}`, { method: "DELETE" }),
+  confirm: (contractId: string, date: IsoDate) =>
+    request<{ entry: WorkEntry }>(`/contracts/${enc(contractId)}/entries/${date}/confirm`, {
+      method: "POST",
+    }),
+  clock: (contractId: string, action: "in" | "out") =>
+    request<{ entry: WorkEntry }>(`/contracts/${enc(contractId)}/clock`, {
+      method: "POST",
+      body: { action },
+    }),
+};
+
+export const adjustmentsApi = {
+  list: (contractId: string, month: YearMonth) =>
+    request<{ adjustments: Adjustment[] }>(`/contracts/${enc(contractId)}/adjustments`, {
+      query: { month },
+    }),
+  create: (contractId: string, body: CreateAdjustmentInput) =>
+    request<{ adjustment: Adjustment }>(`/contracts/${enc(contractId)}/adjustments`, {
+      method: "POST",
+      body,
+    }),
+  remove: (contractId: string, id: string) =>
+    request<void>(`/contracts/${enc(contractId)}/adjustments/${enc(id)}`, { method: "DELETE" }),
+};
+
+export const paymentsApi = {
+  list: (contractId: string, year: number) =>
+    request<{ payments: Payment[] }>(`/contracts/${enc(contractId)}/payments`, { query: { year } }),
+  create: (contractId: string, form: FormData) =>
+    request<{ payment: Payment }>(`/contracts/${enc(contractId)}/payments`, {
+      method: "POST",
+      body: form,
+    }),
+  replaceReceipt: (contractId: string, paymentId: string, form: FormData) =>
+    request<{ payment: Payment }>(
+      `/contracts/${enc(contractId)}/payments/${enc(paymentId)}/receipt`,
+      {
+        method: "PUT",
+        body: form,
+      },
+    ),
+  receipt: (contractId: string, paymentId: string) =>
+    requestBlob(`/contracts/${enc(contractId)}/payments/${enc(paymentId)}/receipt`),
+  remove: (contractId: string, paymentId: string) =>
+    request<void>(`/contracts/${enc(contractId)}/payments/${enc(paymentId)}`, { method: "DELETE" }),
+  acknowledge: (contractId: string, paymentId: string) =>
+    request<{ payment: Payment }>(
+      `/contracts/${enc(contractId)}/payments/${enc(paymentId)}/acknowledge`,
+      {
+        method: "POST",
+      },
+    ),
+};
+
+export const dashboardApi = {
+  get: () => request<{ items: DashboardItem[]; month: YearMonth; today: IsoDate }>("/dashboard"),
+};
+
+function enc(id: string): string {
+  return encodeURIComponent(id);
+}

@@ -1,0 +1,165 @@
+<script setup lang="ts">
+import { computed } from "vue";
+import { RouterLink, type RouteLocationRaw } from "vue-router";
+import Icon from "./Icon.vue";
+import type { IconName } from "./icons.ts";
+
+const {
+  variant = "secondary",
+  type = "button",
+  to,
+  href,
+  loading = false,
+  disabled = false,
+  block = false,
+  icon,
+  iconRight,
+  download,
+} = defineProps<{
+  variant?: "primary" | "secondary" | "ghost" | "danger";
+  type?: "button" | "submit";
+  to?: RouteLocationRaw;
+  href?: string;
+  loading?: boolean;
+  disabled?: boolean;
+  block?: boolean;
+  icon?: IconName;
+  iconRight?: IconName;
+  /** With `href`: save the target under this filename instead of opening it. */
+  download?: string;
+}>();
+
+const tag = computed(() => (to ? RouterLink : href ? "a" : "button"));
+const attrs = computed(() => {
+  if (to) return { to };
+  if (href && download) return { href, download };
+  if (href) return { href, target: "_blank", rel: "noopener noreferrer" };
+  return { type, disabled: disabled || loading };
+});
+</script>
+
+<template>
+  <component
+    :is="tag"
+    v-bind="attrs"
+    class="btn"
+    :class="[`btn--${variant}`, { 'btn--block': block, 'is-loading': loading }]"
+    :aria-busy="loading || undefined"
+  >
+    <span v-if="loading" class="btn__spinner" aria-hidden="true" />
+    <Icon v-else-if="icon" :name="icon" :size="18" />
+    <span class="btn__label"><slot /></span>
+    <Icon v-if="iconRight && !loading" :name="iconRight" :size="18" />
+  </component>
+</template>
+
+<style scoped>
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  min-height: 44px;
+  padding: 0 var(--s-5);
+  border-radius: var(--r-1);
+  font-weight: 600;
+  font-size: var(--t-16);
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    transform var(--d-fast) var(--ease),
+    box-shadow var(--d-fast) var(--ease),
+    background-color var(--d-fast) var(--ease),
+    color var(--d-fast) var(--ease),
+    border-color var(--d-fast) var(--ease);
+}
+
+.btn--block {
+  display: flex;
+  width: 100%;
+}
+
+.btn--primary {
+  background: var(--blue);
+  color: var(--on-ink);
+  border: 1px solid var(--ink);
+  box-shadow: var(--press);
+}
+
+.btn--primary:hover:not(:disabled) {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 var(--ink);
+}
+
+.btn--primary:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.btn--secondary {
+  background: var(--sheet);
+  color: var(--ink);
+  border: 1px solid var(--ink);
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: var(--paper);
+}
+
+.btn--ghost {
+  color: var(--blue);
+  padding: 0 var(--s-3);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--blue-wash);
+}
+
+.btn--danger {
+  color: var(--red-text);
+  border: 1px solid currentColor;
+  background: transparent;
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--red-wash);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+}
+
+.btn.is-loading {
+  cursor: progress;
+  opacity: 1;
+}
+
+.btn__label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.btn__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn--primary:hover:not(:disabled),
+  .btn--primary:active:not(:disabled) {
+    transform: none;
+  }
+}
+</style>

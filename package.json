@@ -1,0 +1,43 @@
+{
+  "name": "ponto",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "tools/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "ready": "vp check && vp run -r test && vp run -r build",
+    "dev": "vp run --parallel --filter @ponto/api --filter @ponto/web dev",
+    "build": "vp run -r build",
+    "start": "WEB_DIST_DIR=../web/dist bun run --cwd apps/api start",
+    "prepare": "vp config",
+    "seed": "vp run --filter @ponto/api seed",
+    "test": "vp run -r test",
+    "check": "vp check",
+    "docs:schema": "vp run --filter @ponto/harness docs:schema"
+  },
+  "devDependencies": {
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "overrides": {
+    "vite": "catalog:"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "version": "1.4.2",
+      "onFail": "download"
+    }
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "catalog": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
+    "vite-plus": "1.0.0"
+  }
+}
