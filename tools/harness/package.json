@@ -8,8 +8,8 @@
     "docs:schema": "node --experimental-strip-types scripts/gen-db-schema.ts"
   },
   "devDependencies": {
-    "@types/node": "^26.6.4",
-    "typescript": "^7.0.2",
-    "vite-plus": "catalog:"
+    "@types/node": "26.6.4",
+    "typescript": "7.0.2",
+    "vite-plus": "1.0.0"
   }
 }
