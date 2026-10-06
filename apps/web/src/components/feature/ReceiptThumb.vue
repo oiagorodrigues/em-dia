@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Receipt } from "@ponto/shared";
+import type { Receipt } from "@emdia/shared";
 import { onMounted, ref } from "vue";
 import { paymentsApi } from "@/api";
 import Icon from "@/components/ui/Icon.vue";

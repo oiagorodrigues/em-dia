@@ -7,7 +7,7 @@ beforeEach(() => {
 });
 afterEach(() => t.cleanup());
 
-const CSRF = { "X-Requested-With": "ponto" };
+const CSRF = { "X-Requested-With": "emdia" };
 
 describe("register", () => {
   test("employer gets a household and a refresh cookie with the contract attributes", async () => {
@@ -19,7 +19,7 @@ describe("register", () => {
     expect(res.body.user).toMatchObject({ email: "ana@test.dev", role: "employer" });
     expect(res.body.user.passwordHash).toBeUndefined();
     const cookie = (res.headers["set-cookie"] as unknown as string[])[0] ?? "";
-    expect(cookie).toMatch(/^ponto_rt=/);
+    expect(cookie).toMatch(/^emdia_rt=/);
     expect(cookie).toMatch(/HttpOnly/);
     expect(cookie).toMatch(/SameSite=Strict/);
     expect(cookie).toMatch(/Path=\/api\/v1\/auth/);
@@ -244,7 +244,7 @@ describe("logout", () => {
     );
     const res = await t.http().post("/api/v1/auth/logout").set(CSRF).set("Cookie", user.cookie);
     expect(res.status).toBe(204);
-    expect(String(res.headers["set-cookie"])).toMatch(/ponto_rt=;/);
+    expect(String(res.headers["set-cookie"])).toMatch(/emdia_rt=;/);
     expect(
       (await t.http().post("/api/v1/auth/refresh").set(CSRF).set("Cookie", user.cookie)).status,
     ).toBe(401);

@@ -1,4 +1,4 @@
-import type { PublicUser, Role } from "@ponto/shared";
+import type { PublicUser, Role } from "@emdia/shared";
 import { execute, queryOne, type Db } from "../db/index.ts";
 
 export interface UserRecord extends PublicUser {

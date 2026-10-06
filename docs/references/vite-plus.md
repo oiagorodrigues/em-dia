@@ -13,7 +13,7 @@ Local docs: `node_modules/vite-plus/docs/guide/`. CLI is `vp` (global, `~/.vite-
 | `vp run <script>`               | Run a package.json script or `vite.config.ts` task, with caching                |
 | `vp run -r <script>`            | Run in every workspace package, in dependency order                             |
 | `vp run --parallel -r <script>` | No ordering, unlimited concurrency; used for `dev`                              |
-| `vp run -F <pkg> <script>`      | Run in one package, e.g. `-F @ponto/api`                                        |
+| `vp run -F <pkg> <script>`      | Run in one package, e.g. `-F @emdia/api`                                        |
 
 Facts that matter:
 

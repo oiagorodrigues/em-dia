@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { Contract, CreateContractInput } from "@ponto/shared";
+import type { Contract, CreateContractInput } from "@emdia/shared";
 import { ref } from "vue";
 import { contractsApi, errorMessage } from "@/api";
 import ContractForm from "@/components/feature/ContractForm.vue";
 import InviteCard from "@/components/feature/InviteCard.vue";
 import Button from "@/components/ui/Button.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
+import { firstName } from "@/lib/format.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
 const toast = useToastStore();
@@ -39,7 +40,7 @@ async function generateInvite(): Promise<void> {
 <template>
   <div class="nc">
     <template v-if="created">
-      <PageHeader back="/" :title="`cadastro de ${created.workerName.split(' ')[0]} feito.`" />
+      <PageHeader back="/" :title="`cadastro de ${firstName(created.workerName)} feito.`" />
       <p class="muted">
         Agora mande o código para a pessoa criar a conta no celular. Enquanto isso, você já pode
         anotar os dias por aqui.

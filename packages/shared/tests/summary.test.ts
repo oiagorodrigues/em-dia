@@ -5,7 +5,14 @@ const base: SummaryInput = {
   contract: {
     payType: "hourly",
     rateCents: 3000,
-    scheduleDays: [1, 3, 5],
+    schedule: {
+      kind: "weekly",
+      weekdays: [1, 3, 5],
+      everyWeeks: 1,
+      monthDays: [],
+      visitsPerMonth: null,
+    },
+    deductAbsences: false,
     startedOn: "2026-01-01",
     endedOn: null,
     workerId: "w1",

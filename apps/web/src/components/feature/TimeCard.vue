@@ -9,7 +9,7 @@ import {
   type IsoDate,
   type WorkEntry,
   type YearMonth,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { computed } from "vue";
 import Stamp from "@/components/ui/Stamp.vue";
 import {
@@ -25,6 +25,7 @@ const {
   month,
   entries,
   contract,
+  expectedDates,
   today,
   fresh = null,
   readonly = false,
@@ -32,7 +33,9 @@ const {
 } = defineProps<{
   month: YearMonth;
   entries: readonly WorkEntry[];
-  contract: Pick<Contract, "scheduleDays" | "startedOn" | "endedOn">;
+  contract: Pick<Contract, "startedOn" | "endedOn">;
+  /** Dates the schedule expects (MonthSummary.expectedDates); empty for per_month and on_demand. */
+  expectedDates: readonly IsoDate[];
   today: IsoDate;
   /** Date whose times were just stamped; they type themselves in. */
   fresh?: IsoDate | null;
@@ -60,13 +63,13 @@ interface Row {
 
 const rows = computed<Row[]>(() => {
   const byDate = new Map(entries.map((e) => [e.date, e]));
-  const schedule = new Set(contract.scheduleDays);
+  const expected = new Set(expectedDates);
   return datesOfMonth(month).map((date) => {
     const weekday = weekdayOf(date);
     const entry = byDate.get(date) ?? null;
     const inside =
       date >= contract.startedOn && (contract.endedOn === null || date <= contract.endedOn);
-    const scheduled = schedule.has(weekday);
+    const scheduled = expected.has(date);
     const future = date > today;
     let kind: RowKind;
     if (entry) kind = "entry";
@@ -83,7 +86,7 @@ const rows = computed<Row[]>(() => {
       weekend: weekday === 0 || weekday === 6,
       isToday: date === today,
       future,
-      label: describe(date, weekday, entry, kind),
+      label: describe(date, weekday, entry, kind, scheduled),
     };
   });
 });
@@ -92,13 +95,19 @@ function stampText(status: EntryStatus): string {
   return status === "worked" ? "" : STATUS_STAMP[status];
 }
 
-function describe(date: IsoDate, weekday: number, entry: WorkEntry | null, kind: RowKind): string {
+function describe(
+  date: IsoDate,
+  weekday: number,
+  entry: WorkEntry | null,
+  kind: RowKind,
+  scheduled: boolean,
+): string {
   const head = `${WEEKDAY_LONG[weekday]}, ${formatDayMonth(date)}`;
   if (kind === "outside") return `${head}: fora do período do vínculo`;
   if (!entry)
     return kind === "missing"
       ? `${head}: dia previsto sem registro. Registrar`
-      : `${head}: sem registro`;
+      : `${head}: ${scheduled ? "dia previsto" : "sem registro"}`;
   const confirmed = !confirmable
     ? ""
     : entry.confirmedAt
@@ -136,6 +145,7 @@ function describe(date: IsoDate, weekday: number, entry: WorkEntry | null, kind:
             {
               'is-today': row.isToday,
               'is-weekend': row.weekend && !row.scheduled,
+              'is-expected': row.scheduled,
               'is-future': row.future,
             },
           ]"
@@ -185,6 +195,7 @@ function describe(date: IsoDate, weekday: number, entry: WorkEntry | null, kind:
           </span>
 
           <span v-else-if="row.kind === 'missing'" class="row__missing">— registrar</span>
+          <span v-else-if="row.scheduled && row.future" class="row__expected">previsto</span>
           <span v-else class="row__blank" />
 
           <span class="row__state" aria-hidden="true">
@@ -314,7 +325,7 @@ function describe(date: IsoDate, weekday: number, entry: WorkEntry | null, kind:
 
 .is-weekend .row__num,
 .is-weekend .row__wd,
-.row--idle.is-future .row__num {
+.row--idle.is-future:not(.is-expected) .row__num {
   color: var(--ink-3);
 }
 
@@ -370,6 +381,15 @@ function describe(date: IsoDate, weekday: number, entry: WorkEntry | null, kind:
   grid-column: 2 / span 4;
 }
 
+.row__expected {
+  grid-column: 2 / span 4;
+  justify-self: start;
+  font-size: var(--t-12);
+  color: var(--ink-2);
+  border-bottom: 1px dotted var(--ink-3);
+  line-height: 1.4;
+}
+
 .row__state {
   display: grid;
   place-items: center;
@@ -401,6 +421,7 @@ function describe(date: IsoDate, weekday: number, entry: WorkEntry | null, kind:
   }
   .row__stamp,
   .row__missing,
+  .row__expected,
   .row__blank {
     grid-column: 2 / span 3;
   }

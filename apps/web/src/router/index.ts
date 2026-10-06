@@ -113,7 +113,7 @@ export function createAppRouter(history: RouterHistory = createWebHistory()): Ro
   router.beforeEach((to) => resolveAccess(to, useAuthStore()));
 
   router.afterEach((to) => {
-    document.title = to.meta.title ? `${to.meta.title} · ponto.` : "ponto.";
+    document.title = to.meta.title ? `${to.meta.title} · em dia` : "em dia";
   });
 
   return router;

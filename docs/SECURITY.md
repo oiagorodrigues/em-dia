@@ -7,10 +7,10 @@ Assets: login credentials, Pix keys and phone numbers, hours and pay records, re
 | Threat                           | Who                      | Main mitigation                                                 |
 | -------------------------------- | ------------------------ | --------------------------------------------------------------- |
 | Reading another household's data | Any logged-in user       | Ownership checks in services, 404 for invisible resources       |
-| Worker acting as employer        | Worker                   | RBAC from `@ponto/shared`, checked in services                  |
+| Worker acting as employer        | Worker                   | RBAC from `@emdia/shared`, checked in services                  |
 | Credential stuffing, brute force | Internet                 | Rate limits, 5-failure lockout, scrypt, generic login errors    |
 | Token theft via XSS              | Injected script          | No `v-html`, CSP via helmet, access token in memory only        |
-| CSRF on cookie endpoints         | Malicious site           | `SameSite=Strict`, `X-Requested-With: ponto`, CORS allowlist    |
+| CSRF on cookie endpoints         | Malicious site           | `SameSite=Strict`, `X-Requested-With: emdia`, CORS allowlist    |
 | Stolen refresh token             | Network or device theft  | Rotation with reuse detection, logout-all, token version        |
 | Malicious upload                 | Employer account         | Size cap, magic-byte type check, random name, no static serving |
 | CSV formula injection            | Worker or employer notes | Prefix cells starting with `= + - @`                            |

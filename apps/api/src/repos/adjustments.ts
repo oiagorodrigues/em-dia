@@ -1,4 +1,4 @@
-import type { Adjustment, AdjustmentKind, YearMonth } from "@ponto/shared";
+import type { Adjustment, AdjustmentKind, YearMonth } from "@emdia/shared";
 import { execute, queryAll, queryOne, type Db } from "../db/index.ts";
 
 interface Row {

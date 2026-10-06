@@ -1,6 +1,6 @@
 # AGENTS.md
 
-"ponto." is a PWA for Brazilian households to track hours, attendance, payments and receipts of domestic workers.
+"em dia" is a PWA for Brazilian households to track hours, attendance, payments and receipts of domestic workers.
 Employers and workers see the same time card and confirm each other's entries.
 The repo is the system of record: if a decision is not in here, it does not exist. This file is a map; details live in `docs/`.
 
@@ -8,12 +8,12 @@ The repo is the system of record: if a decision is not in here, it does not exis
 
 | Path              | What                                                                       |
 | ----------------- | -------------------------------------------------------------------------- |
-| `packages/shared` | `@ponto/shared`: domain types, zod schemas, RBAC, pay math, time helpers   |
+| `packages/shared` | `@emdia/shared`: domain types, zod schemas, RBAC, pay math, time helpers   |
 | `apps/api`        | Express 5 + `node:sqlite` API (`/api/v1`)                                  |
 | `apps/web`        | Vue 3.6 + Pinia + vue-router PWA (vite-plugin-pwa)                         |
 | `tools/e2e`       | Browser journeys and screenshots (`node scripts/flows.ts`, see its README) |
-| `tools/harness`   | `@ponto/harness`: architecture, taste and doc tests, schema generator      |
-| `tools/e2e`       | `@ponto/e2e`: drives the running app in Chrome (screenshots, journeys)     |
+| `tools/harness`   | `@emdia/harness`: architecture, taste and doc tests, schema generator      |
+| `tools/e2e`       | `@emdia/e2e`: drives the running app in Chrome (screenshots, journeys)     |
 | `docs/`           | Knowledge base (see below)                                                 |
 
 ## Commands
@@ -33,7 +33,7 @@ Toolchain is Vite+ (`vp`). No ESLint, no Prettier.
 
 Each is enforced by `tools/harness` where it can be. A failure message says WHAT, FIX and REF.
 
-- Contract first: shapes and validation live in `@ponto/shared` and `docs/product-specs/api-contract.md`. Never redefine a type locally.
+- Contract first: shapes and validation live in `@emdia/shared` and `docs/product-specs/api-contract.md`. Never redefine a type locally.
 - Money is integer cents (`*Cents`). Format only at the edge with `formatCents`.
 - "Today" is computed in the household timezone with `nowInZone`, never `new Date()` date parts.
 - API layering: `http -> services -> repos -> db`; `config`/`lib` usable everywhere; only `server.ts` imports `http`; no express outside `http`.

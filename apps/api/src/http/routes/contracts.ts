@@ -3,7 +3,7 @@ import {
   endContractSchema,
   joinContractSchema,
   updateContractSchema,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { Router } from "express";
 import type { Services } from "../../services/index.ts";
 import { actorOf } from "../context.ts";

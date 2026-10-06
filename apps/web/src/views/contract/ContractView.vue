@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { OCCUPATION_LABEL, PAY_TYPE_LABEL, formatCents, type Contract } from "@ponto/shared";
+import { OCCUPATION_LABEL, PAY_TYPE_LABEL, formatCents, type Contract } from "@emdia/shared";
 import { computed, nextTick, onBeforeUnmount, reactive, useTemplateRef, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import { contractsApi } from "@/api";
@@ -128,9 +128,11 @@ onBeforeUnmount(() => resize.disconnect());
         >
         <div class="cv__title">
           <div>
-            <p class="label">
-              {{ OCCUPATION_LABEL[data.occupation] }} ·
-              {{ PAY_TYPE_LABEL[data.payType].toLowerCase() }}
+            <p class="cv__meta">
+              <span class="label"
+                >{{ OCCUPATION_LABEL[data.occupation] }} ·
+                {{ PAY_TYPE_LABEL[data.payType].toLowerCase() }}</span
+              >
               <span class="mono cv__rate">{{ formatCents(data.rateCents) }}</span>
             </p>
             <h1 class="page-title">{{ counterpart }}</h1>
@@ -221,8 +223,15 @@ onBeforeUnmount(() => resize.disconnect());
   margin-top: var(--s-1);
 }
 
+.cv__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--s-2);
+}
+
 .cv__rate {
-  margin-left: var(--s-1);
+  font-size: var(--t-12);
   letter-spacing: 0;
   text-transform: none;
   color: var(--ink);

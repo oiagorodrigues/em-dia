@@ -40,7 +40,7 @@ const active = computed(() => items.find((i) => i.match(route.path, route.name))
 
 <template>
   <nav class="nav" aria-label="Principal">
-    <RouterLink to="/" class="nav__brand" aria-label="ponto., início">
+    <RouterLink to="/" class="nav__brand" aria-label="em dia, início">
       <Wordmark :size="30" />
     </RouterLink>
     <ul class="nav__list">

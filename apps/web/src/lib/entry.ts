@@ -1,4 +1,4 @@
-import { ENTRY_STATUS_LABEL, type WorkEntry } from "@ponto/shared";
+import { ENTRY_STATUS_LABEL, type WorkEntry } from "@emdia/shared";
 
 export type ClockState = "in" | "out" | "done" | "off";
 

@@ -10,20 +10,26 @@ import {
   type CreateContractInput,
   type Occupation,
   type PayType,
-} from "@ponto/shared";
+  type Schedule,
+  toYearMonth,
+} from "@emdia/shared";
+import { computed } from "vue";
 import Button from "@/components/ui/Button.vue";
 import Field from "@/components/ui/Field.vue";
 import MoneyInput from "@/components/ui/MoneyInput.vue";
 import Segmented from "@/components/ui/Segmented.vue";
 import { useForm } from "@/composables/form.ts";
-import WeekdayToggles from "./WeekdayToggles.vue";
+import Toggle from "@/components/ui/Toggle.vue";
+import { DEFAULT_SCHEDULE } from "@/lib/schedule.ts";
+import ScheduleField from "./ScheduleField.vue";
 
 interface FormValues {
   workerName: string;
   occupation: Occupation;
   payType: PayType;
   rateCents: number | null;
-  scheduleDays: number[];
+  schedule: Schedule;
+  deductAbsences: boolean;
   expectedStart: string;
   expectedEnd: string;
   startedOn: string;
@@ -47,7 +53,8 @@ const defaults: FormValues = {
   occupation: initial?.occupation ?? "diarista",
   payType: initial?.payType ?? "daily",
   rateCents: initial?.rateCents ?? null,
-  scheduleDays: initial?.scheduleDays ? [...initial.scheduleDays] : [1, 3, 5],
+  schedule: structuredClone(initial?.schedule ?? DEFAULT_SCHEDULE),
+  deductAbsences: initial?.deductAbsences ?? false,
   expectedStart: initial?.expectedStart ?? "08:00",
   expectedEnd: initial?.expectedEnd ?? "17:00",
   startedOn: initial?.startedOn ?? nowInZone(DEFAULT_TIMEZONE).date,
@@ -67,9 +74,16 @@ const RATE_LABEL: Record<PayType, string> = {
   monthly: "Salário mensal",
 };
 
+const today = nowInZone(DEFAULT_TIMEZONE).date;
+/** Preview the month the contract is in now, or its first month if it starts later. */
+const previewMonth = computed(() =>
+  toYearMonth(values.startedOn && values.startedOn > today ? values.startedOn : today),
+);
+
 function onSubmit(): void {
   const input = {
     ...values,
+    deductAbsences: values.payType === "monthly" && values.deductAbsences,
     rateCents: values.rateCents ?? 0,
     expectedStart: values.expectedStart || null,
     expectedEnd: values.expectedEnd || null,
@@ -125,13 +139,20 @@ function onSubmit(): void {
       </Field>
     </div>
 
-    <fieldset class="cf__set">
-      <legend class="label">Dias que vem</legend>
-      <WeekdayToggles v-model="values.scheduleDays" label="Dias que vem" />
-      <p class="cf__hint">
-        Usamos para lembrar dos dias sem registro. Pode ficar vazio se não tiver dia fixo.
-      </p>
-    </fieldset>
+    <Toggle
+      v-if="values.payType === 'monthly'"
+      v-model="values.deductAbsences"
+      label="Descontar faltas não justificadas"
+      hint="Salário ÷ 30 por falta. Faltas justificadas, folgas e feriados não descontam."
+    />
+
+    <ScheduleField
+      v-model="values.schedule"
+      :month="previewMonth"
+      :started-on="values.startedOn"
+      :error="errors.schedule"
+      @update:model-value="clearError('schedule')"
+    />
 
     <div class="cf__two">
       <Field

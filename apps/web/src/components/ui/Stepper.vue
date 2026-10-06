@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatDuration } from "@ponto/shared";
+import { formatDuration } from "@emdia/shared";
 import Icon from "./Icon.vue";
 
 const model = defineModel<number>({ required: true });
@@ -9,12 +9,17 @@ const {
   min = 0,
   max = 720,
   label,
+  format = (v: number) => (v === 0 ? "sem pausa" : formatDuration(v)),
+  unit = "minutos",
 } = defineProps<{
   id?: string;
   step?: number;
   min?: number;
   max?: number;
   label: string;
+  format?: (value: number) => string;
+  /** Spoken in the +/- button labels: "Menos 15 minutos". */
+  unit?: string;
 }>();
 
 function bump(delta: number): void {
@@ -28,19 +33,17 @@ function bump(delta: number): void {
       type="button"
       class="stp__btn"
       :disabled="model <= min"
-      :aria-label="`Menos ${step} minutos`"
+      :aria-label="`Menos ${step} ${unit}`"
       @click="bump(-step)"
     >
       <Icon name="minus" />
     </button>
-    <output :id="id" class="stp__val mono" aria-live="polite">{{
-      model === 0 ? "sem pausa" : formatDuration(model)
-    }}</output>
+    <output :id="id" class="stp__val mono" aria-live="polite">{{ format(model) }}</output>
     <button
       type="button"
       class="stp__btn"
       :disabled="model >= max"
-      :aria-label="`Mais ${step} minutos`"
+      :aria-label="`Mais ${step} ${unit}`"
       @click="bump(step)"
     >
       <Icon name="plus" />

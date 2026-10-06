@@ -21,7 +21,7 @@ describe("roles", () => {
         occupation: "diarista",
         payType: "daily",
         rateCents: 100,
-        scheduleDays: [1],
+        schedule: { kind: "weekly", weekdays: [1] },
         expectedStart: null,
         expectedEnd: null,
         startedOn: "2026-08-01",
@@ -164,7 +164,9 @@ describe("contracts and invites", () => {
 
   test("employer creates, updates and ends a contract", async () => {
     const employer = await t.register("employer");
-    const created = await t.createContract(employer, { scheduleDays: [5, 1, 3, 1] });
+    const created = await t.createContract(employer, {
+      schedule: { kind: "weekly", weekdays: [5, 1, 3, 1], monthDays: [5] },
+    });
     const as = { type: "bearer" } as const;
 
     const updated = await t
@@ -174,7 +176,13 @@ describe("contracts and invites", () => {
       .send({ rateCents: 20000 });
     expect(updated.body.contract).toMatchObject({
       rateCents: 20000,
-      scheduleDays: [1, 3, 5],
+      schedule: {
+        kind: "weekly",
+        weekdays: [1, 3, 5],
+        everyWeeks: 1,
+        monthDays: [],
+        visitsPerMonth: null,
+      },
       employerName: "Ana Contratante",
     });
 

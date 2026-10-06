@@ -1,9 +1,9 @@
-import type { Role } from "@ponto/shared";
+import type { Role } from "@emdia/shared";
 import { errors, jwtVerify, SignJWT } from "jose";
 import { AppError } from "./errors.ts";
 
-const ISSUER = "ponto-api";
-const AUDIENCE = "ponto-web";
+const ISSUER = "emdia-api";
+const AUDIENCE = "emdia-web";
 const ACCESS_TTL_SECONDS = 15 * 60;
 
 export interface AccessClaims {

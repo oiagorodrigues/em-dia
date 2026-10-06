@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { parseMoneyToCents } from "@ponto/shared";
+import { parseMoneyToCents } from "@emdia/shared";
 import { computed } from "vue";
 
 const MAX_CENTS = 100_000_000;

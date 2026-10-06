@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { registerSchema, type Role } from "@ponto/shared";
+import { registerSchema, type Role } from "@emdia/shared";
 import { computed } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import AuthHeader from "@/components/layout/AuthHeader.vue";

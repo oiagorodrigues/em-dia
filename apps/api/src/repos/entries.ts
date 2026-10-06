@@ -1,4 +1,4 @@
-import type { EntryStatus, IsoDate, Role, WorkEntry, YearMonth } from "@ponto/shared";
+import type { EntryStatus, IsoDate, Role, WorkEntry, YearMonth } from "@emdia/shared";
 import { execute, queryAll, queryOne, type Db } from "../db/index.ts";
 
 interface Row {

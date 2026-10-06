@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { changePasswordSchema, ROLE_LABEL, updateMeSchema } from "@ponto/shared";
+import { changePasswordSchema, ROLE_LABEL, updateMeSchema } from "@emdia/shared";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { errorMessage, meApi } from "@/api";
@@ -182,7 +182,7 @@ async function install(): Promise<void> {
           do Safari.
         </li>
         <li>Escolha <strong>Adicionar à Tela de Início</strong>.</li>
-        <li>Toque em <strong>Adicionar</strong>. Pronto: o ponto. aparece como app.</li>
+        <li>Toque em <strong>Adicionar</strong>. Pronto: o em dia aparece como app.</li>
       </ol>
     </section>
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { monthName, parseYearMonth, shiftMonth, type YearMonth } from "@ponto/shared";
+import { monthName, parseYearMonth, shiftMonth, type YearMonth } from "@emdia/shared";
 import { computed } from "vue";
 import Icon from "@/components/ui/Icon.vue";
 

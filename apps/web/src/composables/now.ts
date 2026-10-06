@@ -1,4 +1,4 @@
-import { DEFAULT_TIMEZONE, nowInZone } from "@ponto/shared";
+import { DEFAULT_TIMEZONE, nowInZone } from "@emdia/shared";
 import { onScopeDispose, ref } from "vue";
 
 /** Household-local date and HH:MM, ticking on the minute (plus seconds for the clock face). */

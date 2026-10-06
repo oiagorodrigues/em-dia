@@ -1,4 +1,4 @@
-import type { PublicUser, Role } from "@ponto/shared";
+import type { PublicUser, Role } from "@emdia/shared";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { createMemoryHistory, createRouter, type RouteRecordRaw } from "vue-router";
 import { resolveAccess, safeNext, type GuardAuth } from "./guard.ts";

@@ -1,11 +1,9 @@
-import type { Contract, CreateContractInput, IsoDate, UpdateContractInput } from "@ponto/shared";
+import type { Contract, CreateContractInput, IsoDate, UpdateContractInput } from "@emdia/shared";
 import { AppError, fieldError, notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
 import { listContracts, loadContract } from "./access.ts";
 import { audit, nowIso, requirePermission, type Actor, type ServiceDeps } from "./context.ts";
 import { hashInviteCode, INVITE_TTL_MS, linkWorkerByCode, newInviteCode } from "./invites.ts";
-
-const uniqueDays = (days: number[]) => [...new Set(days)].sort((a, b) => a - b);
 
 export function contractsService(deps: ServiceDeps) {
   const { repos } = deps;
@@ -44,7 +42,8 @@ export function contractsService(deps: ServiceDeps) {
           occupation: input.occupation,
           payType: input.payType,
           rateCents: input.rateCents,
-          scheduleDays: uniqueDays(input.scheduleDays),
+          schedule: input.schedule,
+          deductAbsences: input.deductAbsences,
           expectedStart: input.expectedStart,
           expectedEnd: input.expectedEnd,
           startedOn: input.startedOn,
@@ -68,7 +67,8 @@ export function contractsService(deps: ServiceDeps) {
         occupation: input.occupation ?? contract.occupation,
         payType: input.payType ?? contract.payType,
         rateCents: input.rateCents ?? contract.rateCents,
-        scheduleDays: uniqueDays(input.scheduleDays ?? contract.scheduleDays),
+        schedule: input.schedule ?? contract.schedule,
+        deductAbsences: input.deductAbsences ?? contract.deductAbsences,
         expectedStart:
           input.expectedStart === undefined ? contract.expectedStart : input.expectedStart,
         expectedEnd: input.expectedEnd === undefined ? contract.expectedEnd : input.expectedEnd,

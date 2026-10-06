@@ -4,12 +4,12 @@ import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 import { setup, type TestEnv } from "./helpers.ts";
 
-const INDEX = "<!doctype html><title>ponto.</title>";
+const INDEX = "<!doctype html><title>em dia</title>";
 let dist: string;
 let t: TestEnv;
 
 beforeAll(() => {
-  dist = mkdtempSync(join(tmpdir(), "ponto-web-dist-"));
+  dist = mkdtempSync(join(tmpdir(), "emdia-web-dist-"));
   mkdirSync(join(dist, "assets"));
   writeFileSync(join(dist, "index.html"), INDEX);
   writeFileSync(join(dist, "assets", "index-abc123.js"), "console.log(1)");

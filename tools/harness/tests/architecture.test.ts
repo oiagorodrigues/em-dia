@@ -174,8 +174,8 @@ describe("workspace boundaries", () => {
   it("apps never import each other", () => {
     const bad: string[] = [];
     for (const [app, other] of [
-      ["apps/api", "@ponto/web"],
-      ["apps/web", "@ponto/api"],
+      ["apps/api", "@emdia/web"],
+      ["apps/web", "@emdia/api"],
     ] as const) {
       for (const file of files(app, CODE)) {
         for (const { specifier, line } of importsOf(sourceForImports(file))) {
@@ -187,7 +187,7 @@ describe("workspace boundaries", () => {
             bad.push(
               `${rel(file)}:${line} ${violation(
                 `${app} imports ${specifier}`,
-                "share code through packages/shared (@ponto/shared) instead",
+                "share code through packages/shared (@emdia/shared) instead",
                 `${ARCH}#packages-and-dependency-direction`,
               )}`,
             );
@@ -205,7 +205,7 @@ describe("workspace boundaries", () => {
         const forbidden =
           specifier.startsWith("node:") ||
           /^(express|vue|pinia|vue-router)(\/|$)/.test(specifier) ||
-          /^@ponto\/(api|web)/.test(specifier) ||
+          /^@emdia\/(api|web)/.test(specifier) ||
           /apps\/(api|web)/.test(specifier);
         if (forbidden) {
           bad.push(

@@ -1,4 +1,4 @@
-import type { LoginInput, PublicUser, RegisterInput } from "@ponto/shared";
+import type { LoginInput, PublicUser, RegisterInput } from "@emdia/shared";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { authApi, meApi, type Session } from "@/api";

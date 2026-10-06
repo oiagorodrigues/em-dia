@@ -1,4 +1,4 @@
-import type { Payment, PaymentMethod, Receipt, ReceiptMimeType, YearMonth } from "@ponto/shared";
+import type { Payment, PaymentMethod, Receipt, ReceiptMimeType, YearMonth } from "@emdia/shared";
 import { execute, queryAll, queryOne, type Db } from "../db/index.ts";
 
 /** `receiptFile` is the storage name; it never leaves the API. */

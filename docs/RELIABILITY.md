@@ -38,7 +38,7 @@ On `SIGTERM` and `SIGINT`: stop accepting connections, wait for in-flight reques
 One process serves the API and the built PWA from the same origin. Same origin is what lets the refresh cookie (`SameSite=Strict`) and the service worker work without CORS.
 
 - Local production run: `bun run build`, then `bun run start` (sets `WEB_DIST_DIR=../web/dist` and runs `apps/api/dist/server.mjs`).
-- Container: `docker build -t ponto .` then `docker run -p 3000:3000 -v ponto-data:/data -e JWT_SECRET=… -e WEB_ORIGIN=https://your.host -e TRUST_PROXY=1 ponto`. It runs as the non-root `node` user, keeps state in the `/data` volume (`DATABASE_PATH=/data/ponto.db`, `UPLOAD_DIR=/data/uploads`) and reports health from `/api/health`.
+- Container: `docker build -t emdia .` then `docker run -p 3000:3000 -v emdia-data:/data -e JWT_SECRET=… -e WEB_ORIGIN=https://your.host -e TRUST_PROXY=1 emdia`. It runs as the non-root `node` user, keeps state in the `/data` volume (`DATABASE_PATH=/data/emdia.db`, `UPLOAD_DIR=/data/uploads`) and reports health from `/api/health`.
 - Required in production: `JWT_SECRET` (≥ 32 chars; the process refuses to start without it). Set `WEB_ORIGIN` to the public URL (reset links) and `TRUST_PROXY` to the number of proxies in front so rate limits see client IPs.
 - Terminate TLS at the proxy. HSTS is sent in production.
 - Caching: `/assets/*` is fingerprinted and served `immutable` for a year. `index.html`, `sw.js`, `workbox-*.js` and `manifest.webmanifest` are `no-cache`, so a deploy reaches clients on their next load. API responses are `no-store`.

@@ -1,4 +1,4 @@
-import { monthQuerySchema } from "@ponto/shared";
+import { monthQuerySchema } from "@emdia/shared";
 import { Router } from "express";
 import { z } from "zod";
 import type { Services } from "../../services/index.ts";

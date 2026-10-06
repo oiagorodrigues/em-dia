@@ -11,7 +11,7 @@ import { chromium, type Browser, type Page } from "playwright-core";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:5173";
 const API = process.env.API_URL ?? "http://localhost:3000/api/v1";
-const PASSWORD = process.env.SEED_PASSWORD ?? "ponto12345";
+const PASSWORD = process.env.SEED_PASSWORD ?? "emdia12345";
 const args = process.argv.slice(2);
 const OUT = args.includes("--out") ? args[args.indexOf("--out") + 1]! : "screens";
 const ONLY = args.includes("--only") ? args[args.indexOf("--only") + 1] : undefined;
@@ -96,8 +96,8 @@ async function main() {
   await mkdir(OUT, { recursive: true });
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   const [employerContracts, workerContracts] = await Promise.all([
-    contractIds("ana@ponto.dev"),
-    contractIds("maria@ponto.dev"),
+    contractIds("ana@emdia.dev"),
+    contractIds("maria@emdia.dev"),
   ]);
   const contractId = employerContracts[0];
 
@@ -113,7 +113,7 @@ async function main() {
       }
       if (!ONLY || ONLY === "employer") {
         await session(browser, "employer", vp, theme, async (page, p) => {
-          await login(page, "ana@ponto.dev");
+          await login(page, "ana@emdia.dev");
           await shoot(page, `${p}-inicio`);
           if (!contractId) return;
           for (const tab of ["", "/pagamentos", "/extras", "/historico", "/ajustes"]) {
@@ -130,7 +130,7 @@ async function main() {
       }
       if (!ONLY || ONLY === "worker") {
         await session(browser, "worker", vp, theme, async (page, p) => {
-          await login(page, "maria@ponto.dev");
+          await login(page, "maria@emdia.dev");
           await shoot(page, `${p}-inicio`);
           for (const path of ["/cartao", "/pagamentos", "/perfil"]) {
             await page.goto(`${BASE}${path}`);

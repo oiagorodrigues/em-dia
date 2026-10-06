@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCents, formatDuration, monthName, parseYearMonth } from "@ponto/shared";
+import { formatCents, formatDuration, monthName, parseYearMonth } from "@emdia/shared";
 import { computed } from "vue";
 import { dashboardApi } from "@/api";
 import ContractStub from "@/components/feature/ContractStub.vue";

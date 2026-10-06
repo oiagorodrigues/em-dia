@@ -1,4 +1,4 @@
-import type { ActivityItem } from "@ponto/shared";
+import type { ActivityItem } from "@emdia/shared";
 import { execute, queryAll, type Db } from "../db/index.ts";
 
 export interface AuditEvent {

@@ -1,4 +1,4 @@
-import { RECEIPT_MAX_BYTES, RECEIPT_MIME_TYPES, type ReceiptMimeType } from "@ponto/shared";
+import { RECEIPT_MAX_BYTES, RECEIPT_MIME_TYPES, type ReceiptMimeType } from "@emdia/shared";
 
 /** Client-side pre-check only; the API re-detects the type from magic bytes. */
 export function receiptProblem(file: File): string | null {

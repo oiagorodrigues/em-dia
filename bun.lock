@@ -10,10 +10,10 @@
       },
     },
     "apps/api": {
-      "name": "@ponto/api",
+      "name": "@emdia/api",
       "version": "0.0.0",
       "dependencies": {
-        "@ponto/shared": "workspace:*",
+        "@emdia/shared": "workspace:*",
         "cookie-parser": "^1.4.7",
         "express": "^5.2.1",
         "express-rate-limit": "^8.7.1",
@@ -36,12 +36,12 @@
       },
     },
     "apps/web": {
-      "name": "@ponto/web",
+      "name": "@emdia/web",
       "version": "0.0.0",
       "dependencies": {
+        "@emdia/shared": "workspace:*",
         "@fontsource-variable/bricolage-grotesque": "^5.3.0",
         "@fontsource-variable/martian-mono": "^5.3.0",
-        "@ponto/shared": "workspace:*",
         "pinia": "^4.0.3",
         "vue": "3.6.0-rc.10",
         "vue-router": "^5.3.1",
@@ -60,7 +60,7 @@
       },
     },
     "packages/shared": {
-      "name": "@ponto/shared",
+      "name": "@emdia/shared",
       "version": "0.0.0",
       "dependencies": {
         "zod": "^4.6.5",
@@ -71,14 +71,14 @@
       },
     },
     "tools/e2e": {
-      "name": "@ponto/e2e",
+      "name": "@emdia/e2e",
       "version": "0.0.0",
       "devDependencies": {
         "playwright-core": "^1.63.0",
       },
     },
     "tools/harness": {
-      "name": "@ponto/harness",
+      "name": "@emdia/harness",
       "version": "0.0.0",
       "devDependencies": {
         "@types/node": "^26.6.4",
@@ -284,6 +284,16 @@
     "@borewit/text-codec": ["@borewit/text-codec@0.2.2", "", {}, "sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ=="],
 
     "@canvas/image-data": ["@canvas/image-data@1.1.0", "", {}, "sha512-QdObRRjRbcXGmM1tmJ+MrHcaz1MftF2+W7YI+MsphnsCrmtyfS0d5qJbk0MeSbUeyM/jCb0hmnkXPsy026L7dA=="],
+
+    "@emdia/api": ["@emdia/api@workspace:apps/api"],
+
+    "@emdia/e2e": ["@emdia/e2e@workspace:tools/e2e"],
+
+    "@emdia/harness": ["@emdia/harness@workspace:tools/harness"],
+
+    "@emdia/shared": ["@emdia/shared@workspace:packages/shared"],
+
+    "@emdia/web": ["@emdia/web@workspace:apps/web"],
 
     "@emnapi/runtime": ["@emnapi/runtime@1.11.3", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA=="],
 
@@ -514,16 +524,6 @@
     "@paralleldrive/cuid2": ["@paralleldrive/cuid2@2.3.1", "", { "dependencies": { "@noble/hashes": "^1.1.5" } }, "sha512-XO7cAxhnTZl0Yggq6jOgjiOHhbgcO4NqFqwSmQpjK3b6TEE6Uj/jfSk6wzYyemh3+I0sHirKSetjQwn5cZktFw=="],
 
     "@polka/url": ["@polka/url@1.0.0-next.29", "", {}, "sha512-wwQAWhWSuHaag8c4q/KN/vCoeOJYshAIvMQwD4GpSb3OiZklFfvAgmj0VCBBImRpuF/aFgIRzllXlVX93Jevww=="],
-
-    "@ponto/api": ["@ponto/api@workspace:apps/api"],
-
-    "@ponto/e2e": ["@ponto/e2e@workspace:tools/e2e"],
-
-    "@ponto/harness": ["@ponto/harness@workspace:tools/harness"],
-
-    "@ponto/shared": ["@ponto/shared@workspace:packages/shared"],
-
-    "@ponto/web": ["@ponto/web@workspace:apps/web"],
 
     "@quansync/fs": ["@quansync/fs@1.1.0", "", { "dependencies": { "quansync": "^1.0.0" } }, "sha512-qAPG/t3HqML1TlN7sY/pTbEjzFVAKsMjNNMGheyDosro+kT4iw2KCUoHcVdmliwWjorm4elZbgNQyU2eD97eDg=="],
 
@@ -1627,7 +1627,7 @@
 
     "@babel/preset-env/semver": ["semver@6.3.1", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-BR7VvDCVHO+q2xBEWskxS6DJE1qRnb7DxzUrogb71CWoSficBxYsiAGd+Kl0mmq/MprG9yArRkyrQxTO6XjMzA=="],
 
-    "@ponto/web/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
+    "@emdia/web/typescript": ["typescript@6.0.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw=="],
 
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 

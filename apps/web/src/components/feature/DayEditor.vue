@@ -10,7 +10,7 @@ import {
   type EntryStatus,
   type IsoDate,
   type WorkEntry,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { computed, ref, watch } from "vue";
 import { entriesApi, errorMessage } from "@/api";
 import Button from "@/components/ui/Button.vue";

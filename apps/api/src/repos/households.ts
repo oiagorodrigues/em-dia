@@ -1,4 +1,4 @@
-import type { Household } from "@ponto/shared";
+import type { Household } from "@emdia/shared";
 import { execute, queryAll, queryOne, type Db } from "../db/index.ts";
 
 interface Row {

@@ -68,7 +68,7 @@ describe("logger", () => {
 
 describe("file names", () => {
   test("stored names cannot escape the upload dir", () => {
-    const store = createFileStore("/tmp/ponto-never-used");
+    const store = createFileStore("/tmp/emdia-never-used");
     expect(() => store.open("../../etc/passwd")).toThrow();
     expect(() => store.open("abc.png")).toThrow();
   });

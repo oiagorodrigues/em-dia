@@ -289,7 +289,12 @@ input[type="date"].input::-webkit-calendar-picker-indicator {
 }
 
 .boot span {
-  color: var(--red);
+  display: inline-block;
+  width: 0.24em;
+  height: 0.24em;
+  margin-left: 0.07em;
+  border-radius: 50%;
+  background: var(--red);
 }
 
 @keyframes boot-in {

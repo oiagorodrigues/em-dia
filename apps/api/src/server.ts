@@ -8,7 +8,7 @@ import { createServices } from "./services/index.ts";
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 const config = loadConfig();
-const logger = createLogger(config.logLevel, { service: "ponto-api" });
+const logger = createLogger(config.logLevel, { service: "emdia-api" });
 if (config.jwtSecretEphemeral) {
   logger.warn("JWT_SECRET not set: using a random key, sessions will not survive a restart");
 }

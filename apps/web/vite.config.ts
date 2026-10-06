@@ -14,8 +14,8 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ["favicon.ico", "apple-touch-icon-180x180.png", "logo.svg"],
       manifest: {
-        name: "ponto. — banco de horas",
-        short_name: "ponto.",
+        name: "em dia — diárias e mensalistas",
+        short_name: "em dia",
         description: "Horas, faltas e pagamentos de quem trabalha na sua casa.",
         lang: "pt-BR",
         dir: "ltr",

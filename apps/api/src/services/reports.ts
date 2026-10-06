@@ -1,15 +1,16 @@
-import type { ActivityItem, DashboardItem, IsoDate, MonthSummary, YearMonth } from "@ponto/shared";
+import type { ActivityItem, DashboardItem, IsoDate, MonthSummary, YearMonth } from "@emdia/shared";
 import {
   computeMonthSummary,
   datesOfMonth,
   DEFAULT_TIMEZONE,
+  describeSchedule,
   ENTRY_STATUS_LABEL,
   formatDuration,
   formatYearMonth,
   nowInZone,
   toYearMonth,
   weekdayOf,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { centsToDecimal, toCsv } from "../lib/csv.ts";
 import { toPayment, type LocatedContract } from "../repos/index.ts";
 import { listContracts, loadContract } from "./access.ts";
@@ -51,6 +52,7 @@ export function reportsService(deps: ServiceDeps) {
       const { summary, entries } = summarize(located, month);
       const byDate = new Map(entries.map((e) => [e.date, e]));
       const unrecorded = new Set(summary.unrecordedDates);
+      const expected = new Set(summary.expectedDates);
 
       const days = datesOfMonth(month).map((date) => {
         const e = byDate.get(date);
@@ -62,6 +64,7 @@ export function reportsService(deps: ServiceDeps) {
         return [
           brDate(date),
           WEEKDAY_SHORT[weekdayOf(date)] ?? "",
+          expected.has(date) ? "Sim" : "",
           status,
           e?.checkIn ?? "",
           e?.checkOut ?? "",
@@ -77,10 +80,12 @@ export function reportsService(deps: ServiceDeps) {
         ["Profissional", contract.workerName],
         ["Contratante", contract.employerName],
         ["Casa", contract.householdName],
+        ["Combinado", describeSchedule(contract.schedule)],
         [],
         [
           "Data",
           "Dia",
+          "Previsto",
           "Situação",
           "Entrada",
           "Saída",
@@ -91,11 +96,13 @@ export function reportsService(deps: ServiceDeps) {
         ],
         ...days,
         [],
+        ["Dias previstos", summary.expectedDays],
         ["Dias trabalhados", summary.daysWorked],
         ["Horas trabalhadas", formatDuration(summary.totalMinutes)],
         ["Faltas", summary.absences],
         ["Faltas justificadas", summary.excused],
         ["Valor bruto (R$)", centsToDecimal(summary.grossCents)],
+        ["Desconto por faltas (R$)", centsToDecimal(summary.absenceDeductionCents)],
         ["Ajustes (R$)", centsToDecimal(summary.adjustmentsCents)],
         ["Total devido (R$)", centsToDecimal(summary.dueCents)],
         ["Pago (R$)", centsToDecimal(summary.paidCents)],

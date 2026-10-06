@@ -7,6 +7,7 @@ import {
   PAYMENT_METHODS,
   ROLES,
 } from "./domain.ts";
+import { SCHEDULE_KINDS } from "./schedule.ts";
 import { CLOCK_RE, isValidIsoDate, YEAR_MONTH_RE } from "./time.ts";
 
 export const isoDate = z.string().refine(isValidIsoDate, "Data inválida (AAAA-MM-DD)");
@@ -70,18 +71,48 @@ export const householdSchema = z.object({
   timezone: z.string().trim().max(64).optional(),
 });
 
+export const scheduleSchema = z
+  .object({
+    kind: z.enum(SCHEDULE_KINDS),
+    weekdays: z.array(z.number().int().min(0).max(6)).max(7).default([]),
+    everyWeeks: z.number().int().min(1).max(4).default(1),
+    monthDays: z.array(z.number().int().min(1).max(31)).max(31).default([]),
+    visitsPerMonth: z.number().int().min(1).max(31).nullable().default(null),
+  })
+  .superRefine((v, ctx) => {
+    if (v.kind === "weekly" && v.weekdays.length === 0) {
+      ctx.addIssue({ code: "custom", path: ["weekdays"], message: "Escolha pelo menos um dia" });
+    }
+    if (v.kind === "month_days" && v.monthDays.length === 0) {
+      ctx.addIssue({ code: "custom", path: ["monthDays"], message: "Escolha pelo menos uma data" });
+    }
+    if (v.kind === "per_month" && v.visitsPerMonth === null) {
+      ctx.addIssue({ code: "custom", path: ["visitsPerMonth"], message: "Quantas vezes por mês?" });
+    }
+  })
+  .transform((v) => ({
+    kind: v.kind,
+    weekdays: v.kind === "weekly" ? [...new Set(v.weekdays)].sort((a, b) => a - b) : [],
+    everyWeeks: v.kind === "weekly" ? v.everyWeeks : 1,
+    monthDays: v.kind === "month_days" ? [...new Set(v.monthDays)].sort((a, b) => a - b) : [],
+    visitsPerMonth: v.kind === "per_month" ? v.visitsPerMonth : null,
+  }));
+export type ScheduleInput = z.input<typeof scheduleSchema>;
+
 const contractBase = z.object({
   workerName: personName,
   occupation: z.enum(OCCUPATIONS),
   payType: z.enum(PAY_TYPES),
   rateCents: cents.min(1, "Informe o valor"),
-  scheduleDays: z.array(z.number().int().min(0).max(6)).max(7),
+  schedule: scheduleSchema,
+  deductAbsences: z.boolean(),
   expectedStart: clockTime.nullable(),
   expectedEnd: clockTime.nullable(),
   startedOn: isoDate,
 });
 
 export const createContractSchema = contractBase.extend({
+  deductAbsences: z.boolean().default(false),
   householdId: z.string().min(1).optional(),
 });
 export type CreateContractInput = z.infer<typeof createContractSchema>;

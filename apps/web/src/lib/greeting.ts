@@ -1,4 +1,4 @@
-import { DEFAULT_TIMEZONE, nowInZone } from "@ponto/shared";
+import { DEFAULT_TIMEZONE, nowInZone } from "@emdia/shared";
 
 export function greeting(now: Date = new Date()): string {
   const hour = Number(nowInZone(DEFAULT_TIMEZONE, now).time.slice(0, 2));

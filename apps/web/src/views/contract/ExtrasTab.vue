@@ -9,7 +9,7 @@ import {
   toYearMonth,
   type Adjustment,
   type AdjustmentKind,
-} from "@ponto/shared";
+} from "@emdia/shared";
 import { computed, ref } from "vue";
 import { adjustmentsApi, errorMessage } from "@/api";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";

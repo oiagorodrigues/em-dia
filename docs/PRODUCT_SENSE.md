@@ -13,6 +13,16 @@
 - Pix: the employer needs the worker's key at hand when paying.
 - Extras and advances (vale, transporte, desconto) are forgotten or argued over at month end.
 
+## Schedules in real households
+
+The agreement between family and worker differs a lot, so the app models the agreement instead of assuming "weekdays":
+
+- Diarista 2x por semana (say terça e sexta): paid per day, expected on fixed weekdays. The family forgets which days she came; the card shows the gaps.
+- Faxina 1x por mês: paid per day, no fixed date. The family only needs to record the day it happened and pay it.
+- Mensalista 30 dias (or seg a sex): fixed monthly salary. Hours matter little; absences matter. The family marks all expected days at once and fixes the exceptions, and may choose to deduct unjustified absences as salário ÷ 30.
+- Quinzenal: every other week on a weekday. A plain weekday list cannot express it.
+- Also common: "todo dia 5" (a fixed date each month) and "quando precisar" (no expectation).
+
 ## Principles
 
 - Both sides see the same truth. The employer and the worker read the same time card, adjustments and payments.

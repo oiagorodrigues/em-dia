@@ -1,5 +1,5 @@
 {
-  "name": "@ponto/web",
+  "name": "@emdia/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,9 +11,9 @@
     "test": "vp test"
   },
   "dependencies": {
+    "@emdia/shared": "workspace:*",
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource-variable/martian-mono": "^5.3.0",
-    "@ponto/shared": "workspace:*",
     "pinia": "^4.0.3",
     "vue": "3.6.0-rc.10",
     "vue-router": "^5.3.1",

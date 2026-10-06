@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatCents, parseYearMonth, type Payment } from "@ponto/shared";
+import { formatCents, parseYearMonth, type Payment } from "@emdia/shared";
 import { computed, ref } from "vue";
 import { errorMessage, paymentsApi } from "@/api";
 import ReceiptStub from "@/components/feature/ReceiptStub.vue";

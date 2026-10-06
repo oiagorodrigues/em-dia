@@ -1,5 +1,5 @@
-import type { Permission, PublicUser } from "@ponto/shared";
-import { can } from "@ponto/shared";
+import type { Permission, PublicUser } from "@emdia/shared";
+import { can } from "@emdia/shared";
 import type { Config } from "../config/index.ts";
 import { forbidden } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";

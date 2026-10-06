@@ -1,4 +1,4 @@
-import { RECEIPT_MAX_BYTES } from "@ponto/shared";
+import { RECEIPT_MAX_BYTES } from "@emdia/shared";
 import type { Request } from "express";
 import multer from "multer";
 import type { UploadedFile } from "../../services/index.ts";

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   DEFAULT_TIMEZONE,
+  describeSchedule,
   formatCents,
   formatDuration,
   monthName,
@@ -8,12 +9,14 @@ import {
   parseYearMonth,
   shiftMonth,
   toYearMonth,
+  expectedDatesInMonth,
   type IsoDate,
   type WorkEntry,
-} from "@ponto/shared";
-import { computed, ref, useTemplateRef } from "vue";
+} from "@emdia/shared";
+import { computed, onBeforeUnmount, ref, useTemplateRef } from "vue";
 import { contractsApi, entriesApi, errorMessage } from "@/api";
 import ClockButton from "@/components/feature/ClockButton.vue";
+import BulkFillSheet from "@/components/feature/BulkFillSheet.vue";
 import DayEditor from "@/components/feature/DayEditor.vue";
 import Ledger from "@/components/feature/Ledger.vue";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
@@ -25,7 +28,7 @@ import { useContract } from "@/composables/contractContext.ts";
 import { useResource } from "@/composables/resource.ts";
 import { useSwipe } from "@/composables/swipe.ts";
 import { clockStateOf } from "@/lib/entry.ts";
-import { firstName } from "@/lib/format.ts";
+import { attendanceLabel, attendanceText } from "@/lib/schedule.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
@@ -78,13 +81,49 @@ function upsertLocal(entry: WorkEntry): void {
     const others = list.filter((e) => e.date !== entry.date);
     return [...others, entry].sort((a, b) => a.date.localeCompare(b.date));
   });
-  void summary.reload();
+  reloadSummarySoon();
 }
 
 function removeLocal(date: IsoDate): void {
   entries.mutate((list = []) => list.filter((e) => e.date !== date));
-  void summary.reload();
+  reloadSummarySoon();
 }
+
+/** Bulk actions save one day at a time; recompute the totals once they settle, not per day. */
+let summaryTimer: ReturnType<typeof setTimeout> | undefined;
+function reloadSummarySoon(): void {
+  clearTimeout(summaryTimer);
+  summaryTimer = setTimeout(() => void summary.reload(), 400);
+}
+onBeforeUnmount(() => clearTimeout(summaryTimer));
+
+const period = computed(() => ({
+  startedOn: contract.value.startedOn,
+  endedOn: contract.value.endedOn,
+}));
+/** The summary is the source of truth; computing locally only avoids an empty frame while it loads. */
+const expectedDates = computed(
+  () =>
+    summary.data.value?.expectedDates ??
+    expectedDatesInMonth(contract.value.schedule, month.value, period.value),
+);
+const unrecorded = computed(() => {
+  const recorded = new Set(entries.data.value?.map((e) => e.date) ?? []);
+  return expectedDates.value.filter((d) => d <= today && !recorded.has(d));
+});
+const bulkOpen = ref(false);
+
+/** Only explain marks that actually appear on this month's card. */
+const legend = computed(() => {
+  const list = entries.data.value ?? [];
+  const confirmable = !!contract.value.workerId;
+  return {
+    ok: confirmable && list.some((e) => e.confirmedAt),
+    open: confirmable && list.some((e) => !e.confirmedAt),
+    today: month.value === currentMonth,
+  };
+});
+const kind = computed(() => contract.value.schedule.kind);
 
 /** Days the *other* party wrote that still need my confirmation. */
 const toConfirm = computed(
@@ -153,13 +192,23 @@ const ledger = computed(() => {
         : { label: "Salário", value: formatCents(s.grossCents) };
   const lines = [
     { label: "Horas", value: formatDuration(s.totalMinutes) },
-    { label: "Dias trabalhados", value: `${s.daysWorked} de ${s.expectedDays}` },
+    { label: attendanceLabel(kind.value), value: attendanceText(s, kind.value) },
     ...(s.absences ? [{ label: "Faltas", value: String(s.absences), tone: "red" as const }] : []),
     ...(s.excused ? [{ label: "Faltas justificadas", value: String(s.excused) }] : []),
     ...(s.daysOff + s.holidays
       ? [{ label: "Folgas e feriados", value: String(s.daysOff + s.holidays) }]
       : []),
     rateLine,
+    ...(s.absenceDeductionCents > 0
+      ? [
+          {
+            label: "Faltas descontadas",
+            hint: `${s.absences} × ${formatCents(Math.round(s.rateCents / 30))}`,
+            value: `− ${formatCents(s.absenceDeductionCents)}`,
+            tone: "red" as const,
+          },
+        ]
+      : []),
     ...(s.adjustmentsCents
       ? [
           {
@@ -192,7 +241,7 @@ async function downloadCsv(): Promise<void> {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename ?? `ponto-${month.value}.csv`;
+    a.download = filename ?? `emdia-${month.value}.csv`;
     document.body.append(a);
     a.click();
     a.remove();
@@ -210,6 +259,12 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 <template>
   <div class="ct">
     <MonthSwitcher v-model="monthModel" :min="minMonth" :max="maxMonth" prefix="cartão de" />
+    <p class="ct__sched">
+      <span>{{ describeSchedule(contract.schedule) }}</span>
+      <span v-if="kind === 'per_month' && summary.data.value" class="ct__visits mono">
+        visitas: {{ summary.data.value.daysWorked }} de {{ summary.data.value.expectedDays }}
+      </span>
+    </p>
 
     <section v-if="showClock" class="ct__clock" aria-label="Bater ponto">
       <ClockButton
@@ -219,10 +274,8 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
         @press="onClock"
       />
       <p class="ct__clockhint">
-        Bater o ponto por {{ firstName(contract.workerName) }}.
-        <template v-if="contract.workerId">
-          Fica no seu nome até {{ firstName(contract.workerName) }} confirmar.
-        </template>
+        Bater o ponto por {{ contract.workerName }}.
+        <template v-if="contract.workerId"> Fica no seu nome até a confirmação. </template>
       </p>
     </section>
 
@@ -237,6 +290,15 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
         sua confirmação.
       </p>
       <Button icon="check" :loading="confirmingAll" @click="confirmAll">confirmar todos</Button>
+    </div>
+
+    <div v-if="auth.isEmployer && active && unrecorded.length > 0" class="ct__bulk" role="status">
+      <p>
+        <strong class="mono">{{ unrecorded.length }}</strong>
+        {{ unrecorded.length === 1 ? "dia previsto sem registro" : "dias previstos sem registro" }}
+        neste mês.
+      </p>
+      <Button icon="check" @click="bulkOpen = true">marcar como trabalhados</Button>
     </div>
 
     <div ref="cardWrap" class="ct__card">
@@ -261,6 +323,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
         :month="month"
         :entries="entries.data.value"
         :contract="contract"
+        :expected-dates="expectedDates"
         :today="today"
         :fresh="freshDate"
         :confirmable="!!contract.workerId"
@@ -268,12 +331,10 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
       />
     </div>
 
-    <ul class="ct__legend" aria-label="Legenda">
-      <template v-if="contract.workerId">
-        <li><span class="lg lg--ok" /> confirmado</li>
-        <li><span class="lg lg--open" /> aguardando confirmação</li>
-      </template>
-      <li><span class="lg lg--today" /> hoje</li>
+    <ul v-if="legend.ok || legend.open || legend.today" class="ct__legend" aria-label="Legenda">
+      <li v-if="legend.ok"><span class="lg lg--ok" /> confirmado</li>
+      <li v-if="legend.open"><span class="lg lg--open" /> aguardando confirmação</li>
+      <li v-if="legend.today"><span class="lg lg--today" /> hoje</li>
     </ul>
 
     <section class="ct__totals" aria-labelledby="totals-title">
@@ -296,6 +357,13 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
         <Button icon="download" :loading="downloading" @click="downloadCsv">baixar planilha</Button>
       </div>
     </section>
+
+    <BulkFillSheet
+      v-model:open="bulkOpen"
+      :contract="contract"
+      :dates="unrecorded"
+      @saved="upsertLocal"
+    />
 
     <DayEditor
       v-model:open="editorOpen"
@@ -329,6 +397,22 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   max-width: 28ch;
 }
 
+.ct__sched {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--s-1) var(--s-4);
+  margin-top: calc(var(--s-3) * -1);
+  font-size: var(--t-14);
+  color: var(--ink-2);
+}
+
+.ct__visits {
+  font-size: var(--t-12);
+  color: var(--blue);
+}
+
+.ct__bulk,
 .ct__confirm {
   display: flex;
   flex-wrap: wrap;
@@ -341,6 +425,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   font-size: var(--t-14);
 }
 
+.ct__bulk p,
 .ct__confirm p {
   flex: 1 1 14rem;
 }
