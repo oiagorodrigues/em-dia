@@ -8,6 +8,6 @@
     "flows": "node scripts/flows.ts"
   },
   "devDependencies": {
-    "playwright-core": "^1.63.0"
+    "playwright-core": "1.63.0"
   }
 }
