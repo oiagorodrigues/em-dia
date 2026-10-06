@@ -9,7 +9,7 @@ The repo is the system of record: if a decision is not in here, it does not exis
 | Path              | What                                                                       |
 | ----------------- | -------------------------------------------------------------------------- |
 | `packages/shared` | `@emdia/shared`: domain types, zod schemas, RBAC, pay math, time helpers   |
-| `apps/api`        | Express 5 + `node:sqlite` API (`/api/v1`)                                  |
+| `apps/api`        | Express 5 API (`/api/v1`), Postgres via Drizzle (PGlite locally)           |
 | `apps/web`        | Vue 3.6 + Pinia + vue-router PWA (vite-plugin-pwa)                         |
 | `tools/e2e`       | Browser journeys and screenshots (`node scripts/flows.ts`, see its README) |
 | `tools/harness`   | `@emdia/harness`: architecture, taste and doc tests, schema generator      |
@@ -25,10 +25,10 @@ Toolchain is Vite+ (`vp`). No ESLint, no Prettier.
 - `vp run -r test` all tests, including the harness; `vp run -r build`
 - `bun run ready` check + test + build (run before declaring done)
 - `bun run docs:schema` regenerate `docs/generated/db-schema.md`
-- Web `.vue` type check: `bun run --cwd apps/web typecheck` (vue-tsc on TypeScript 6; it is part of the web build)
+- Web `.vue` type check: `bun run --cwd apps/web typecheck` (vue-tsc; the whole repo uses TypeScript 6.0.3 because vue-tsc does not run on TS 7 yet)
 - See the UI yourself: with `bun run dev` up, `node tools/e2e/scripts/screens.ts` (needs `bun run seed -- --reset`) and `node tools/e2e/scripts/flows.ts`. Read the PNGs and `report.txt`. See [e2e README](tools/e2e/README.md)
 - Production locally: `bun run build && bun run start` (API serves `apps/web/dist`); container: `Dockerfile`
-- Deploy on Vercel (Turso + private Blob, `vercel.json`, `bun run build:vercel`): [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md)
+- Deploy on Vercel (Neon + private Blob, `vercel.json`, `bun run build:vercel`): [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md). Schema change: edit `apps/api/src/db/schema.ts`, `bun run db:generate`, commit `apps/api/drizzle/`
 
 ## Golden principles
 
@@ -46,20 +46,20 @@ Each is enforced by `tools/harness` where it can be. A failure message says WHAT
 
 ## Where to find what
 
-| Question                         | Doc                                                                                       |
-| -------------------------------- | ----------------------------------------------------------------------------------------- |
-| How is it structured?            | [ARCHITECTURE](docs/ARCHITECTURE.md)                                                      |
-| What does the API accept/return? | [api-contract](docs/product-specs/api-contract.md)                                        |
-| What must each feature do?       | [features](docs/product-specs/features.md), [index](docs/product-specs/index.md)          |
-| How should the UI look?          | [DESIGN](docs/DESIGN.md), [FRONTEND](docs/FRONTEND.md)                                    |
-| Security rules and threat model  | [SECURITY](docs/SECURITY.md)                                                              |
-| Ops, backups, health, logs       | [RELIABILITY](docs/RELIABILITY.md)                                                        |
-| Who are the users, why           | [PRODUCT_SENSE](docs/PRODUCT_SENSE.md)                                                    |
-| What are we building now         | [PLANS](docs/PLANS.md), [active plan](docs/exec-plans/active/0002-next.md)                |
-| Known gaps and grades            | [QUALITY_SCORE](docs/QUALITY_SCORE.md), [tech debt](docs/exec-plans/tech-debt-tracker.md) |
-| Operating principles             | [core-beliefs](docs/design-docs/core-beliefs.md)                                          |
-| Tool notes (vp, sqlite, Vue)     | [references](docs/references/vite-plus.md)                                                |
-| DB schema (generated)            | [generated](docs/generated/README.md)                                                     |
+| Question                         | Doc                                                                                                 |
+| -------------------------------- | --------------------------------------------------------------------------------------------------- |
+| How is it structured?            | [ARCHITECTURE](docs/ARCHITECTURE.md)                                                                |
+| What does the API accept/return? | [api-contract](docs/product-specs/api-contract.md)                                                  |
+| What must each feature do?       | [features](docs/product-specs/features.md), [index](docs/product-specs/index.md)                    |
+| How should the UI look?          | [DESIGN](docs/DESIGN.md), [FRONTEND](docs/FRONTEND.md)                                              |
+| Security rules and threat model  | [SECURITY](docs/SECURITY.md)                                                                        |
+| Ops, backups, health, logs       | [RELIABILITY](docs/RELIABILITY.md)                                                                  |
+| Who are the users, why           | [PRODUCT_SENSE](docs/PRODUCT_SENSE.md)                                                              |
+| What are we building now         | [PLANS](docs/PLANS.md), [active plan](docs/exec-plans/active/0002-next.md)                          |
+| Known gaps and grades            | [QUALITY_SCORE](docs/QUALITY_SCORE.md), [tech debt](docs/exec-plans/tech-debt-tracker.md)           |
+| Operating principles             | [core-beliefs](docs/design-docs/core-beliefs.md)                                                    |
+| Tool notes (vp, Drizzle, Vue)    | [references](docs/references/vite-plus.md), [Drizzle/Postgres](docs/references/drizzle-postgres.md) |
+| DB schema (generated)            | [generated](docs/generated/README.md)                                                               |
 
 ## How to work
 

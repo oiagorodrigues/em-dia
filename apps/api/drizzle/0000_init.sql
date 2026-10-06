@@ -1,0 +1,203 @@
+CREATE TABLE "adjustments" (
+	"id" text PRIMARY KEY NOT NULL,
+	"contract_id" text NOT NULL,
+	"month" text NOT NULL,
+	"kind" text NOT NULL,
+	"amount_cents" integer NOT NULL,
+	"description" text,
+	"created_by" text NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "adjustments_kind_check" CHECK ("adjustments"."kind" IN ('bonus', 'transport', 'advance', 'deduction')),
+	CONSTRAINT "adjustments_amount_check" CHECK ("adjustments"."amount_cents" > 0),
+	CONSTRAINT "adjustments_month_check" CHECK ("adjustments"."month" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$')
+);
+--> statement-breakpoint
+CREATE TABLE "agreements" (
+	"id" text PRIMARY KEY NOT NULL,
+	"contract_id" text NOT NULL,
+	"description" text NOT NULL,
+	"total_cents" integer NOT NULL,
+	"installment_cents" integer,
+	"start_month" text NOT NULL,
+	"accepted_at" timestamp with time zone,
+	"cancelled_at" timestamp with time zone,
+	"created_by" text NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "agreements_total_check" CHECK ("agreements"."total_cents" > 0),
+	CONSTRAINT "agreements_installment_check" CHECK ("agreements"."installment_cents" > 0),
+	CONSTRAINT "agreements_start_month_check" CHECK ("agreements"."start_month" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$')
+);
+--> statement-breakpoint
+CREATE TABLE "audit_log" (
+	"id" text PRIMARY KEY NOT NULL,
+	"seq" integer GENERATED ALWAYS AS IDENTITY (sequence name "audit_log_seq_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"actor_id" text,
+	"contract_id" text,
+	"action" text NOT NULL,
+	"entity" text NOT NULL,
+	"entity_id" text,
+	"meta" jsonb,
+	"at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "contracts" (
+	"id" text PRIMARY KEY NOT NULL,
+	"household_id" text NOT NULL,
+	"worker_id" text,
+	"worker_name" text NOT NULL,
+	"occupation" text NOT NULL,
+	"pay_type" text NOT NULL,
+	"rate_cents" integer NOT NULL,
+	"schedule_kind" text NOT NULL,
+	"schedule_weekdays" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"every_weeks" integer DEFAULT 1 NOT NULL,
+	"month_days" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"visits_per_month" integer,
+	"deduct_absences" boolean DEFAULT false NOT NULL,
+	"contact_email" text,
+	"contact_phone" text,
+	"expected_start" text,
+	"expected_end" text,
+	"started_on" date NOT NULL,
+	"ended_on" date,
+	"status" text NOT NULL,
+	"archived_at" timestamp with time zone,
+	"created_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "contracts_occupation_check" CHECK ("contracts"."occupation" IN ('diarista', 'faxineira', 'baba', 'cuidadora', 'cozinheira', 'jardineiro', 'motorista', 'passadeira', 'outro')),
+	CONSTRAINT "contracts_pay_type_check" CHECK ("contracts"."pay_type" IN ('hourly', 'daily', 'monthly')),
+	CONSTRAINT "contracts_status_check" CHECK ("contracts"."status" IN ('active', 'ended')),
+	CONSTRAINT "contracts_schedule_kind_check" CHECK ("contracts"."schedule_kind" IN ('weekly', 'month_days', 'per_month', 'on_demand')),
+	CONSTRAINT "contracts_rate_check" CHECK ("contracts"."rate_cents" > 0),
+	CONSTRAINT "contracts_every_weeks_check" CHECK ("contracts"."every_weeks" BETWEEN 1 AND 12),
+	CONSTRAINT "contracts_visits_check" CHECK ("contracts"."visits_per_month" BETWEEN 1 AND 31),
+	CONSTRAINT "contracts_expected_start_check" CHECK ("contracts"."expected_start" ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+	CONSTRAINT "contracts_expected_end_check" CHECK ("contracts"."expected_end" ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$')
+);
+--> statement-breakpoint
+CREATE TABLE "households" (
+	"id" text PRIMARY KEY NOT NULL,
+	"owner_id" text NOT NULL,
+	"name" text NOT NULL,
+	"timezone" text NOT NULL,
+	"created_at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "invites" (
+	"contract_id" text PRIMARY KEY NOT NULL,
+	"code_hash" text NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "invites_code_hash_unique" UNIQUE("code_hash")
+);
+--> statement-breakpoint
+CREATE TABLE "password_resets" (
+	"token_hash" text PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"used_at" timestamp with time zone,
+	"created_at" timestamp with time zone NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE "payments" (
+	"id" text PRIMARY KEY NOT NULL,
+	"contract_id" text NOT NULL,
+	"reference_month" text NOT NULL,
+	"paid_on" date NOT NULL,
+	"amount_cents" integer NOT NULL,
+	"method" text NOT NULL,
+	"note" text,
+	"receipt_file" text,
+	"receipt_mime" text,
+	"receipt_size" integer,
+	"receipt_name" text,
+	"receipt_uploaded_at" timestamp with time zone,
+	"acknowledged_at" timestamp with time zone,
+	"agreement_id" text,
+	"created_by" text NOT NULL,
+	"created_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "payments_method_check" CHECK ("payments"."method" IN ('pix', 'cash', 'transfer', 'compensation', 'other')),
+	CONSTRAINT "payments_receipt_mime_check" CHECK ("payments"."receipt_mime" IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf')),
+	CONSTRAINT "payments_amount_check" CHECK ("payments"."amount_cents" > 0),
+	CONSTRAINT "payments_reference_month_check" CHECK ("payments"."reference_month" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$')
+);
+--> statement-breakpoint
+CREATE TABLE "refresh_tokens" (
+	"id" text PRIMARY KEY NOT NULL,
+	"user_id" text NOT NULL,
+	"family_id" text NOT NULL,
+	"token_hash" text NOT NULL,
+	"expires_at" timestamp with time zone NOT NULL,
+	"revoked_at" timestamp with time zone,
+	"revoked_reason" text,
+	"created_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "refresh_tokens_token_hash_unique" UNIQUE("token_hash"),
+	CONSTRAINT "refresh_tokens_reason_check" CHECK ("refresh_tokens"."revoked_reason" IN ('rotated', 'reuse', 'logout', 'logout_all', 'password_change', 'password_reset', 'account_deleted'))
+);
+--> statement-breakpoint
+CREATE TABLE "users" (
+	"id" text PRIMARY KEY NOT NULL,
+	"email" text NOT NULL,
+	"name" text NOT NULL,
+	"role" text NOT NULL,
+	"phone" text,
+	"pix_key" text,
+	"password_hash" text NOT NULL,
+	"token_version" integer DEFAULT 0 NOT NULL,
+	"failed_logins" integer DEFAULT 0 NOT NULL,
+	"locked_until" timestamp with time zone,
+	"created_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "users_email_unique" UNIQUE("email"),
+	CONSTRAINT "users_role_check" CHECK ("users"."role" IN ('employer', 'worker'))
+);
+--> statement-breakpoint
+CREATE TABLE "work_entries" (
+	"id" text PRIMARY KEY NOT NULL,
+	"contract_id" text NOT NULL,
+	"date" date NOT NULL,
+	"status" text NOT NULL,
+	"check_in" text,
+	"check_out" text,
+	"break_minutes" integer DEFAULT 0 NOT NULL,
+	"minutes" integer DEFAULT 0 NOT NULL,
+	"note" text,
+	"created_by" text NOT NULL,
+	"created_by_role" text NOT NULL,
+	"confirmed_by" text,
+	"confirmed_at" timestamp with time zone,
+	"updated_at" timestamp with time zone NOT NULL,
+	CONSTRAINT "work_entries_contract_date_unique" UNIQUE("contract_id","date"),
+	CONSTRAINT "work_entries_status_check" CHECK ("work_entries"."status" IN ('worked', 'absent', 'excused', 'day_off', 'holiday')),
+	CONSTRAINT "work_entries_role_check" CHECK ("work_entries"."created_by_role" IN ('employer', 'worker')),
+	CONSTRAINT "work_entries_check_in_check" CHECK ("work_entries"."check_in" ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+	CONSTRAINT "work_entries_check_out_check" CHECK ("work_entries"."check_out" ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+	CONSTRAINT "work_entries_minutes_check" CHECK ("work_entries"."break_minutes" >= 0 AND "work_entries"."minutes" >= 0)
+);
+--> statement-breakpoint
+ALTER TABLE "adjustments" ADD CONSTRAINT "adjustments_contract_id_contracts_id_fk" FOREIGN KEY ("contract_id") REFERENCES "public"."contracts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "adjustments" ADD CONSTRAINT "adjustments_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agreements" ADD CONSTRAINT "agreements_contract_id_contracts_id_fk" FOREIGN KEY ("contract_id") REFERENCES "public"."contracts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "agreements" ADD CONSTRAINT "agreements_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_actor_id_users_id_fk" FOREIGN KEY ("actor_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_contract_id_contracts_id_fk" FOREIGN KEY ("contract_id") REFERENCES "public"."contracts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "contracts" ADD CONSTRAINT "contracts_household_id_households_id_fk" FOREIGN KEY ("household_id") REFERENCES "public"."households"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "contracts" ADD CONSTRAINT "contracts_worker_id_users_id_fk" FOREIGN KEY ("worker_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "households" ADD CONSTRAINT "households_owner_id_users_id_fk" FOREIGN KEY ("owner_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "invites" ADD CONSTRAINT "invites_contract_id_contracts_id_fk" FOREIGN KEY ("contract_id") REFERENCES "public"."contracts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "password_resets" ADD CONSTRAINT "password_resets_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payments" ADD CONSTRAINT "payments_contract_id_contracts_id_fk" FOREIGN KEY ("contract_id") REFERENCES "public"."contracts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payments" ADD CONSTRAINT "payments_agreement_id_agreements_id_fk" FOREIGN KEY ("agreement_id") REFERENCES "public"."agreements"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "payments" ADD CONSTRAINT "payments_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "work_entries" ADD CONSTRAINT "work_entries_contract_id_contracts_id_fk" FOREIGN KEY ("contract_id") REFERENCES "public"."contracts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "work_entries" ADD CONSTRAINT "work_entries_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "work_entries" ADD CONSTRAINT "work_entries_confirmed_by_users_id_fk" FOREIGN KEY ("confirmed_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "adjustments_contract_month_idx" ON "adjustments" USING btree ("contract_id","month");--> statement-breakpoint
+CREATE INDEX "agreements_contract_idx" ON "agreements" USING btree ("contract_id","created_at");--> statement-breakpoint
+CREATE INDEX "audit_log_contract_idx" ON "audit_log" USING btree ("contract_id","at");--> statement-breakpoint
+CREATE INDEX "contracts_household_idx" ON "contracts" USING btree ("household_id");--> statement-breakpoint
+CREATE INDEX "contracts_worker_idx" ON "contracts" USING btree ("worker_id");--> statement-breakpoint
+CREATE INDEX "households_owner_idx" ON "households" USING btree ("owner_id","created_at");--> statement-breakpoint
+CREATE INDEX "payments_contract_month_idx" ON "payments" USING btree ("contract_id","reference_month");--> statement-breakpoint
+CREATE INDEX "payments_agreement_idx" ON "payments" USING btree ("agreement_id");--> statement-breakpoint
+CREATE INDEX "refresh_tokens_family_idx" ON "refresh_tokens" USING btree ("family_id");--> statement-breakpoint
+CREATE INDEX "refresh_tokens_user_idx" ON "refresh_tokens" USING btree ("user_id");

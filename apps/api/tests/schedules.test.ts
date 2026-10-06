@@ -1,7 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
-import { migrate, openDatabase } from "../src/db/index.ts";
-import { migrations } from "../src/db/migrations/index.ts";
-import { createRepos } from "../src/repos/index.ts";
 import { setup, type ContractOverrides, type TestEnv, type TestUser } from "./helpers.ts";
 
 let t: TestEnv;
@@ -220,41 +217,5 @@ describe("absence deduction", () => {
     const daily = await contractWith({ payType: "daily", deductAbsences: true });
     await put(daily, "2026-09-16", "absent");
     expect((await summary(daily, "2026-09")).absenceDeductionCents).toBe(0);
-  });
-});
-
-describe("migration 003", () => {
-  test("turns weekday lists into weekly schedules and empty lists into on_demand", async () => {
-    const db = openDatabase(":memory:");
-    await migrate(db, migrations.slice(0, 2));
-    await db.exec(`
-      INSERT INTO users (id, email, name, role, password_hash, created_at)
-        VALUES ('u', 'a@b.co', 'Ana', 'employer', 'x', '2026-01-01');
-      INSERT INTO households (id, owner_id, name, timezone, created_at)
-        VALUES ('h', 'u', 'Casa', 'America/Sao_Paulo', '2026-01-01');
-      INSERT INTO contracts (id, household_id, worker_name, occupation, pay_type, rate_cents, schedule_days,
-          started_on, status, created_at)
-        VALUES ('weekly', 'h', 'Maria', 'diarista', 'daily', 18000, '[1,3,5]', '2026-08-01', 'active', '2026-08-01'),
-               ('empty', 'h', 'Rosa', 'passadeira', 'daily', 15000, '[]', '2026-08-01', 'active', '2026-08-01');
-    `);
-    await migrate(db);
-
-    const repos = createRepos(db);
-    expect((await repos.contracts.findById("weekly"))?.contract).toMatchObject({
-      schedule: {
-        kind: "weekly",
-        weekdays: [1, 3, 5],
-        everyWeeks: 1,
-        monthDays: [],
-        visitsPerMonth: null,
-      },
-      deductAbsences: false,
-    });
-    expect((await repos.contracts.findById("empty"))?.contract.schedule.kind).toBe("on_demand");
-    const columns = (
-      await db.all<{ name: string }>("SELECT name FROM pragma_table_info('contracts')")
-    ).map((r) => r.name);
-    expect(columns).not.toContain("schedule_days");
-    await db.close();
   });
 });

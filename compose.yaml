@@ -1,0 +1,36 @@
+# Self-hosted: Postgres plus the app (API and PWA on one port).
+#   JWT_SECRET=$(node -e "console.log(require('node:crypto').randomBytes(48).toString('base64url'))") docker compose up --build
+services:
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: emdia
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-emdia}
+      POSTGRES_DB: emdia
+    volumes:
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emdia -d emdia"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://emdia:${POSTGRES_PASSWORD:-emdia}@db:5432/emdia
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (32+ characters)}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      SMTP_URL: ${SMTP_URL:-}
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/data
+
+volumes:
+  db-data:
+  uploads:

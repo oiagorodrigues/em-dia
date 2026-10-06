@@ -9,9 +9,7 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
-  DATABASE_PATH: z.string().min(1).default("./data/emdia.db"),
   DATABASE_URL: z.string().trim().optional(),
-  DATABASE_AUTH_TOKEN: z.string().trim().optional(),
   BLOB_READ_WRITE_TOKEN: z.string().trim().optional(),
   BLOB_STORE_ID: z.string().trim().optional(),
   UPSTASH_REDIS_REST_URL: z.string().trim().optional(),
@@ -43,9 +41,8 @@ export interface Config {
   isProduction: boolean;
   version: string;
   port: number;
-  /** A file path / `:memory:` (node:sqlite) or `libsql://…` (Turso). */
-  databaseUrl: string;
-  databaseAuthToken: string | null;
+  /** `postgres://…` (Neon, Docker) or `pglite:<dir>`; undefined means PGlite in ./data/pglite. */
+  databaseUrl: string | undefined;
   /** Receipts go to a private Vercel Blob store when a token or connected store is present. */
   blob: { token: string | null } | null;
   upstash: { url: string; token: string } | null;
@@ -78,16 +75,20 @@ function parseTrustProxy(value: string): boolean | number | string {
 
 /** Just the database settings, for scripts that must not require the rest (the build's migrate step). */
 export function loadDatabaseConfig(env: NodeJS.ProcessEnv = process.env): {
-  url: string;
-  authToken: string | null;
+  url: string | undefined;
   explicit: boolean;
 } {
-  const url = env.DATABASE_URL?.trim();
-  return {
-    url: url || env.DATABASE_PATH?.trim() || "./data/emdia.db",
-    authToken: env.DATABASE_AUTH_TOKEN?.trim() || null,
-    explicit: Boolean(url),
-  };
+  // Migrations take a session-level advisory lock, which Neon's pooler (transaction mode) does not keep:
+  // prefer the direct URL the Neon integration provides, else drop the documented `-pooler` host suffix.
+  const direct = env.DATABASE_URL_UNPOOLED?.trim() || env.DATABASE_URL?.trim() || undefined;
+  return { url: direct ? withoutNeonPooler(direct) : undefined, explicit: Boolean(direct) };
+}
+
+export function withoutNeonPooler(url: string): string {
+  if (!/^postgres(ql)?:\/\//.test(url)) return url;
+  const parsed = new URL(url);
+  parsed.hostname = parsed.hostname.replace(/-pooler(?=\.)/, "");
+  return parsed.toString();
 }
 
 /** Throws with every invalid variable listed; callers should let it crash the process. */
@@ -111,12 +112,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error("Invalid environment: JWT_SECRET is required in production");
   }
 
-  const databaseUrl = e.DATABASE_URL || e.DATABASE_PATH;
+  const databaseUrl = e.DATABASE_URL || undefined;
   const blob =
     e.BLOB_READ_WRITE_TOKEN || e.BLOB_STORE_ID ? { token: e.BLOB_READ_WRITE_TOKEN || null } : null;
   // The function disk is ephemeral and per instance: a local database or upload dir would silently lose data.
-  if (onVercel && !/^(libsql|https?|wss?):\/\//.test(databaseUrl)) {
-    throw new Error("Invalid environment: on Vercel DATABASE_URL must be a libsql:// (Turso) URL");
+  if (onVercel && !/^postgres(ql)?:\/\//.test(databaseUrl ?? "")) {
+    throw new Error("Invalid environment: on Vercel DATABASE_URL must be a postgres:// (Neon) URL");
   }
   if (onVercel && !blob) {
     throw new Error("Invalid environment: on Vercel connect a Blob store (BLOB_READ_WRITE_TOKEN)");
@@ -138,7 +139,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     version: pkg.version,
     port: e.PORT,
     databaseUrl,
-    databaseAuthToken: e.DATABASE_AUTH_TOKEN || null,
     blob,
     upstash:
       e.UPSTASH_REDIS_REST_URL && e.UPSTASH_REDIS_REST_TOKEN

@@ -15,7 +15,7 @@ bun run setup   # instala dependências, cria apps/api/.env e carrega dados de d
 bun run dev     # sobe a API (http://localhost:3000) e o app (http://localhost:5173)
 ```
 
-Abra http://localhost:5173 e entre com `ana@emdia.dev` (contratante) ou `maria@emdia.dev` (profissional), senha `emdia12345`. Para recriar os dados: `bun run seed -- --reset`.
+Abra http://localhost:5173 e entre com `ana@emdia.dev` (contratante) ou `maria@emdia.dev` (profissional), senha `emdia12345`. Para recriar os dados: `bun run seed -- --reset` (com a API parada: o banco local é um PGlite em `apps/api/data/pglite`, de um processo por vez).
 
 ### Se algo der errado
 
@@ -42,9 +42,9 @@ docker build -t emdia .
 docker run -p 3000:3000 -v emdia-data:/data -e JWT_SECRET=<32+ caracteres> emdia
 ```
 
-O banco SQLite e os comprovantes ficam em `/data`; faça backup dos dois juntos (veja [docs/RELIABILITY.md](docs/RELIABILITY.md)). `JWT_SECRET` é obrigatório em produção. A imagem tem healthcheck em `/api/health`.
+Com Postgres: `JWT_SECRET=<32+ caracteres> docker compose up --build` sobe o banco e o app (o container aplica as migrações antes de iniciar). Sem `DATABASE_URL`, a imagem usa PGlite em `/data`. Os comprovantes ficam em `/data`; faça backup do banco e deles juntos (veja [docs/RELIABILITY.md](docs/RELIABILITY.md)). `JWT_SECRET` é obrigatório em produção. A imagem tem healthcheck em `/api/health`.
 
-Para publicar na Vercel (banco no Turso, comprovantes no Vercel Blob), siga [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md).
+Para publicar na Vercel (banco no Neon, comprovantes no Vercel Blob), siga [docs/DEPLOY-VERCEL.md](docs/DEPLOY-VERCEL.md).
 
 ## Testes de navegador
 
@@ -53,7 +53,7 @@ Para publicar na Vercel (banco no Turso, comprovantes no Vercel Blob), siga [doc
 ## Estrutura
 
 - `packages/shared`: tipos, schemas, permissões e cálculo de pagamento
-- `apps/api`: API Express 5 com `node:sqlite`
+- `apps/api`: API Express 5 com PostgreSQL via Drizzle ORM (PGlite embutido no desenvolvimento)
 - `apps/web`: PWA em Vue 3 e Pinia
 - `tools/e2e`: jornadas e capturas de tela no navegador
 - `tools/harness`: testes que impõem arquitetura, estilo e documentação

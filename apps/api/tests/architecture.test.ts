@@ -45,7 +45,8 @@ describe("layering", () => {
       );
       for (const spec of specifiers) {
         const to = layerOf(resolve(dirname(file), spec));
-        if (to === from || spec.endsWith("package.json")) continue;
+        // JSON outside src (package.json, the Drizzle migrations journal) is bundled data, not a layer.
+        if (to === from || (spec.endsWith(".json") && to === "..")) continue;
         expect(allowed, `${relative(SRC, file)} imports ${spec}`).toContain(to);
       }
     },

@@ -4,8 +4,10 @@ import { join } from "node:path";
 import type { CreateContractInput, PublicUser, Role, ScheduleInput } from "@emdia/shared";
 import request from "supertest";
 import { loadConfig } from "../src/config/index.ts";
-import { migrate, openDatabase } from "../src/db/index.ts";
-import { createLibsqlDatabase } from "../src/db/libsql.ts";
+import { getTableName, is, sql } from "drizzle-orm";
+import { PgTable } from "drizzle-orm/pg-core";
+import { openDatabase, type Database } from "../src/db/index.ts";
+import * as schema from "../src/db/schema.ts";
 import { createApp } from "../src/http/app.ts";
 import { createLogger } from "../src/lib/logger.ts";
 import { createMailer } from "../src/lib/mailer.ts";
@@ -35,16 +37,33 @@ export type ContractOverrides = Partial<Omit<CreateContractInput, "schedule">> &
 
 let seq = 0;
 
+const TABLES = Object.values(schema)
+  .filter((value) => is(value, PgTable))
+  .map((table) => `"${getTableName(table)}"`);
+
 /**
- * The suite runs on node:sqlite in memory. `EMDIA_TEST_DRIVER=libsql vp test`
- * runs it against libSQL on a temp file instead (libSQL's `:memory:` gives
- * each transaction connection its own empty database).
+ * Migrated in-memory PGlite databases for this test file. Creating and
+ * migrating one costs far more than truncating it, so a finished test hands
+ * its database back and the next one gets it empty. Tests that need a second
+ * app at the same time (two secrets, production mode) get another instance.
  */
+const idle: Database[] = [];
+
+async function acquireDatabase(): Promise<Database> {
+  const reused = idle.pop();
+  if (reused) {
+    await reused.db.execute(sql.raw(`TRUNCATE ${TABLES.join(", ")} RESTART IDENTITY CASCADE`));
+    return reused;
+  }
+  const fresh = await openDatabase("pglite:memory");
+  await fresh.migrate();
+  return fresh;
+}
+
 export async function setup(env: Record<string, string> = {}) {
   const uploadDir = mkdtempSync(join(tmpdir(), "emdia-api-test-"));
   const config = loadConfig({
     NODE_ENV: "test",
-    DATABASE_PATH: ":memory:",
     UPLOAD_DIR: uploadDir,
     JWT_SECRET: "test-secret-that-is-long-enough-0123456789",
     LOG_LEVEL: "silent",
@@ -53,13 +72,7 @@ export async function setup(env: Record<string, string> = {}) {
     ...env,
   });
   let now = new Date(DEFAULT_NOW);
-  const db =
-    process.env.EMDIA_TEST_DRIVER === "libsql"
-      ? createLibsqlDatabase(
-          `file:${join(mkdtempSync(join(tmpdir(), "emdia-libsql-")), "test.db")}`,
-        )
-      : openDatabase(":memory:");
-  await migrate(db);
+  const db = await acquireDatabase();
   const logger = createLogger("silent");
   const mailer = createMailer(
     { isProduction: config.isProduction, smtpUrl: config.smtpUrl, from: config.mailFrom },
@@ -148,7 +161,7 @@ export async function setup(env: Record<string, string> = {}) {
       },
     },
     cleanup: async () => {
-      await db.close();
+      idle.push(db);
       rmSync(uploadDir, { recursive: true, force: true });
     },
   };

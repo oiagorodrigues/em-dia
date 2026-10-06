@@ -4,6 +4,7 @@ import { hashPassword, randomToken, sha256, verifyPassword } from "../lib/crypto
 import { AppError, fieldError, formError } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
 import {
+  isDuplicateEmail,
   toPublicUser,
   type RefreshTokenRecord,
   type TxRepos,
@@ -26,10 +27,6 @@ export interface Session {
 
 const invalidCredentials = () => new AppError("UNAUTHENTICATED", "E-mail ou senha incorretos");
 const invalidSession = () => new AppError("UNAUTHENTICATED", "Sessão inválida. Entre novamente.");
-
-function isUniqueViolation(err: unknown): boolean {
-  return err instanceof Error && /UNIQUE constraint failed: users\.email/.test(err.message);
-}
 
 export function authService(deps: ServiceDeps) {
   const { repos, tokens } = deps;
@@ -115,7 +112,7 @@ export function authService(deps: ServiceDeps) {
           if (inviteCode) await linkWorkerByCode(deps, r, id, inviteCode);
         });
       } catch (err) {
-        if (isUniqueViolation(err))
+        if (isDuplicateEmail(err))
           throw new AppError("CONFLICT", "Já existe uma conta com este e-mail");
         throw err;
       }
