@@ -14,7 +14,7 @@
     "dev": "vp run --parallel --filter @emdia/api --filter @emdia/web dev",
     "build": "vp run -r build",
     "start": "WEB_DIST_DIR=../web/dist bun run --cwd apps/api start",
-    "build:vercel": "vp run --filter @emdia/api build && vp run --filter @emdia/web build && bun run --cwd apps/api db:migrate --if-configured",
+    "build:vercel": "vp run --filter @emdia/api build && bun run --cwd apps/web vp build && bun run --cwd apps/api db:migrate --if-configured",
     "db:migrate": "bun run --cwd apps/api db:migrate",
     "db:generate": "bun run --cwd apps/api db:generate",
     "prepare": "vp config",

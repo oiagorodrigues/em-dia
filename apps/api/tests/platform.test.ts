@@ -77,6 +77,18 @@ describe("Vercel config", () => {
         .upstash,
     ).toEqual({ url: "https://x.upstash.io", token: "t" });
   });
+
+  test("Upstash accepts the names the Vercel integration generates", () => {
+    expect(
+      loadConfig({
+        UPSTASH_REDIS_KV_REST_API_URL: "https://x.upstash.io",
+        UPSTASH_REDIS_KV_REST_API_TOKEN: "t",
+      }).upstash,
+    ).toEqual({ url: "https://x.upstash.io", token: "t" });
+    expect(
+      loadConfig({ KV_REST_API_URL: "https://y.upstash.io", KV_REST_API_TOKEN: "u" }).upstash,
+    ).toEqual({ url: "https://y.upstash.io", token: "u" });
+  });
 });
 
 describe("database URLs", () => {

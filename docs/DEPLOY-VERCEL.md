@@ -83,6 +83,8 @@ Sem Upstash, cada instância da função conta os limites de requisição por co
 
 Crie um banco Redis no [console do Upstash](https://console.upstash.com) e copie a **REST URL** e o **REST token** para `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN`. A API fala com o Upstash por HTTP (`fetch`), sem conexão TCP aberta. Se o Upstash cair, as requisições passam sem limite em vez de falhar.
 
+Se preferir a integração do Upstash na Vercel, não precisa renomear nada: a API também lê `KV_REST_API_URL`/`KV_REST_API_TOKEN` e as versões com prefixo `UPSTASH_REDIS_`.
+
 ## 6. E-mail
 
 Qualquer provedor SMTP serve. Configure `SMTP_URL` e `MAIL_FROM`. Sobre portas e conexões SMTP a partir de funções, veja o guia da Vercel [Can I use SMTP with Vercel?](https://vercel.com/kb/guide/serverless-functions-and-smtp).
@@ -92,7 +94,7 @@ Qualquer provedor SMTP serve. Configure `SMTP_URL` e `MAIL_FROM`. Sobre portas e
 Clique em **Deploy**. No log do build, confira:
 
 1. `bun install` com o `bun.lock`;
-2. `bun run build:vercel`: `vp pack` da API, build do PWA e `db:migrate --if-configured`;
+2. `bun run build:vercel`: `vp pack` da API, build do PWA (sem `vue-tsc`, que roda no CI) e `db:migrate --if-configured`;
 3. a linha `"msg":"migrations applied"` com as migrações aplicadas. Em deploys seguintes aparece `database already up to date`.
 
 Depois abra `https://<seu-projeto>.vercel.app/api/health`. A resposta esperada é `{"status":"ok","db":"ok",...}`. Então crie a primeira conta pelo app.
