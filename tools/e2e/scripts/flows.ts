@@ -631,6 +631,11 @@ function teamTable(page: Page): Locator {
   return page.getByRole("region", { name: "Equipe" });
 }
 
+/** Body rows of a DataTable, leaving out the loading skeleton's placeholder rows. */
+function dataRows(region: Locator): Locator {
+  return region.locator('table:not([aria-hidden="true"]) tbody tr');
+}
+
 function personRow(table: Locator, name: string): Locator {
   return table.getByRole("row").filter({ hasText: name });
 }
@@ -764,7 +769,7 @@ async function teamSearchSortFilter(state: State): Promise<void> {
 
   await page.goto(`${BASE}/equipe`);
   const table = teamTable(page);
-  const rows = table.locator("tbody tr");
+  const rows = dataRows(table);
   await see("the team table", rows);
   const everyone = await rows.count();
   if (everyone < 2) throw new Error(`test bug: expected several people, found ${everyone}`);
@@ -799,7 +804,7 @@ async function teamSearchSortFilter(state: State): Promise<void> {
   await page.waitForURL(/q=antonio/);
 
   await page.reload();
-  await see("the table after reload", table.locator("tbody tr"));
+  await see("the table after reload", rows);
   const url = new URL(page.url());
   for (const [key, value] of [
     ["q", "antonio"],
@@ -851,7 +856,7 @@ async function paymentsTable(state: State): Promise<void> {
 
   await page.goto(`${BASE}/pagamentos`);
   const table = page.getByRole("region", { name: "Pagamentos" });
-  const rows = table.locator("tbody tr");
+  const rows = dataRows(table);
   await see("the payments table", rows);
   const mine = rows.filter({ hasText: WORKER_NAME });
   await poll("both payments listed with the person's name", async () => (await mine.count()) >= 2);
