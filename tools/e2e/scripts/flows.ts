@@ -825,10 +825,17 @@ async function boardCell(state: State): Promise<void> {
     .locator("th.bg__day")
     .evaluateAll((ths) => ths.findIndex((t) => t.getAttribute("aria-current") === "date"));
   if (dayIndex < 0) throw new Error("the board has no column for today");
-  const cell = row.locator("td.bg__td").nth(dayIndex).getByRole("img");
+  const cell = row.locator("td.bg__td").nth(dayIndex).getByRole("button");
   const label = (await cell.getAttribute("aria-label")) ?? "";
   if (!/trabalhou/.test(label))
     throw new Error(`today's cell is labelled "${label}", expected 'trabalhou'`);
+
+  await cell.click();
+  const sheet = page.getByRole("dialog");
+  await see("the day editor opened in place", sheet.getByText("Pagar este dia agora"));
+  if (!page.url().endsWith("/cartao")) throw new Error(`a day click navigated to ${page.url()}`);
+  await page.keyboard.press("Escape");
+  await sheet.waitFor({ state: "hidden" });
 
   await row.locator("th").first().click();
   await page.waitForURL(new RegExp(`/equipe/${id}`));
@@ -1130,7 +1137,7 @@ const JOURNEYS: [string, (state: State) => Promise<void>][] = [
   ["14 contact e-mail and phone: estimate, e-mail sent, WhatsApp", contactInvite],
   ["15 remove and restore from the team table", removeAndRestore],
   ["16 team search, sort and filter survive a reload", teamSearchSortFilter],
-  ["17 board cell for a worked day, row opens the person", boardCell],
+  ["17 board cell opens the day in place, row opens the person", boardCell],
   ["18 payments table lists, filters, worker sees recebi", paymentsTable],
   ["20 old /vinculos URL redirects to /equipe", legacyUrl],
   ["21 agreement: create, worker agrees, installment payment", agreement],

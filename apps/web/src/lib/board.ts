@@ -69,6 +69,11 @@ export function cellKind(
   return "none";
 }
 
+/** Days that open the day editor from the board; outside the contract there is nothing to record. */
+export function dayOpens(cell: Pick<BoardCell, "kind">): boolean {
+  return cell.kind !== "outside";
+}
+
 const KIND_TEXT: Record<Exclude<BoardCellKind, "worked" | "absent" | "soft">, string> = {
   missing: "previsto, sem registro",
   planned: "previsto",
