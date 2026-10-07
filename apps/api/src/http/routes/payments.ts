@@ -15,6 +15,10 @@ export function paymentRoutes({ payments }: Services, receiptMaxBytes: number): 
     res.json({ payments: await payments.list(actorOf(res), req.params.id, year) });
   });
 
+  router.get("/contracts/:id/advances", async (req, res) => {
+    res.json({ advances: await payments.listAdvances(actorOf(res), req.params.id) });
+  });
+
   router.post<{ id: string }>("/contracts/:id/payments", upload, async (req, res) => {
     const input = parse(createPaymentSchema, req.body);
     const payment = await payments.create(actorOf(res), req.params.id, input, uploadedFile(req));

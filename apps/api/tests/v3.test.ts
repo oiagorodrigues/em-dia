@@ -261,11 +261,30 @@ describe("compensation payments", () => {
     const start = lines.indexOf("Pagamentos");
     expect(lines.slice(start, start + 5)).toEqual([
       "Pagamentos",
-      "Data;Forma;Valor (R$);Recebido;Observação",
-      "02/10/2026;Compensação: Mesa de jantar;200,00;Não;",
-      "03/10/2026;Compensação;50,00;Não;Ficou com a bicicleta",
-      "04/10/2026;Pix;300,00;Não;",
+      "Data;Tipo;Forma;Valor (R$);Recebido;Observação",
+      "02/10/2026;Diárias/salário;Compensação: Mesa de jantar;200,00;Não;",
+      "03/10/2026;Diárias/salário;Compensação;50,00;Não;Ficou com a bicicleta",
+      "04/10/2026;Diárias/salário;Pix;300,00;Não;",
     ]);
+  });
+
+  test("the statement lists every kind, abatements with their adiantamento", async () => {
+    const advance = await pay({
+      kind: "advance",
+      amountCents: 36000,
+      method: "pix",
+      paidOn: "2026-09-10",
+    });
+    await pay({ amountCents: 18000, advanceId: advance.body.payment.id, paidOn: "2026-09-12" });
+    await pay({ kind: "deduction", method: undefined, amountCents: 5000, paidOn: "2026-09-13" });
+    const csv = await t.http().get(`${base}/statement.csv?month=2026-09`).auth(employer.token, as);
+    const lines = csv.text.split("\r\n");
+    expect(lines).toContain("10/09/2026;Adiantamento;Pix;360,00;Não;");
+    expect(lines).toContain(
+      "12/09/2026;Diárias/salário;Compensação: adiantamento de 10/09/2026;180,00;Não;",
+    );
+    expect(lines).toContain("13/09/2026;Desconto;;50,00;;");
+    expect(lines).toContain("Adiantamentos ainda a abater (R$);180,00");
   });
 
   test("archived contracts reject agreement writes", async () => {

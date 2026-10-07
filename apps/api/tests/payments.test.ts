@@ -289,48 +289,275 @@ describe("edit", () => {
   });
 });
 
-describe("extra payments", () => {
-  test("are flagged on create and edit and leave the month's balance alone", async () => {
-    const summary = async () =>
-      (await t.http().get(`${base}/summary?month=2026-09`).auth(worker.token, as)).body.summary;
-    const before = await summary();
+const summaryOf = async (month: string) =>
+  (await t.http().get(`${base}/summary?month=${month}`).auth(worker.token, as)).body.summary as {
+    dueCents: number;
+    paidCents: number;
+    balanceCents: number;
+    adjustmentsCents: number;
+  };
 
-    const extra = await t
+const postJson = (body: Record<string, unknown>) =>
+  t
+    .http()
+    .post(`${base}/payments`)
+    .auth(employer.token, as)
+    .send({ referenceMonth: "2026-09", paidOn: "2026-09-20", ...body });
+
+describe("payment kinds", () => {
+  test("gratificação and vale-transporte count as due and as paid, leaving the balance alone", async () => {
+    const before = await summaryOf("2026-09");
+    const bonus = await t
       .http()
       .post(`${base}/payments`)
       .auth(employer.token, as)
+      .field("kind", "bonus")
       .field("referenceMonth", "2026-09")
       .field("paidOn", "2026-09-20")
       .field("amountCents", "10000")
-      .field("method", "pix")
-      .field("isExtra", "true");
-    expect(extra.status).toBe(201);
-    expect(extra.body.payment.isExtra).toBe(true);
+      .field("method", "pix");
+    expect(bonus.status).toBe(201);
+    expect(bonus.body.payment).toMatchObject({ kind: "bonus", method: "pix" });
+    const transport = await postJson({ kind: "transport", amountCents: 4400, method: "cash" });
+    expect(transport.status).toBe(201);
 
-    const after = await summary();
-    expect(after.paidCents - before.paidCents).toBe(10000);
-    expect(after.adjustmentsCents - before.adjustmentsCents).toBe(10000);
+    const after = await summaryOf("2026-09");
+    expect(after.paidCents - before.paidCents).toBe(14400);
+    expect(after.adjustmentsCents - before.adjustmentsCents).toBe(14400);
     expect(after.balanceCents).toBe(before.balanceCents);
 
-    const off = await t
-      .http()
-      .patch(`${base}/payments/${extra.body.payment.id}`)
-      .auth(employer.token, as)
-      .send({ isExtra: false });
-    expect(off.body.payment.isExtra).toBe(false);
-    expect((await summary()).balanceCents).toBe(before.balanceCents - 10000);
+    const list = await t.http().get(`${base}/payments?year=2026`).auth(worker.token, as);
+    expect(list.body.payments.map((p: { kind: string }) => p.kind).sort()).toEqual([
+      "bonus",
+      "transport",
+    ]);
   });
 
-  test("a compensation cannot be an extra", async () => {
-    const res = await t.http().post(`${base}/payments`).auth(employer.token, as).send({
-      referenceMonth: "2026-09",
-      paidOn: "2026-09-20",
+  test("a payment without kind is diárias/salário", async () => {
+    const res = await createPayment();
+    expect(res.body.payment).toMatchObject({ kind: "pay", advanceId: null, remainingCents: null });
+  });
+
+  test("a compensation only abates diárias/salário", async () => {
+    const res = await postJson({
+      kind: "bonus",
       amountCents: 1000,
       method: "compensation",
       note: "celular",
-      isExtra: true,
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.details.fieldErrors.isExtra).toBeDefined();
+    expect(res.body.error.details.fieldErrors.kind).toBeDefined();
+  });
+});
+
+describe("desconto", () => {
+  test("only lowers what is due, with no method", async () => {
+    const before = await summaryOf("2026-09");
+    const res = await postJson({ kind: "deduction", amountCents: 5000, note: "Uniforme" });
+    expect(res.status).toBe(201);
+    expect(res.body.payment).toMatchObject({ kind: "deduction", method: null });
+
+    const after = await summaryOf("2026-09");
+    expect(after.dueCents - before.dueCents).toBe(-5000);
+    expect(after.paidCents).toBe(before.paidCents);
+  });
+
+  test("rejects a method and a receipt", async () => {
+    const withMethod = await postJson({ kind: "deduction", amountCents: 5000, method: "pix" });
+    expect(withMethod.status).toBe(400);
+    expect(withMethod.body.error.details.fieldErrors.method).toBeDefined();
+
+    const withReceipt = await t
+      .http()
+      .post(`${base}/payments`)
+      .auth(employer.token, as)
+      .field("kind", "deduction")
+      .field("referenceMonth", "2026-09")
+      .field("paidOn", "2026-09-20")
+      .field("amountCents", "5000")
+      .attach("receipt", png, { filename: "x.png", contentType: "image/png" });
+    expect(withReceipt.status).toBe(400);
+    expect(readdirSync(t.uploadDir)).toHaveLength(0);
+  });
+
+  test("has no recebi, no concluir and no receipt", async () => {
+    const id = (await postJson({ kind: "deduction", amountCents: 5000 })).body.payment.id;
+    const ack = await t.http().post(`${base}/payments/${id}/acknowledge`).auth(worker.token, as);
+    expect(ack.status).toBe(409);
+    const confirm = await t.http().post(`${base}/payments/${id}/confirm`).auth(employer.token, as);
+    expect(confirm.status).toBe(409);
+    const receipt = await t
+      .http()
+      .put(`${base}/payments/${id}/receipt`)
+      .auth(employer.token, as)
+      .attach("receipt", png, { filename: "x.png", contentType: "image/png" });
+    expect(receipt.status).toBe(409);
+  });
+
+  test("an edit into a desconto drops the method and the confirmation", async () => {
+    const paid = await postJson({ kind: "bonus", amountCents: 3000, method: "pix" });
+    const id = paid.body.payment.id;
+    await t.http().post(`${base}/payments/${id}/acknowledge`).auth(worker.token, as);
+    const res = await t
+      .http()
+      .patch(`${base}/payments/${id}`)
+      .auth(employer.token, as)
+      .send({ kind: "deduction" });
+    expect(res.status).toBe(200);
+    expect(res.body.payment).toMatchObject({
+      kind: "deduction",
+      method: null,
+      acknowledgedAt: null,
+    });
+  });
+});
+
+describe("adiantamentos", () => {
+  const advance = (amountCents = 36000) =>
+    postJson({
+      kind: "advance",
+      referenceMonth: "2026-09",
+      paidOn: "2026-09-15",
+      amountCents,
+      method: "pix",
+      note: "Vale",
+    });
+  const abate = (advanceId: string, amountCents: number, referenceMonth = "2026-10") =>
+    postJson({
+      referenceMonth,
+      paidOn: "2026-10-02",
+      amountCents,
+      method: "compensation",
+      advanceId,
+    });
+  const advances = async () =>
+    (await t.http().get(`${base}/advances`).auth(worker.token, as)).body.advances as {
+      id: string;
+      settledCents: number;
+      remainingCents: number;
+    }[];
+
+  test("change nothing when handed, and pay the days they abate", async () => {
+    const before = await summaryOf("2026-09");
+    const created = await advance();
+    expect(created.status).toBe(201);
+    expect(created.body.payment).toMatchObject({ settledCents: 0, remainingCents: 36000 });
+    expect(await summaryOf("2026-09")).toEqual(before);
+
+    const october = await summaryOf("2026-10");
+    const abated = await abate(created.body.payment.id, 18000);
+    expect(abated.status).toBe(201);
+    expect(abated.body.payment).toMatchObject({
+      kind: "pay",
+      method: "compensation",
+      advanceId: created.body.payment.id,
+    });
+    const after = await summaryOf("2026-10");
+    expect(after.paidCents - october.paidCents).toBe(18000);
+    expect(after.dueCents).toBe(october.dueCents);
+
+    expect(await advances()).toMatchObject([{ settledCents: 18000, remainingCents: 18000 }]);
+
+    const activity = await t.http().get(`${base}/activity`).auth(worker.token, as);
+    const create = activity.body.activity.find(
+      (a: { action: string; entityId: string }) =>
+        a.action === "payment.create" && a.entityId === abated.body.payment.id,
+    );
+    expect(create.meta).toMatchObject({ advanceId: created.body.payment.id, kind: "pay" });
+  });
+
+  test("cannot abate more than what remains", async () => {
+    const id = (await advance()).body.payment.id;
+    await abate(id, 30000);
+    const over = await abate(id, 6001);
+    expect(over.status).toBe(400);
+    expect(over.body.error.details.fieldErrors.amountCents[0]).toContain("R$");
+    expect((await abate(id, 6000)).status).toBe(201);
+    const full = await abate(id, 1);
+    expect(full.body.error.details.fieldErrors.amountCents[0]).toBe(
+      "Este adiantamento já foi todo abatido",
+    );
+  });
+
+  test("an edit of an abatement respects what remains", async () => {
+    const id = (await advance(20000)).body.payment.id;
+    const abated = (await abate(id, 15000)).body.payment.id;
+    const edit = (amountCents: number) =>
+      t.http().patch(`${base}/payments/${abated}`).auth(employer.token, as).send({ amountCents });
+    expect((await edit(20000)).status).toBe(200);
+    expect((await edit(20001)).status).toBe(400);
+  });
+
+  test("abate only as compensation and only from an adiantamento of this contract", async () => {
+    const id = (await advance()).body.payment.id;
+    const pix = await postJson({ amountCents: 1000, method: "pix", advanceId: id });
+    expect(pix.status).toBe(400);
+    expect(pix.body.error.details.fieldErrors.method).toBeDefined();
+
+    const plain = (await createPayment()).body.payment.id;
+    const notAdvance = await abate(plain, 1000);
+    expect(notAdvance.status).toBe(400);
+    expect(notAdvance.body.error.details.fieldErrors.advanceId).toEqual([
+      "Adiantamento não encontrado",
+    ]);
+
+    const other = await t.linkedPair();
+    const foreign = await t
+      .http()
+      .post(`/api/v1/contracts/${other.contractId}/payments`)
+      .auth(other.employer.token, as)
+      .send({
+        referenceMonth: "2026-10",
+        paidOn: "2026-10-02",
+        amountCents: 1000,
+        method: "compensation",
+        advanceId: id,
+      });
+    expect(foreign.status).toBe(400);
+    expect(foreign.body.error.details.fieldErrors.advanceId).toBeDefined();
+  });
+
+  test("with abatements cannot be removed, retyped or shrunk below them", async () => {
+    const id = (await advance()).body.payment.id;
+    const abated = (await abate(id, 18000)).body.payment.id;
+    const patch = (body: Record<string, unknown>) =>
+      t.http().patch(`${base}/payments/${id}`).auth(employer.token, as).send(body);
+
+    const removed = await t.http().delete(`${base}/payments/${id}`).auth(employer.token, as);
+    expect(removed.status).toBe(409);
+    expect((await patch({ kind: "pay" })).status).toBe(400);
+    const shrink = await patch({ amountCents: 17999 });
+    expect(shrink.status).toBe(400);
+    expect(shrink.body.error.details.fieldErrors.amountCents).toBeDefined();
+    const grow = await patch({ amountCents: 40000 });
+    expect(grow.body.payment).toMatchObject({ remainingCents: 22000 });
+
+    const undo = await t.http().delete(`${base}/payments/${abated}`).auth(employer.token, as);
+    expect(undo.status).toBe(204);
+    expect(await advances()).toMatchObject([{ settledCents: 0, remainingCents: 40000 }]);
+    expect((await t.http().delete(`${base}/payments/${id}`).auth(employer.token, as)).status).toBe(
+      204,
+    );
+  });
+
+  test("the worker sees them, says recebi, and cannot write", async () => {
+    const id = (await advance()).body.payment.id;
+    expect(await advances()).toHaveLength(1);
+    const ack = await t.http().post(`${base}/payments/${id}/acknowledge`).auth(worker.token, as);
+    expect(ack.status).toBe(200);
+    const write = await t.http().post(`${base}/payments`).auth(worker.token, as).send({
+      referenceMonth: "2026-10",
+      paidOn: "2026-10-02",
+      amountCents: 1000,
+      method: "compensation",
+      advanceId: id,
+    });
+    expect(write.status).toBe(403);
+  });
+
+  test("are hidden from people outside the contract", async () => {
+    const stranger = await t.register("employer");
+    const res = await t.http().get(`${base}/advances`).auth(stranger.token, as);
+    expect(res.status).toBe(404);
   });
 });

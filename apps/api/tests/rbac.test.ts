@@ -8,7 +8,7 @@ beforeEach(async () => {
 afterEach(() => t.cleanup());
 
 describe("roles", () => {
-  test("a worker cannot create contracts, adjustments or payments", async () => {
+  test("a worker cannot create contracts or payments of any kind", async () => {
     const { worker, contractId } = await t.linkedPair();
     const asWorker = { type: "bearer" } as const;
 
@@ -39,12 +39,17 @@ describe("roles", () => {
       .field("method", "pix");
     expect(payment.status).toBe(403);
 
-    const adjustment = await t
+    const deduction = await t
       .http()
-      .post(`/api/v1/contracts/${contractId}/adjustments`)
+      .post(`/api/v1/contracts/${contractId}/payments`)
       .auth(worker.token, asWorker)
-      .send({ month: "2026-09", kind: "bonus", amountCents: 1000 });
-    expect(adjustment.status).toBe(403);
+      .send({
+        kind: "deduction",
+        referenceMonth: "2026-09",
+        paidOn: "2026-10-01",
+        amountCents: 1000,
+      });
+    expect(deduction.status).toBe(403);
 
     expect(
       (

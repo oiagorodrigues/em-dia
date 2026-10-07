@@ -209,11 +209,12 @@ describe("archive and restore", () => {
         .send({ status: "absent", checkIn: null, checkOut: null }),
       t.http().delete(`${base}/entries/2026-10-05`).auth(employer.token, as),
       t.http().post(`${base}/clock`).auth(employer.token, as).send({ action: "in" }),
-      t
-        .http()
-        .post(`${base}/adjustments`)
-        .auth(employer.token, as)
-        .send({ month: "2026-10", kind: "bonus", amountCents: 100 }),
+      t.http().post(`${base}/payments`).auth(employer.token, as).send({
+        kind: "deduction",
+        referenceMonth: "2026-10",
+        paidOn: "2026-10-06",
+        amountCents: 100,
+      }),
       t
         .http()
         .post(`${base}/payments`)
