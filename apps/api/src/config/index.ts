@@ -14,6 +14,10 @@ const envSchema = z.object({
   BLOB_STORE_ID: z.string().trim().optional(),
   UPSTASH_REDIS_REST_URL: z.string().trim().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().trim().optional(),
+  UPSTASH_REDIS_KV_REST_API_URL: z.string().trim().optional(),
+  UPSTASH_REDIS_KV_REST_API_TOKEN: z.string().trim().optional(),
+  KV_REST_API_URL: z.string().trim().optional(),
+  KV_REST_API_TOKEN: z.string().trim().optional(),
   VERCEL: z.string().optional(),
   VERCEL_PROJECT_PRODUCTION_URL: z.string().trim().optional(),
   UPLOAD_DIR: z.string().min(1).default("./data/uploads"),
@@ -122,7 +126,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (onVercel && !blob) {
     throw new Error("Invalid environment: on Vercel connect a Blob store (BLOB_READ_WRITE_TOKEN)");
   }
-  if (Boolean(e.UPSTASH_REDIS_REST_URL) !== Boolean(e.UPSTASH_REDIS_REST_TOKEN)) {
+  // The Vercel Upstash integration names these KV_REST_API_*, optionally behind a custom prefix.
+  const upstashUrl =
+    e.UPSTASH_REDIS_REST_URL || e.UPSTASH_REDIS_KV_REST_API_URL || e.KV_REST_API_URL || undefined;
+  const upstashToken =
+    e.UPSTASH_REDIS_REST_TOKEN ||
+    e.UPSTASH_REDIS_KV_REST_API_TOKEN ||
+    e.KV_REST_API_TOKEN ||
+    undefined;
+  if (Boolean(upstashUrl) !== Boolean(upstashToken)) {
     throw new Error(
       "Invalid environment: set both UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN",
     );
@@ -140,10 +152,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     port: e.PORT,
     databaseUrl,
     blob,
-    upstash:
-      e.UPSTASH_REDIS_REST_URL && e.UPSTASH_REDIS_REST_TOKEN
-        ? { url: e.UPSTASH_REDIS_REST_URL, token: e.UPSTASH_REDIS_REST_TOKEN }
-        : null,
+    upstash: upstashUrl && upstashToken ? { url: upstashUrl, token: upstashToken } : null,
     onVercel,
     receiptMaxBytes: onVercel ? VERCEL_RECEIPT_MAX_BYTES : RECEIPT_MAX_BYTES,
     uploadDir: e.UPLOAD_DIR,

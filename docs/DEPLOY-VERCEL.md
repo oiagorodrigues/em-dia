@@ -83,6 +83,8 @@ Sem Upstash, cada instância da função conta os limites de requisição por co
 
 Crie um banco Redis no [console do Upstash](https://console.upstash.com) e copie a **REST URL** e o **REST token** para `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN`. A API fala com o Upstash por HTTP (`fetch`), sem conexão TCP aberta. Se o Upstash cair, as requisições passam sem limite em vez de falhar.
 
+Se preferir a integração do Upstash na Vercel, não precisa renomear nada: a API também lê `KV_REST_API_URL`/`KV_REST_API_TOKEN` e as versões com prefixo `UPSTASH_REDIS_`.
+
 ## 6. E-mail
 
 Qualquer provedor SMTP serve. Configure `SMTP_URL` e `MAIL_FROM`. Sobre portas e conexões SMTP a partir de funções, veja o guia da Vercel [Can I use SMTP with Vercel?](https://vercel.com/kb/guide/serverless-functions-and-smtp).
