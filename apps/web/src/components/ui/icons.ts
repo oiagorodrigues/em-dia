@@ -59,6 +59,8 @@ export const ICON_PATHS = {
   /* arrow leaving a door */
   "clock-out": "M10 4H5v16h5M10 12h11M17 8l4 4-4 4",
   filter: "M4 5h16l-6 7.5V19l-4-2v-4.5z",
+  handshake:
+    "M11 17l2 2a1 1 0 1 0 3-3M14 14l2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4M21 3l1 11h-2M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3M3 4h8",
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;
