@@ -2,7 +2,6 @@
 import {
   DEFAULT_TIMEZONE,
   formatCents,
-  formatDuration,
   monthName,
   nowInZone,
   parseYearMonth,
@@ -66,6 +65,15 @@ const pendingCaption = computed(() => {
 const people = computed(() =>
   totals.value.people === 1 ? "1 pessoa" : `${totals.value.people} pessoas`,
 );
+
+/** What the month costs if everyone comes on the agreed days: the number to budget for. */
+const forecastCaption = computed(() => {
+  const p = projection.value;
+  if (p.unpriced > 0) {
+    return `sem estimativa para ${p.unpriced} ${p.unpriced === 1 ? "pessoa" : "pessoas"}`;
+  }
+  return `${people.value} · ${p.days === 1 ? "1 dia combinado" : `${p.days} dias combinados`}`;
+});
 </script>
 
 <template>
@@ -77,7 +85,7 @@ const people = computed(() =>
       </div>
       <MonthSwitcher v-model="month" :max="shiftMonth(currentMonth, 12)" class="lg:min-w-80" />
       <!-- Hidden while empty: the empty state carries the one "Adicionar profissional" button. -->
-      <div v-if="current.length > 0" class="flex flex-wrap gap-2">
+      <div v-if="loadingFirst || current.length > 0" class="flex flex-wrap gap-2">
         <Button to="/equipe/novo" variant="primary" icon="plus">Adicionar profissional</Button>
         <Button to="/pagamentos/novo" icon="wallet-plus">Registrar pagamento</Button>
       </div>
@@ -111,17 +119,6 @@ const people = computed(() =>
       <section v-if="future" class="kpi-grid col-span-12" :aria-label="`Previsão de ${monthLabel}`">
         <KpiCard
           projected
-          tone="brand"
-          icon="clock"
-          :label="`Horas em ${monthLabel}`"
-          :value="formatDuration(projection.minutes)"
-          :amount="projection.minutes"
-          :format="formatDuration"
-          :caption="people"
-          :loading="loadingFirst"
-        />
-        <KpiCard
-          projected
           tone="amber"
           icon="coins"
           label="Custo"
@@ -143,21 +140,11 @@ const people = computed(() =>
           :value="String(projection.days)"
           :amount="projection.days"
           :format="String"
-          caption="dias e visitas combinados"
+          :caption="`${people} · dias e visitas combinados`"
           :loading="loadingFirst"
         />
       </section>
       <section v-else class="kpi-grid col-span-12" :aria-label="`Resumo de ${monthLabel}`">
-        <KpiCard
-          tone="brand"
-          icon="clock"
-          :label="`Horas em ${monthLabel}`"
-          :value="formatDuration(totals.minutes)"
-          :amount="totals.minutes"
-          :format="formatDuration"
-          :caption="people"
-          :loading="loadingFirst"
-        />
         <KpiCard
           :tone="totals.balanceCents > 0 ? 'amber' : 'brand'"
           icon="coins"
@@ -177,6 +164,17 @@ const people = computed(() =>
           :amount="totals.paidCents"
           :format="formatCents"
           :caption="totals.paidCents > 0 ? 'referente ao mês' : 'nenhum pagamento ainda'"
+          :loading="loadingFirst"
+        />
+        <KpiCard
+          projected
+          tone="brand"
+          icon="calendar"
+          label="Custo do mês"
+          :value="formatCents(projection.cents)"
+          :amount="projection.cents"
+          :format="formatCents"
+          :caption="forecastCaption"
           :loading="loadingFirst"
         />
         <KpiCard
@@ -217,8 +215,14 @@ const people = computed(() =>
         class="order-1 col-span-12 grid content-start items-start gap-5 lg:order-none lg:grid-cols-2 2xl:col-span-4 2xl:grid-cols-1"
         aria-label="Hoje e pendências"
       >
-        <HomeToday v-if="isCurrent" :items="current" :today="today" @reload="invalidate.all" />
-        <HomePendencies :items="pending" />
+        <HomeToday
+          v-if="isCurrent"
+          :items="current"
+          :today="today"
+          :loading="loadingFirst"
+          @reload="invalidate.all"
+        />
+        <HomePendencies :items="pending" :loading="loadingFirst" />
       </aside>
     </template>
   </div>

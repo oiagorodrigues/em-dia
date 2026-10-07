@@ -5,6 +5,7 @@ import { RouterLink, RouterView, useRoute } from "vue-router";
 import { contractsApi } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
 import ContactActions from "@/components/feature/ContactActions.vue";
+import ContractTabSkeleton from "@/components/feature/ContractTabSkeleton.vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import Button from "@/components/ui/Button.vue";
 import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
@@ -133,10 +134,33 @@ onBeforeUnmount(() => resize.disconnect());
 <template>
   <div class="cv">
     <div v-if="loading && !data" class="cv__head" aria-busy="true">
-      <Skeleton w="30%" h="14px" />
-      <Skeleton w="60%" h="36px" gap="10px" />
-      <Skeleton h="44px" gap="24px" />
-      <Skeleton h="420px" gap="24px" />
+      <div class="pf">
+        <span class="cv__back"><Skeleton w="64px" h="14px" /></span>
+        <div class="pf__row">
+          <Skeleton :w="wide ? '64px' : '48px'" :h="wide ? '64px' : '48px'" round />
+          <div class="pf__id cv__skelid">
+            <Skeleton w="min(320px, 70%)" h="clamp(1.75rem, 3vw, 2.5rem)" />
+            <Skeleton w="min(240px, 50%)" h="14px" />
+          </div>
+          <div v-if="auth.isEmployer" class="pf__actions">
+            <Skeleton w="176px" h="44px" />
+            <Skeleton w="96px" h="44px" class="pf__edit" />
+            <Skeleton w="44px" h="44px" />
+          </div>
+        </div>
+      </div>
+      <div class="tabs-wrap" aria-hidden="true">
+        <div class="tabs">
+          <span
+            v-for="tab in tabs"
+            :key="tab.name"
+            class="tabs__item"
+            :class="{ 'is-active': route.name === tab.name }"
+            >{{ tab.label }}</span
+          >
+        </div>
+      </div>
+      <ContractTabSkeleton :tab="String(route.name ?? '')" :month="month" />
     </div>
 
     <EmptyState
@@ -265,7 +289,17 @@ onBeforeUnmount(() => resize.disconnect());
 
 .cv__head {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
+}
+
+.cv__skelid {
+  display: grid;
   gap: var(--s-2);
+}
+
+.cv__head .tabs__item.is-active {
+  box-shadow: inset 0 -3px 0 var(--brand);
 }
 
 .cv__back {

@@ -26,6 +26,8 @@ import DateField from "@/components/ui/DateField.vue";
 import MonthField from "@/components/ui/MonthField.vue";
 import Select from "@/components/ui/Select.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
+import SkeletonForm from "@/components/ui/SkeletonForm.vue";
+import SkeletonLedger from "@/components/ui/SkeletonLedger.vue";
 import { previousInApp, useBack } from "@/composables/back.ts";
 import { useForm } from "@/composables/form.ts";
 import { useInvalidate, useResource } from "@/composables/resource.ts";
@@ -180,10 +182,24 @@ const { to: back } = useBack(
       subtitle="Fica guardado com o comprovante, e a pessoa confirma que recebeu."
     />
 
-    <div v-if="contracts.loading.value && !contracts.data.value" aria-busy="true">
-      <Skeleton h="48px" />
-      <Skeleton h="48px" gap="20px" />
-      <Skeleton h="120px" gap="20px" />
+    <div
+      v-if="contracts.loading.value && !contracts.data.value"
+      aria-busy="true"
+      class="np__layout"
+    >
+      <SkeletonForm :fields="['input', 'two', 'input', 'choice', 'drop', 'area']" />
+      <div class="np__panel np__skel">
+        <span class="np__skelwho">
+          <Skeleton w="44px" h="44px" round />
+          <span class="np__skellines">
+            <Skeleton w="60%" h="16px" />
+            <Skeleton w="40%" h="12px" />
+          </span>
+        </span>
+        <Skeleton w="45%" h="12px" />
+        <SkeletonLedger />
+        <Skeleton h="88px" />
+      </div>
     </div>
 
     <EmptyState v-else-if="contracts.error.value" tone="error" title="Não deu para carregar.">
@@ -370,6 +386,28 @@ const { to: back } = useBack(
     position: sticky;
     top: var(--s-6);
   }
+}
+
+.np__skel {
+  display: grid;
+  gap: var(--s-5);
+  padding: var(--s-6);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-1);
+}
+
+.np__skelwho {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.np__skellines {
+  flex: 1;
+  display: grid;
+  gap: 6px;
 }
 
 .np__form {

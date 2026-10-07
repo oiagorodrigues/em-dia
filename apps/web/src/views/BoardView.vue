@@ -11,7 +11,7 @@ import EmptyState from "@/components/ui/EmptyState.vue";
 import Icon from "@/components/ui/Icon.vue";
 import ChoiceField from "@/components/ui/ChoiceField.vue";
 import Select from "@/components/ui/Select.vue";
-import Skeleton from "@/components/ui/Skeleton.vue";
+import SkeletonBoard from "@/components/ui/SkeletonBoard.vue";
 import { useMonthQuery } from "@/composables/contractContext.ts";
 import { useMonthBoard } from "@/composables/monthBoard.ts";
 import { useTableState } from "@/composables/tableState.ts";
@@ -132,7 +132,7 @@ const count = computed(() =>
     </div>
 
     <div v-if="board.loading.value && !board.data.value" aria-busy="true" class="bv__loading">
-      <Skeleton v-for="i in 4" :key="i" h="56px" :gap="i === 1 ? '0' : '6px'" />
+      <SkeletonBoard :month="month" :wide="wide" />
     </div>
 
     <EmptyState v-else-if="board.error.value" tone="error" title="Não deu para carregar o quadro.">
