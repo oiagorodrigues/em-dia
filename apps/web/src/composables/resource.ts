@@ -1,4 +1,10 @@
-import { hashKey, useQuery, useQueryClient, type Query, type QueryKey } from "@tanstack/vue-query";
+import {
+  toCacheKey,
+  useQuery,
+  useQueryCache,
+  type EntryKey,
+  type UseQueryEntry,
+} from "@pinia/colada";
 import { computed, toValue, type MaybeRefOrGetter, type Ref } from "vue";
 import { ApiError } from "@/api";
 import { staleAfterContract, staleAfterRecords } from "@/api/keys.ts";
@@ -10,7 +16,7 @@ export interface Resource<T> {
   loading: Readonly<Ref<boolean>>;
   /** True during any request, including a background refresh of cached data. */
   fetching: Readonly<Ref<boolean>>;
-  key: Readonly<Ref<QueryKey | null>>;
+  key: Readonly<Ref<EntryKey | null>>;
   reload: () => Promise<void>;
   /** Replace the cached data (optimistic or with a server response) without refetching. */
   mutate: (next: T | ((prev: T | undefined) => T)) => void;
@@ -23,22 +29,21 @@ export interface Resource<T> {
  */
 export function useResource<T, S>(
   source: MaybeRefOrGetter<S>,
-  key: (value: S) => QueryKey | null,
+  key: (value: S) => EntryKey | null,
   fetcher: (value: S) => Promise<T>,
 ): Resource<T> {
-  const client = useQueryClient();
+  const cache = useQueryCache();
   const current = computed(() => {
     const value = toValue(source);
     return { value, key: key(value) };
   });
 
-  const query = useQuery<T, unknown, T, QueryKey>(() => {
-    const { value, key: queryKey } = current.value;
+  const query = useQuery<T, unknown>(() => {
+    const { value, key: entryKey } = current.value;
     return {
-      queryKey: queryKey ?? ["disabled"],
-      queryFn: () => fetcher(value),
-      enabled: queryKey !== null,
-      shallow: true,
+      key: entryKey ?? ["disabled"],
+      query: () => fetcher(value),
+      enabled: entryKey !== null,
     };
   });
 
@@ -50,15 +55,16 @@ export function useResource<T, S>(
       return e instanceof ApiError ? e : new ApiError(0, "INTERNAL", "");
     }),
     loading: computed(() => current.value.key !== null && query.isPending.value),
-    fetching: query.isFetching,
+    // The retry plugin leaves the entry idle while it waits to try again.
+    fetching: computed(() => query.asyncStatus.value === "loading" || query.isRetrying.value),
     key: computed(() => current.value.key),
     reload: async () => {
       if (current.value.key !== null) await query.refetch();
     },
     mutate: (next) => {
-      const queryKey = current.value.key;
-      if (queryKey === null) return;
-      client.setQueryData<T>(queryKey, (prev) =>
+      const entryKey = current.value.key;
+      if (entryKey === null) return;
+      cache.setQueryData<T | undefined>(entryKey, (prev) =>
         typeof next === "function" ? (next as (prev: T | undefined) => T)(prev) : next,
       );
     },
@@ -73,13 +79,21 @@ type Cached = Pick<Resource<unknown>, "key">;
  * `mutate` as `fresh` to skip refetching them.
  */
 export function useInvalidate() {
-  const client = useQueryClient();
+  const cache = useQueryCache();
 
-  function run(stale: (query: Query) => boolean, fresh: readonly Cached[]): Promise<void> {
-    const skip = new Set(fresh.flatMap((r) => (r.key.value ? [hashKey(r.key.value)] : [])));
-    return client.invalidateQueries({
-      predicate: (query) => stale(query) && !skip.has(query.queryHash),
-    });
+  // Like `cache.invalidateQueries`, but waits for every refetch and never rejects: a failed
+  // refetch shows up as that read's error, not as a failure of the write that triggered it.
+  async function refetch(entries: UseQueryEntry[]): Promise<void> {
+    for (const entry of entries) cache.invalidate(entry);
+    const onScreen = entries.filter((e) => e.active && toValue(e.options?.enabled));
+    await Promise.all(onScreen.map((entry) => cache.fetch(entry).catch(() => {})));
+  }
+
+  function run(stale: (entry: UseQueryEntry) => boolean, fresh: readonly Cached[]): Promise<void> {
+    const skip = new Set(fresh.flatMap((r) => (r.key.value ? [toCacheKey(r.key.value)] : [])));
+    return refetch(
+      cache.getEntries({ predicate: (entry) => stale(entry) && !skip.has(entry.keyHash) }),
+    );
   }
 
   return {
@@ -89,6 +103,6 @@ export function useInvalidate() {
     contract: (contractId: string, ...fresh: Cached[]) =>
       run(staleAfterContract(contractId), fresh),
     /** A write whose reach is unknown here, such as an action inside a feature component. */
-    all: () => client.invalidateQueries(),
+    all: () => refetch(cache.getEntries()),
   };
 }

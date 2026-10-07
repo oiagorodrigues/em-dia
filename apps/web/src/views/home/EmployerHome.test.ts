@@ -8,13 +8,13 @@ import {
   type MonthSummary,
   type PublicUser,
 } from "@emdia/shared";
-import { VueQueryPlugin } from "@tanstack/vue-query";
+import { PiniaColada } from "@pinia/colada";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { teamApi } from "@/api";
-import { createQueryClient } from "@/api/query.ts";
+import { queryCacheOptions } from "@/api/query.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import EmployerHome from "./EmployerHome.vue";
 
@@ -62,7 +62,8 @@ async function setup(items: DashboardItem[]) {
     addEventListener: () => {},
     removeEventListener: () => {},
   }));
-  setActivePinia(createPinia());
+  const pinia = createPinia();
+  setActivePinia(pinia);
   useAuthStore().user = { id: "u1", name: "Ana Souza", role: "employer" } as PublicUser;
   let respond: () => void = () => {};
   const list = vi.spyOn(teamApi, "list").mockImplementation(
@@ -79,7 +80,7 @@ async function setup(items: DashboardItem[]) {
   const stub = { template: "<div />" };
   const wrapper = mount(EmployerHome, {
     global: {
-      plugins: [router, [VueQueryPlugin, { queryClient: createQueryClient() }]],
+      plugins: [router, pinia, [PiniaColada, queryCacheOptions({ retry: false })]],
       stubs: {
         TeamTable: stub,
         HomeToday: stub,

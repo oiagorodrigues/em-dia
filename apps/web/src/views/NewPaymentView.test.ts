@@ -6,15 +6,15 @@ import {
   type Contract,
   type MonthSummary,
 } from "@emdia/shared";
-import { VueQueryPlugin } from "@tanstack/vue-query";
+import { PiniaColada, useQueryCache } from "@pinia/colada";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
-import { defineComponent } from "vue";
+import { createApp, defineComponent } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { agreementsApi, contractsApi } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
-import { createQueryClient } from "@/api/query.ts";
+import { queryCacheOptions } from "@/api/query.ts";
 import NewPaymentView from "./NewPaymentView.vue";
 
 const month = toYearMonth(nowInZone(DEFAULT_TIMEZONE).date);
@@ -46,11 +46,12 @@ const PaymentFields = defineComponent({
 });
 
 async function setup(query: string, cached: boolean) {
-  setActivePinia(createPinia());
+  const pinia = createPinia();
+  setActivePinia(pinia);
   vi.spyOn(contractsApi, "list").mockResolvedValue({ contracts: [contract] });
   vi.spyOn(contractsApi, "summary").mockResolvedValue({ summary } as never);
   vi.spyOn(agreementsApi, "list").mockResolvedValue({ agreements: [mesa] });
-  const client = createQueryClient();
+  const client = createApp({}).runWithContext(() => useQueryCache(pinia));
   if (cached) {
     client.setQueryData(queryKeys.contracts(), [contract]);
     client.setQueryData(queryKeys.summary({ id: "c1", month }), summary);
@@ -63,7 +64,7 @@ async function setup(query: string, cached: boolean) {
   await router.push(`/pagamentos/novo${query}`);
   const wrapper = mount(NewPaymentView, {
     global: {
-      plugins: [router, [VueQueryPlugin, { queryClient: client }]],
+      plugins: [router, pinia, [PiniaColada, queryCacheOptions({ retry: false })]],
       stubs: { PaymentFields, PaymentsSidePanel: true, PageHeader: true },
     },
   });

@@ -61,8 +61,8 @@ Source is under `apps/web/src`:
 
 `api -> stores -> composables -> components/{ui,feature} -> views`
 
-- `api`: typed fetch client, plus the query client and query key factories (`query.ts`, `keys.ts`). Holds nothing but request and cache logic and the in-memory access token hook.
-- `stores`: Pinia stores. Call `api`, expose state and actions.
+- `api`: typed fetch client, plus the query cache options and query key factories (`query.ts`, `keys.ts`). Holds nothing but request and cache logic and the in-memory access token hook. The cache itself is Pinia Colada's `_pc_query` Pinia store, installed in `main.ts`.
+- `stores`: Pinia stores. Call `api`, expose state and actions. The auth store empties the query cache on logout through `useQueryCache()` and `clearQueryCache` from `api/query.ts`.
 - `composables`: reusable logic over stores (month navigation, clock, install prompt).
 - `components/ui`: presentational primitives (button, sheet, month switcher). Props in, events out. They never import `stores`, `api` or `pinia`.
 - `components/feature`: domain components (time card, payment stub). May use stores and composables.

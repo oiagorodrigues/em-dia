@@ -1,9 +1,10 @@
 import type { LoginInput, PublicUser, RegisterInput } from "@emdia/shared";
+import { useQueryCache } from "@pinia/colada";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { authApi, meApi, type Session } from "@/api";
 import { announceLogout, refreshSession, setAccessToken } from "@/api/client.ts";
-import { queryClient } from "@/api/query.ts";
+import { clearQueryCache } from "@/api/query.ts";
 
 export const useAuthStore = defineStore("auth", () => {
   const user = ref<PublicUser | null>(null);
@@ -22,7 +23,7 @@ export const useAuthStore = defineStore("auth", () => {
   function clear(): void {
     setAccessToken(null);
     user.value = null;
-    queryClient.clear();
+    clearQueryCache(useQueryCache());
   }
 
   /** Called once on first navigation: the refresh cookie is the only thing that survives a reload. */

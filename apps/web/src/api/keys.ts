@@ -1,5 +1,5 @@
 import type { YearMonth } from "@emdia/shared";
-import type { Query, QueryKey } from "@tanstack/vue-query";
+import type { EntryKey, UseQueryEntry } from "@pinia/colada";
 
 /**
  * Query keys for every cached read. Everything about one contract sits under
@@ -24,23 +24,25 @@ export const queryKeys = {
 };
 
 /** Reads that combine several contracts; any write to one contract can change them. */
-const AGGREGATES: QueryKey[] = [["team"], ["dashboard"], ["board"], ["teamPayments"]];
+const AGGREGATES: EntryKey[] = [["team"], ["dashboard"], ["board"], ["teamPayments"]];
 
-function startsWith(key: QueryKey, prefix: QueryKey): boolean {
+function startsWith(key: EntryKey, prefix: EntryKey): boolean {
   return prefix.every((part, i) => key[i] === part);
 }
 
+type Entry = Pick<UseQueryEntry, "key">;
+
 /** Entries, adjustments, payments or agreements of one contract changed; the contract itself did not. */
-export function staleAfterRecords(contractId: string): (query: Query) => boolean {
-  return ({ queryKey }) =>
-    (queryKey.length > 2 && startsWith(queryKey, queryKeys.contract(contractId))) ||
-    AGGREGATES.some((p) => startsWith(queryKey, p));
+export function staleAfterRecords(contractId: string): (entry: Entry) => boolean {
+  return ({ key }) =>
+    (key.length > 2 && startsWith(key, queryKeys.contract(contractId))) ||
+    AGGREGATES.some((p) => startsWith(key, p));
 }
 
 /** The contract changed (edited, ended, removed, restored): everything that shows it. */
-export function staleAfterContract(contractId: string): (query: Query) => boolean {
-  return ({ queryKey }) =>
-    startsWith(queryKey, queryKeys.contract(contractId)) ||
-    startsWith(queryKey, queryKeys.contracts()) ||
-    AGGREGATES.some((p) => startsWith(queryKey, p));
+export function staleAfterContract(contractId: string): (entry: Entry) => boolean {
+  return ({ key }) =>
+    startsWith(key, queryKeys.contract(contractId)) ||
+    startsWith(key, queryKeys.contracts()) ||
+    AGGREGATES.some((p) => startsWith(key, p));
 }

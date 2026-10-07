@@ -1,26 +1,25 @@
-import { VueQueryPlugin, type QueryClient, type QueryKey } from "@tanstack/vue-query";
+import { PiniaColada, useQueryCache, type EntryKey } from "@pinia/colada";
 import { flushPromises, mount } from "@vue/test-utils";
+import { createPinia, type Pinia } from "pinia";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { defineComponent, nextTick, ref } from "vue";
 import { ApiError } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
-import { createQueryClient } from "@/api/query.ts";
+import { clearQueryCache, queryCacheOptions } from "@/api/query.ts";
 import { useInvalidate, useResource } from "./resource.ts";
 
-function testClient(): QueryClient {
-  const client = createQueryClient();
-  client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retry: false } });
-  return client;
+function testClient(): Pinia {
+  return createPinia();
 }
 
-function host<R>(client: QueryClient, use: () => R): R {
+function host<R>(client: Pinia, use: () => R): R {
   let out!: R;
   mount(
     defineComponent(() => {
       out = use();
       return () => null;
     }),
-    { global: { plugins: [[VueQueryPlugin, { queryClient: client }]] } },
+    { global: { plugins: [client, [PiniaColada, queryCacheOptions({ retry: false })]] } },
   );
   return out;
 }
@@ -69,7 +68,7 @@ describe("useResource", () => {
     calls["2026-09"]!.resolve("setembro");
     await flushPromises();
     expect(res.data.value).toBe("outubro");
-    expect(client.getQueryData(entriesKey("2026-09"))).toBe("setembro");
+    expect(useQueryCache(client).getQueryData(entriesKey("2026-09"))).toBe("setembro");
   });
 
   it("does not fetch while the key is null", async () => {
@@ -138,8 +137,28 @@ describe("useResource", () => {
   });
 });
 
+describe("clearQueryCache", () => {
+  it("empties the reads on screen and drops the rest", async () => {
+    const client = testClient();
+    const res = host(client, () =>
+      useResource(
+        () => "c1",
+        queryKeys.contract,
+        async () => "vínculo",
+      ),
+    );
+    await flushPromises();
+    const cache = useQueryCache(client);
+    cache.setQueryData(queryKeys.contracts(), ["c1"]);
+    clearQueryCache(cache);
+    expect(res.data.value).toBeUndefined();
+    expect(res.loading.value).toBe(true);
+    expect(cache.getQueryData(queryKeys.contracts())).toBeUndefined();
+  });
+});
+
 describe("useInvalidate", () => {
-  function counted(client: QueryClient, key: QueryKey) {
+  function counted(client: Pinia, key: EntryKey) {
     const fetcher = vi.fn(async () => "ok");
     const res = host(client, () =>
       useResource(

@@ -17,7 +17,7 @@ describe("shouldRetry", () => {
 });
 
 describe("stale filters", () => {
-  const q = (queryKey: readonly unknown[]) => ({ queryKey }) as never;
+  const q = (key: readonly unknown[]) => ({ key }) as never;
 
   it("a record write reaches the contract's data and the cross-contract reads", () => {
     const stale = staleAfterRecords("c1");

@@ -1,4 +1,5 @@
-import { QueryClient } from "@tanstack/vue-query";
+import type { PiniaColadaOptions, QueryCache } from "@pinia/colada";
+import { PiniaColadaRetry } from "@pinia/colada-plugin-retry";
 import { ApiError } from "./client.ts";
 
 const MAX_RETRIES = 2;
@@ -9,19 +10,30 @@ export function shouldRetry(failureCount: number, error: unknown): boolean {
   return failureCount < MAX_RETRIES;
 }
 
-export function createQueryClient(): QueryClient {
-  return new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 30_000,
-        refetchOnWindowFocus: true,
-        retry: shouldRetry,
-        // Fetch even when the browser reports offline, so a failed read shows its error instead of a skeleton that never ends.
-        networkMode: "always",
-      },
+/** Options for the `PiniaColada` plugin. Tests pass `retry: false` so a failure shows at once. */
+export function queryCacheOptions({ retry = true } = {}): PiniaColadaOptions {
+  return {
+    queryOptions: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     },
-  });
+    plugins: [PiniaColadaRetry({ retry: retry ? shouldRetry : 0 })],
+  };
 }
 
-/** The app's single cache. The auth store clears it on logout so one account never sees another's data. */
-export const queryClient = createQueryClient();
+/**
+ * Forgets every cached read, so one account never sees another's data. Entries a mounted
+ * screen still uses go back to "nothing loaded"; Colada warns when an active entry is removed.
+ */
+export function clearQueryCache(cache: QueryCache): void {
+  for (const entry of cache.getEntries()) {
+    if (entry.active) {
+      cache.setEntryState(entry, { status: "pending", data: undefined, error: null });
+      cache.invalidate(entry);
+    } else {
+      cache.cancel(entry);
+      cache.remove(entry);
+    }
+  }
+}
