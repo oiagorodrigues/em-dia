@@ -387,34 +387,90 @@ async function markAbsence(state: State): Promise<void> {
   await see("the FALTA stamp", absentRow.getByText(/^falta$/i));
 }
 
-async function addExtra(state: State): Promise<void> {
+/** Vale-transporte is paid at once, so "a pagar" stays put; a desconto lowers it. */
+async function paymentKinds(state: State): Promise<void> {
   const { page } = need(state.employer, 1);
   const id = need(state.contractId, 1);
   const total = page.locator(".ledger__total dd");
-
-  await page.goto(`${BASE}/equipe/${id}`);
-  await see("the monthly total", total);
-  const before = parseCents(await textOf(total));
+  const owed = async () => {
+    await page.goto(`${BASE}/equipe/${id}`);
+    await see("the monthly total", total);
+    return parseCents(await textOf(total));
+  };
+  const before = await owed();
 
   await page.goto(`${BASE}/equipe/${id}/extras`);
-  await action(page, "Novo lançamento").click();
-  const sheet = page.getByRole("dialog");
-  await choose(sheet, "Tipo", "Vale-transporte");
-  await sheet.getByLabel("Valor", { exact: true }).fill("2000");
-  await action(sheet, /^lançar em/i).click();
-  await see("the new entry in the list", page.getByRole("list").getByText("Vale-transporte"));
-  await see("the extras net", page.getByText("saldo dos lançamentos"));
-  const net = await textOf(page.locator(".ex__net .mono"));
-  if (parseCents(net) !== 2000) throw new Error(`extras net is "${net}", expected R$ 20,00`);
+  await page.waitForURL(new RegExp(`/equipe/${id}/pagamentos`));
+
+  await page.goto(`${BASE}/pagamentos/novo?vinculo=${id}`);
+  await choose(page, "Tipo", "Vale-transporte");
+  await page.getByLabel("Valor", { exact: true }).fill("2000");
+  await choose(page, "Como pagou", "Dinheiro");
+  await submitPayment(page, /^Registrar vale-transporte$/);
+  await see(
+    "the vale-transporte in Pagamentos",
+    page.getByRole("article", { name: /Pagamento de R\$\s*20,00/ }).getByText(/Vale-transporte/),
+  );
+  if ((await owed()) !== before)
+    throw new Error("a vale-transporte paid at once changed what is still owed");
+  await see("the line in the ledger", page.getByText("Gratificações, vale e descontos"));
+
+  await page.goto(`${BASE}/pagamentos/novo?vinculo=${id}`);
+  await choose(page, "Tipo", "Desconto");
+  await absent("the method for a desconto", page.getByText("Como pagou"));
+  await absent("the receipt for a desconto", page.locator('input[type="file"]'));
+  await page.getByLabel("Valor do desconto", { exact: true }).fill("1000");
+  await submitPayment(page, /^Lançar desconto$/);
+  const desconto = page.getByRole("article", { name: /Pagamento de R\$\s*10,00/ });
+  await see("the desconto as a negative amount", desconto.getByText(/−\s*R\$\s*10,00/));
+  await see("the desconto without recebi", desconto.getByText(/só diminui o valor do mês/));
+  await poll("the total to drop by R$ 10,00", async () => before - (await owed()) === 1000);
+}
+
+/** An adiantamento changes nothing until a worked day is abated from it in the day editor. */
+async function advanceAbate(state: State): Promise<void> {
+  const id = need(state.contractId, 1);
+  const page = await deskOf(state);
+  const worker = need(state.worker, 2).page;
+
+  await page.goto(`${BASE}/pagamentos/novo?vinculo=${id}`);
+  await choose(page, "Tipo", "Adiantamento");
+  await page.getByLabel("Valor", { exact: true }).fill("30000");
+  await choose(page, "Como pagou", "Pix");
+  await submitPayment(page, /^Registrar adiantamento$/);
+  const panel = page.getByRole("region", { name: "Adiantamentos em aberto" });
+  await see("the open adiantamento", panel.getByText(/Restam R\$\s*300,00 de R\$\s*300,00/));
 
   await page.goto(`${BASE}/equipe/${id}`);
-  await see("the monthly total", total);
-  await see("the extras line in the ledger", page.getByText("Extras e descontos"));
-  const after = await poll("the total to grow by R$ 20,00", async () => {
-    const value = parseCents(await textOf(total));
-    return value - before === 2000 && value;
-  });
-  void after;
+  await todayRow(page).click();
+  const sheet = page.getByRole("dialog");
+  await see("the abate option", sheet.getByText("Abater do adiantamento"));
+  await sheet.getByText("Abater do adiantamento").click();
+  const amount = sheet.getByLabel("Valor abatido", { exact: true });
+  await poll("one diária prefilled", async () => /150,00/.test(await amount.inputValue()));
+  await action(sheet, /^Abater$/).click();
+  await absent("the day editor", sheet);
+
+  await page.goto(`${BASE}/equipe/${id}/pagamentos`);
+  await see(
+    "R$ 150 left on the adiantamento",
+    panel.getByText(/Restam R\$\s*150,00 de R\$\s*300,00/),
+  );
+  await see(
+    "the abatement row",
+    page
+      .getByRole("region", { name: "Pagamentos" })
+      .getByText(/^Adiantamento de \d{2}\/\d{2}\/\d{4}$/)
+      .first(),
+  );
+
+  await worker.goto(`${BASE}/equipe/${id}/pagamentos`);
+  await see(
+    "the open adiantamento for the worker",
+    worker
+      .getByRole("region", { name: "Adiantamentos em aberto" })
+      .getByText(/Restam R\$\s*150,00/),
+  );
 }
 
 async function createPayment(state: State): Promise<void> {
@@ -641,14 +697,14 @@ function personRow(table: Locator, name: string): Locator {
 }
 
 /** Submits the payment form and waits for the POST to succeed and the form to close, so a later goto cannot abort it. */
-async function submitPayment(page: Page): Promise<void> {
+async function submitPayment(page: Page, button: RegExp = /^Registrar pagamento$/): Promise<void> {
   const [response] = await Promise.all([
     page.waitForResponse(
       (r) =>
         r.request().method() === "POST" &&
         /\/contracts\/[^/]+\/payments$/.test(new URL(r.url()).pathname),
     ),
-    action(page, /^Registrar pagamento$/).click(),
+    action(page, button).click(),
   ]);
   if (!response.ok()) throw new Error(`creating the payment returned ${response.status()}`);
   await page.waitForURL((url) => !url.pathname.endsWith("/pagamentos/novo"));
@@ -1134,7 +1190,6 @@ const JOURNEYS: [string, (state: State) => Promise<void>][] = [
   ["2  worker signup via invite, clock in and out", workerClocksIn],
   ["3  employer confirms the day, worker sees it", confirmDay],
   ["4  employer marks a past day as absent", markAbsence],
-  ["5  extras change the ledger total", addExtra],
   ["6  payment with receipt, fake .png rejected", createPayment],
   ["7  worker acknowledges the payment", acknowledgePayment],
   ["10 CSV download", downloadCsv],
@@ -1146,6 +1201,8 @@ const JOURNEYS: [string, (state: State) => Promise<void>][] = [
   ["16 team search, sort and filter survive a reload", teamSearchSortFilter],
   ["17 board cell opens the day in place, row opens the person", boardCell],
   ["18 payments table lists, filters, worker sees recebi", paymentsTable],
+  ["5  vale-transporte keeps a pagar, desconto lowers it", paymentKinds],
+  ["26 adiantamento: abate a worked day from the day editor", advanceAbate],
   ["20 old /vinculos URL redirects to /equipe", legacyUrl],
   ["21 agreement: create, worker agrees, installment payment", agreement],
   ["22 future month shows forecast KPIs only", futureMonth],

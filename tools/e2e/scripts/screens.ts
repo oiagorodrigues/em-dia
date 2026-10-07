@@ -121,14 +121,7 @@ async function main() {
             await page.goto(`${BASE}${path}`);
             await shoot(page, `${p}${path.replace("/", "-")}`);
           }
-          for (const tab of [
-            "/visao-geral",
-            "",
-            "/pagamentos",
-            "/extras",
-            "/historico",
-            "/ajustes",
-          ]) {
+          for (const tab of ["/visao-geral", "", "/pagamentos", "/historico", "/ajustes"]) {
             await page.goto(`${BASE}/equipe/${contractId}${tab}?mes=2026-09`);
             await shoot(page, `${p}-vinculo${tab.replace("/", "-") || "-cartao"}`);
           }
@@ -136,6 +129,10 @@ async function main() {
           await shoot(page, `${p}-novo-vinculo`);
           await page.goto(`${BASE}/pagamentos/novo?vinculo=${contractId}`);
           await shoot(page, `${p}-novo-pagamento`);
+          for (const kind of ["deduction", "advance"]) {
+            await page.goto(`${BASE}/pagamentos/novo?vinculo=${contractId}&tipo=${kind}`);
+            await shoot(page, `${p}-novo-pagamento-${kind}`);
+          }
           await page.goto(`${BASE}/perfil`);
           await shoot(page, `${p}-perfil`);
         });
@@ -149,6 +146,8 @@ async function main() {
             await shoot(page, `${p}${path.replace("/", "-")}`);
           }
           if (workerContracts[0]) {
+            await page.goto(`${BASE}/equipe/${workerContracts[0]}/pagamentos?mes=2026-09`);
+            await shoot(page, `${p}-vinculo-pagamentos`);
             await page.goto(`${BASE}/equipe/${workerContracts[0]}/ajustes`);
             await page.waitForTimeout(900);
             if (page.url().includes("/ajustes"))
