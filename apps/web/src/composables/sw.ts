@@ -16,7 +16,7 @@ export function useServiceWorker(): void {
     if (!value) return;
     toast.show("Nova versão disponível.", {
       timeout: 0,
-      action: { label: "atualizar", run: () => void updateServiceWorker(true) },
+      action: { label: "Atualizar", run: () => void updateServiceWorker(true) },
     });
   });
 

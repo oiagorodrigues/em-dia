@@ -24,7 +24,7 @@ The contract carries an agreed schedule (`weekly`, `month_days`, `per_month` or 
 Acceptance criteria:
 
 - E picks one kind when creating or editing a contract and sees a short pt-BR description of the result (for example "seg, qua e sex", "quinzenal: sex", "todo dia 5", "2x por mês", "quando precisar"). W sees the same text.
-- weekly: E picks weekdays and every how many weeks (1 or 2 and up to 4). Expected days are those weekdays in the month, in weeks that match, counting from the Monday-starting week of the start date. "Todos os dias" is all seven weekdays.
+- weekly: E picks weekdays and every how many weeks (1 or 2 and up to 4). Expected days are those weekdays in the month, in weeks that match, counting from the Monday-starting week that holds the first scheduled weekday on or after the start date (a quinzenal Friday that starts on a Saturday has its first visit the next Friday). "Todos os dias" is all seven weekdays.
 - month_days: E picks days 1 to 31. In a short month a day past its end falls on the last day. Days outside the contract period are not expected.
 - per_month: E gives a number of visits per month. No dates are expected; the month shows "N de M vezes" and nothing is flagged as unrecorded.
 - on_demand: nothing is expected, nothing is flagged, days are recorded as they happen.
@@ -41,6 +41,7 @@ Acceptance criteria:
 - Editing a confirmed entry clears the confirmation.
 - Dates before the start date or after the end date are rejected. Future dates accept only day off, holiday and excused.
 - W can delete their own unconfirmed entry; E can delete any entry.
+- Pay the day: when E marks a past or current day as worked, the day editor offers "pagar este dia agora". It is off by default; turned on, it shows the same pago em, valor, como pagou and comprovante fields as "novo pagamento". Valor is prefilled with the diária for daily pay and empty otherwise; pago em defaults to today. The payment's reference month is the worked day's month, not the month it is paid in. The payment is validated before the day is saved, so an invalid amount saves nothing. If the day is already recorded and E changed nothing, only the payment is sent, so W's confirmation stays. If the day saves and the payment fails, E is told and the sheet stays open to retry. With an open adiantamento, E can abate the day instead (see [Payment types](#payment-types)). W never sees the payment section in the day editor.
 
 ## Clock in and out
 
@@ -48,32 +49,52 @@ Acceptance criteria:
 - A second check-in the same day, or a check-out without check-in, shows a clear message and changes nothing.
 - The button is disabled offline.
 
-## Adjustments
+## Payment types
 
-- E adds bonus, transport, advance or deduction with amount, month and note. W and E both see them. E can delete.
-- Advances and deductions reduce the amount to receive; bonus and transport increase it.
+Everything that changes what a month owes lives in Pagamentos; there is no Extras tab (`/equipe/:id/extras` redirects to Pagamentos). Each entry has a type (`Payment.kind`):
+
+- Diárias/salário (`pay`, the default): pays the month. Counts as paid.
+- Gratificação (`bonus`) and vale-transporte (`transport`): money handed on top of the pay. They count both in what is due and as paid, so the month's balance does not move. They show in the payments list with their type, take a receipt and a "recebi".
+- Desconto (`deduction`): not money handed. It only lowers what is due; it never counts as paid, has no method, no receipt, no "recebi" and no "concluir". Lists show it as a coral negative amount ("− R$ 50,00") with "não se aplica" in the Recebido column; the form hides "como pagou" and the receipt and labels the date "Data".
+- Adiantamento (`advance`): money handed ahead, paid down with work. Registering it changes nothing in the month (neither due nor paid) and no day status. It takes a receipt and a "recebi".
+
+Acceptance criteria:
+
+- "Novo pagamento" and the edit sheet have a "Tipo" field with a one-line explanation of the chosen type. The amount is prefilled with the month's balance only for diárias/salário. `?tipo=` opens the form on a type; the old `?extra=1` link opens it on gratificação.
+- Compensation is offered only for diárias/salário.
+- Payment tables have a Tipo column and a type filter, for both roles. Totals ("total pago") count only what counts as paid; "com recebi" and "aguardando recebi" count only entries where money changed hands.
+- Abate a day (E): when E marks a past or current day as worked and the person has an open adiantamento, the day editor offers "abater do adiantamento" next to "pagar este dia agora" (turning one on turns the other off). It shows what remains ("restam R$ 180,00 de R$ 360,00"), picks the oldest open adiantamento (a select appears when there are several) and prefills the day's value (the diária, hours × rate, or salário ÷ 30) capped at what remains; when the day is worth more, the hint says the rest stays to be paid. An amount over what remains is blocked with a message and the day is not saved. Abating creates a compensation payment for the worked day's month, dated the worked day and linked to the adiantamento, so the day counts as paid and the adiantamento's balance drops. Days of any later month can be abated.
+- Pagamentos (the person's tab and /pagamentos) shows "Adiantamentos em aberto" with what remains and a progress bar, for E and W. Each abatement names its adiantamento ("Adiantamento de 15/09/2026").
+- An adiantamento with abated days cannot be removed (409 with the abated amount), retyped, or lowered below what was abated. Removing an abatement gives its amount back to the adiantamento.
+- Data from before this change was migrated so every month keeps its amount due and amount paid; see the decision log in [0002](../exec-plans/active/0002-next.md).
 
 ## Payments, receipts and acknowledgement
 
-- E registers a payment with reference month, date, amount (prefilled with the balance), method and an optional receipt (JPEG, PNG, WebP or PDF, up to 5 MB).
+- E registers a payment with reference month, date, amount (prefilled with the balance), method and an optional receipt (JPEG, PNG, WebP or PDF, up to 5 MB). The reference month is visible and editable; it defaults to the current month (or the month the form was opened from). A payment made from the day editor refers to that day's month.
 - A file with a wrong real type or over the size limit is rejected with a message, whatever its name or declared type.
 - E can replace the receipt or delete the payment. Both parties can open the receipt.
+- In payment tables the receipt is one icon (a printed receipt) at the end of the row: with a receipt it opens the viewer, where E can also "trocar comprovante"; without one, E's click opens the file picker. There is no "Comprovante" column and no "trocar comprovante" menu item.
+- The receipt field says it takes drag and drop ("Arraste e solte o arquivo aqui ou clique para escolher", with the accepted types and size) and shows a drag-over state; on touch it says what a tap does. Dropping a file on a chosen receipt replaces it.
+- The receipt viewer zooms images (buttons, ctrl/cmd + wheel or trackpad pinch, two-finger pinch, double click, + / - / 0 keys), pans while zoomed (drag or arrow keys) and fits back. PDFs use the browser reader's zoom.
 - W taps "recebi" once; the stub then shows "recebido" and the time.
+- E can "marcar como concluído" (row menu or "Concluir" on the stub) without waiting for W. The payment then shows "concluído", records who confirmed it (`acknowledgedBy`, `acknowledgedByRole: "employer"`) and is audited as `payment.confirm`. A later "recebi" keeps the first confirmation.
+- E edits a payment from the row menu ("Editar") in a sheet with the same fields as the form, except the receipt. Changing the type, reference month, date, amount, method, agreement or adiantamento sends the payment back to "aguardando" (the confirmation was about the old values); the note does not. Compensation edits respect what the agreement or adiantamento still owes. Audited as `payment.update`.
+- The Observação column is narrow and cut with an ellipsis; hovering shows the full note in a tooltip.
 
 ## Monthly summary and CSV statement
 
-- Both see hours, amount earned, adjustments, payments and balance for any month, computed by the shared pay math.
+- Both see hours, amount earned, gratificações, vale-transporte and descontos, payments and balance for any month, computed by the shared pay math. The CSV lists every payments-list entry with its type and ends with what is still to be abated from adiantamentos.
 - The CSV opens correctly in Excel pt-BR (BOM, `;` separator), has one row per day plus totals, and neutralizes formula-looking cells.
 
 ## Activity log
 
-- Both see who did what and when (entries, confirmations, adjustments, payments, contract changes), newest first.
+- Both see who did what and when (entries, confirmations, payments of every type, abatements, contract changes; adjustments from before the payment types keep their old wording), newest first.
 
 ## Dashboard
 
 Layout and columns: [DESIGN](../DESIGN.md#screens).
 
-- E: four KPI cards for the month (horas no mês, a pagar, pago no mês, pendências) with a context caption each. Pendências adds days without record, entries waiting for confirmation and payments without "recebi".
+- E: four KPI cards for the month (a pagar, pago no mês, custo do mês, pendências) with a context caption each. Custo do mês is the forecast from `DashboardItem.estimate` (what the month costs if everyone comes on the agreed days), styled as a projection with the "previsto" tag and captioned with people and agreed days, or with who can't be priced. Hours worked are not a KPI for the employer; they stay in the team table and on the worker's home. Pendências adds days without record, entries waiting for confirmation and payments without "recebi".
 - E: below the KPIs, the team table (profissional, frequência, hoje, horas, dias, a pagar, status). Each row has quick actions: bater ponto, registrar pagamento, ver cartão and a menu (copiar convite, editar, remover). The row opens the person's page.
 - E: column "hoje" shows who is expected today with their status; "pendências" lists actionable items, each linking to the right screen.
 - E: with no team, an empty state invites to add a professional.
@@ -89,26 +110,27 @@ Layout and columns: [DESIGN](../DESIGN.md#screens).
 ## Profissional page (/equipe/:id)
 
 - Header: avatar, name, função and frequência, status chip, WhatsApp, ligar and copiar Pix (when known), registrar pagamento, editar, remover. `/vinculos/:id` redirects here.
-- Tabs: Visão geral, Cartão, Pagamentos, Extras, Histórico, Ajustes.
+- Tabs: Visão geral, Cartão, Pagamentos, Acordos, Histórico, Ajustes.
 - Visão geral: month KPIs, estimated vs. actual cost, the agreement (frequência, horários, valor, desconto de faltas), contact, latest entries and payments.
 - W sees the same page without employer-only actions and without Ajustes.
 
 ## Quadro do mês (/cartao)
 
 - E sees one row per person and one column per day of the month. Worked, falta, justificada/folga/feriado, expected-but-unrecorded and today are visually distinct and each cell has a text label for assistive tech.
-- Row totals show horas, dias and a pagar; clicking a row opens that person's Cartão.
-- Below `md` the board becomes a list of people with a week strip.
+- Row totals show horas, dias and a pagar; clicking a row (outside the day cells) opens that person's Cartão.
+- Clicking a day cell, or Enter or Space on a focused cell, opens that day's editor in place, without leaving the board, so E can record the day and pay it there. Days outside the contract period do not open. Closing the editor returns focus to the cell; saving refreshes the board totals.
+- Below `md` the board becomes a list of people with a week strip. The person's name opens their Cartão; each day of the strip is a button that opens the day editor in place.
 - W's Cartão is their own time card.
 
 ## Payments across the team (/pagamentos)
 
-- E sees all payments of all contracts in one table (pessoa, referência, pago em, valor, forma, comprovante, recebido) with filters (pessoa, ano/mês, forma, recebido) and totals.
+- E sees all payments of all contracts in one table (pessoa, referência, pago em, valor, forma, recebido) with filters (pessoa, ano/mês, forma, recebido) and totals. Row actions: the receipt icon inline; ver pagamentos da pessoa, editar, marcar como concluído and remover in the menu.
 - W sees their own payments. Receipts open from either view.
 
 ## Logical removal and restore
 
 - E removes a professional from the row menu or the person's page after a confirmation dialog. Nothing is deleted: the contract gets `archivedAt` and any pending invite is dropped. An undo toast shows for a few seconds.
-- Archived contracts are read-only for both parties: writes to entries, clock, adjustments and payments fail with "Este vínculo foi removido". History stays readable; W sees the contract marked as removed.
+- Archived contracts are read-only for both parties: writes to entries, clock and payments fail with "Este vínculo foi removido". History stays readable; W sees the contract marked as removed.
 - Archived contracts are missing from the dashboard and from lists unless asked (Equipe tab "removidos").
 - E can restore from the removidos tab or the person's page; the contract becomes editable again.
 
@@ -129,11 +151,13 @@ Layout and columns: [DESIGN](../DESIGN.md#screens).
 An agreement records something the worker pays back in work (a dining table, an advance). Each installment is a payment with method "compensação" linked to the agreement. Endpoints: [api-contract](api-contract.md#agreements-compensation-account-deletion-projections-v3).
 
 - E creates an agreement on the profissional's "Acordos" tab with a description, total, installment (optional) and start month. It shows "aguardando a profissional concordar" until W accepts.
-- W sees the agreement and taps "concordar" once. W cannot create or cancel agreements.
-- The tab lists descrição, total, abatido, falta, parcela and status (aguardando, em andamento, quitado, cancelado).
+- W sees the agreement and taps "concordar" once. W cannot create, remove or restore agreements.
+- The tab lists descrição, total, abatido, falta, parcela and status (aguardando, em andamento, quitado, cancelado). Removed agreements are hidden unless the "Situação" filter is set to "Removidos".
+- With no agreements the tab shows a handshake icon and one short line for each role.
 - When E registers a payment, "abater de um acordo" offers the open agreements with the installment prefilled. The amount cannot exceed what remains; the form shows the error on the amount.
 - A compensation payment counts toward the month's paid total like any payment and W acknowledges it with "recebi". Without an agreement it is allowed only with a note.
-- E can cancel an agreement; payments already linked stay. Archived contracts reject agreement changes.
+- E can remove an agreement from its row menu ("Remover acordo", with a confirmation and a "desfazer" toast). Removal is logical: the agreement leaves the list, and its compensation payments leave the payment lists and the month's paid total for both roles. Restoring it ("Restaurar" in the "Removidos" filter) brings the agreement and its payments back unchanged. A removed agreement cannot be accepted or paid down.
+- The UI no longer offers "cancelar"; agreements cancelled before stay as "cancelado" and keep their payments. Archived contracts reject agreement changes.
 
 ## Delete account
 

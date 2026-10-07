@@ -186,11 +186,13 @@ describe("absence deduction", () => {
     const id = await monthly(true);
     await put(id, "2026-09-16", "absent");
     await put(id, "2026-09-17", "excused");
-    await t
-      .http()
-      .post(`/api/v1/contracts/${id}/adjustments`)
-      .auth(employer.token, as)
-      .send({ month: "2026-09", kind: "transport", amountCents: 22000 });
+    await t.http().post(`/api/v1/contracts/${id}/payments`).auth(employer.token, as).send({
+      kind: "transport",
+      referenceMonth: "2026-09",
+      paidOn: "2026-09-01",
+      amountCents: 22000,
+      method: "pix",
+    });
 
     expect(await summary(id, "2026-09")).toMatchObject({
       grossCents: 240000,

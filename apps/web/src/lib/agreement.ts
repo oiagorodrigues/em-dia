@@ -1,7 +1,7 @@
 import type { Agreement } from "@emdia/shared";
 import type { Tone } from "./tone.ts";
 
-export type AgreementState = "pending" | "running" | "settled" | "cancelled";
+export type AgreementState = "pending" | "running" | "settled" | "cancelled" | "removed";
 
 export interface AgreementStatus {
   state: AgreementState;
@@ -9,19 +9,23 @@ export interface AgreementStatus {
   tone: Tone;
 }
 
-/** Cancelled wins; a fully paid agreement is settled even if the worker never tapped "concordo". */
+/**
+ * Removed wins, then cancelled; a fully paid agreement is settled even if the worker never
+ * tapped "concordo".
+ */
 export function agreementStatus(
-  a: Pick<Agreement, "cancelledAt" | "acceptedAt" | "remainingCents">,
+  a: Pick<Agreement, "archivedAt" | "cancelledAt" | "acceptedAt" | "remainingCents">,
 ): AgreementStatus {
-  if (a.cancelledAt) return { state: "cancelled", label: "cancelado", tone: "neutral" };
-  if (a.remainingCents <= 0) return { state: "settled", label: "quitado", tone: "brand" };
+  if (a.archivedAt) return { state: "removed", label: "Removido", tone: "neutral" };
+  if (a.cancelledAt) return { state: "cancelled", label: "Cancelado", tone: "neutral" };
+  if (a.remainingCents <= 0) return { state: "settled", label: "Quitado", tone: "brand" };
   if (!a.acceptedAt)
     return {
       state: "pending",
-      label: "aguardando a profissional concordar",
+      label: "Aguardando a profissional concordar",
       tone: "amber",
     };
-  return { state: "running", label: "em andamento", tone: "brand" };
+  return { state: "running", label: "Em andamento", tone: "brand" };
 }
 
 /** Share already paid back, 0–100. */
@@ -40,6 +44,8 @@ export function nextInstallmentCents(
 }
 
 /** Agreements that can still receive a compensation payment. */
-export function isOpenAgreement(a: Pick<Agreement, "cancelledAt" | "remainingCents">): boolean {
-  return !a.cancelledAt && a.remainingCents > 0;
+export function isOpenAgreement(
+  a: Pick<Agreement, "archivedAt" | "cancelledAt" | "remainingCents">,
+): boolean {
+  return !a.archivedAt && !a.cancelledAt && a.remainingCents > 0;
 }

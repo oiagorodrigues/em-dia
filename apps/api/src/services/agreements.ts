@@ -9,9 +9,16 @@ import { audit, nowIso, requirePermission, type Actor, type ServiceDeps } from "
 export function agreementsService(deps: ServiceDeps) {
   const { repos } = deps;
 
-  async function find(contractId: string, agreementId: string): Promise<Agreement> {
+  /** Removed agreements answer 404 unless the caller is restoring them. */
+  async function find(
+    contractId: string,
+    agreementId: string,
+    includeArchived = false,
+  ): Promise<Agreement> {
     const agreement = await repos.agreements.find(contractId, agreementId);
-    if (!agreement) throw notFound("Acordo não encontrado");
+    if (!agreement || (agreement.archivedAt && !includeArchived)) {
+      throw notFound("Acordo não encontrado");
+    }
     return agreement;
   }
 
@@ -31,9 +38,9 @@ export function agreementsService(deps: ServiceDeps) {
   }
 
   return {
-    async list(actor: Actor, contractId: string): Promise<Agreement[]> {
+    async list(actor: Actor, contractId: string, includeArchived = false): Promise<Agreement[]> {
       await loadContract(deps, actor, contractId);
-      return repos.agreements.list(contractId);
+      return repos.agreements.list(contractId, includeArchived);
     },
 
     async create(
@@ -54,6 +61,7 @@ export function agreementsService(deps: ServiceDeps) {
         remainingCents: input.totalCents,
         acceptedAt: null,
         cancelledAt: null,
+        archivedAt: null,
         createdBy: actor.id,
         createdAt: nowIso(deps),
       };
@@ -86,6 +94,33 @@ export function agreementsService(deps: ServiceDeps) {
       await repos.tx(async (r) => {
         await r.agreements.cancel(agreementId, nowIso(deps));
         await record(r, actor, agreement, "agreement.cancel");
+      });
+      return find(contractId, agreementId);
+    },
+
+    /**
+     * Logical and reversible: the row and its installments stay, but the agreement leaves the
+     * list and its compensation payments leave payment lists and month totals until restored.
+     */
+    async archive(actor: Actor, contractId: string, agreementId: string): Promise<void> {
+      await loadWritableContract(deps, actor, contractId);
+      requirePermission(actor, "agreement:write");
+      const agreement = await find(contractId, agreementId, true);
+      if (agreement.archivedAt) return;
+      await repos.tx(async (r) => {
+        await r.agreements.setArchivedAt(agreementId, nowIso(deps));
+        await record(r, actor, agreement, "agreement.archive");
+      });
+    },
+
+    async restore(actor: Actor, contractId: string, agreementId: string): Promise<Agreement> {
+      await loadWritableContract(deps, actor, contractId);
+      requirePermission(actor, "agreement:write");
+      const agreement = await find(contractId, agreementId, true);
+      if (!agreement.archivedAt) return agreement;
+      await repos.tx(async (r) => {
+        await r.agreements.setArchivedAt(agreementId, null);
+        await record(r, actor, agreement, "agreement.restore");
       });
       return find(contractId, agreementId);
     },

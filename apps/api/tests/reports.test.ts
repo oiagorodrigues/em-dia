@@ -23,7 +23,7 @@ async function put(user: TestUser, date: string, body: Record<string, unknown>) 
 }
 
 describe("summary", () => {
-  test("matches computeMonthSummary over entries, adjustments and payments", async () => {
+  test("matches computeMonthSummary over entries and every payment kind", async () => {
     await put(worker, "2026-09-02", {
       status: "worked",
       checkIn: "08:00",
@@ -39,21 +39,16 @@ describe("summary", () => {
     await put(employer, "2026-09-07", { status: "holiday", checkIn: null, checkOut: null });
     await put(employer, "2026-09-09", { status: "absent", checkIn: null, checkOut: null });
     await t.http().post(`${base}/entries/2026-09-02/confirm`).auth(employer.token, as);
-    await t
-      .http()
-      .post(`${base}/adjustments`)
-      .auth(employer.token, as)
-      .send({ month: "2026-09", kind: "bonus", amountCents: 5000 });
-    await t
-      .http()
-      .post(`${base}/adjustments`)
-      .auth(employer.token, as)
-      .send({ month: "2026-09", kind: "advance", amountCents: 10000 });
-    await t
-      .http()
-      .post(`${base}/payments`)
-      .auth(employer.token, as)
-      .send({ referenceMonth: "2026-09", paidOn: "2026-09-30", amountCents: 20000, method: "pix" });
+    const pay = (body: Record<string, unknown>) =>
+      t
+        .http()
+        .post(`${base}/payments`)
+        .auth(employer.token, as)
+        .send({ referenceMonth: "2026-09", paidOn: "2026-09-30", ...body });
+    await pay({ kind: "bonus", amountCents: 5000, method: "cash" });
+    await pay({ kind: "deduction", amountCents: 10000 });
+    await pay({ kind: "advance", amountCents: 50000, method: "pix" });
+    await pay({ amountCents: 20000, method: "pix" });
 
     const res = await t.http().get(`${base}/summary?month=2026-09`).auth(worker.token, as);
     expect(res.status).toBe(200);
@@ -68,8 +63,8 @@ describe("summary", () => {
       grossCents: 36000,
       adjustmentsCents: -5000,
       dueCents: 31000,
-      paidCents: 20000,
-      balanceCents: 11000,
+      paidCents: 25000,
+      balanceCents: 6000,
       avgPerDayCents: 18000,
     });
     expect(res.body.summary.unrecordedDates).toHaveLength(9);

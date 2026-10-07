@@ -1,5 +1,5 @@
 import {
-  ADJUSTMENT_KINDS,
+  PAYMENT_KINDS,
   CONTRACT_STATUSES,
   ENTRY_STATUSES,
   OCCUPATIONS,
@@ -154,30 +154,6 @@ export const workEntries = pgTable(
   ],
 );
 
-export const adjustments = pgTable(
-  "adjustments",
-  {
-    id: text("id").primaryKey(),
-    contractId: text("contract_id")
-      .notNull()
-      .references(() => contracts.id, { onDelete: "cascade" }),
-    month: text("month").notNull(),
-    kind: text("kind", { enum: ADJUSTMENT_KINDS }).notNull(),
-    amountCents: integer("amount_cents").notNull(),
-    description: text("description"),
-    createdBy: text("created_by")
-      .notNull()
-      .references(() => users.id),
-    createdAt: timestamptz("created_at").notNull(),
-  },
-  (t) => [
-    index("adjustments_contract_month_idx").on(t.contractId, t.month),
-    check("adjustments_kind_check", oneOf(t.kind, ADJUSTMENT_KINDS)),
-    check("adjustments_amount_check", sql`${t.amountCents} > 0`),
-    check("adjustments_month_check", sql`${t.month} ~ ${sql.raw(`'${YEAR_MONTH}'`)}`),
-  ],
-);
-
 export const agreements = pgTable(
   "agreements",
   {
@@ -191,6 +167,7 @@ export const agreements = pgTable(
     startMonth: text("start_month").notNull(),
     acceptedAt: timestamptz("accepted_at"),
     cancelledAt: timestamptz("cancelled_at"),
+    archivedAt: timestamptz("archived_at"),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
@@ -214,7 +191,9 @@ export const payments = pgTable(
     referenceMonth: text("reference_month").notNull(),
     paidOn: isoDate("paid_on").notNull(),
     amountCents: integer("amount_cents").notNull(),
-    method: text("method", { enum: PAYMENT_METHODS }).notNull(),
+    kind: text("kind", { enum: PAYMENT_KINDS }).notNull().default("pay"),
+    /** Null when no money changed hands: a desconto, or a migrated gratificação. */
+    method: text("method", { enum: PAYMENT_METHODS }),
     note: text("note"),
     /** Storage name; it never leaves the API. */
     receiptFile: text("receipt_file"),
@@ -223,7 +202,11 @@ export const payments = pgTable(
     receiptName: text("receipt_name"),
     receiptUploadedAt: timestamptz("receipt_uploaded_at"),
     acknowledgedAt: timestamptz("acknowledged_at"),
+    acknowledgedBy: text("acknowledged_by").references(() => users.id),
+    acknowledgedByRole: text("acknowledged_by_role", { enum: ROLES }),
     agreementId: text("agreement_id").references(() => agreements.id, { onDelete: "set null" }),
+    /** The adiantamento this compensation abates; the service blocks removing one that has any. */
+    advanceId: text("advance_id").references((): AnyPgColumn => payments.id),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
@@ -232,8 +215,15 @@ export const payments = pgTable(
   (t) => [
     index("payments_contract_month_idx").on(t.contractId, t.referenceMonth),
     index("payments_agreement_idx").on(t.agreementId),
+    index("payments_advance_idx").on(t.advanceId),
+    check("payments_kind_check", oneOf(t.kind, PAYMENT_KINDS)),
     check("payments_method_check", oneOf(t.method, PAYMENT_METHODS)),
+    check(
+      "payments_kind_method_check",
+      sql`(${t.kind} = 'deduction' AND ${t.method} IS NULL) OR (${t.kind} <> 'deduction' AND (${t.method} IS NOT NULL OR ${t.kind} IN ('bonus', 'transport')))`,
+    ),
     check("payments_receipt_mime_check", oneOf(t.receiptMime, RECEIPT_MIME_TYPES)),
+    check("payments_acknowledged_by_role_check", oneOf(t.acknowledgedByRole, ROLES)),
     check("payments_amount_check", sql`${t.amountCents} > 0`),
     check(
       "payments_reference_month_check",

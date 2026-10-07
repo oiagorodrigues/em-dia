@@ -3,34 +3,65 @@ import {
   createPaymentSchema,
   DEFAULT_TIMEZONE,
   formatCents,
+  isOpenAdvance,
   nowInZone,
-  PAYMENT_METHOD_LABEL,
-  PAYMENT_METHODS,
+  PAYMENT_KINDS,
   toYearMonth,
   YEAR_MONTH_RE,
+  type PaymentKind,
   type PaymentMethod,
 } from "@emdia/shared";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { agreementsApi, contractsApi, paymentsApi } from "@/api";
-import ReceiptDrop from "@/components/feature/ReceiptDrop.vue";
+import { queryKeys } from "@/api/keys.ts";
+import PaymentFields from "@/components/feature/PaymentFields.vue";
 import PaymentsSidePanel from "@/components/feature/PaymentsSidePanel.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import Field from "@/components/ui/Field.vue";
-import MoneyInput from "@/components/ui/MoneyInput.vue";
-import ChoiceField from "@/components/ui/ChoiceField.vue";
-import DateField from "@/components/ui/DateField.vue";
 import MonthField from "@/components/ui/MonthField.vue";
 import Select from "@/components/ui/Select.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
+import SkeletonForm from "@/components/ui/SkeletonForm.vue";
+import SkeletonLedger from "@/components/ui/SkeletonLedger.vue";
+import ChoiceField from "@/components/ui/ChoiceField.vue";
 import { previousInApp, useBack } from "@/composables/back.ts";
 import { useForm } from "@/composables/form.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { isOpenAgreement, nextInstallmentCents } from "@/lib/agreement.ts";
 import { isWritable } from "@/lib/contract.ts";
+import { formatDateShort } from "@/lib/format.ts";
+import { advanceProgress, KIND_HINT, KIND_OPTIONS, paymentFormData } from "@/lib/payments.ts";
+
+const SUBMIT_LABEL: Record<PaymentKind, string> = {
+  pay: "Registrar pagamento",
+  bonus: "Registrar gratificação",
+  transport: "Registrar vale-transporte",
+  advance: "Registrar adiantamento",
+  deduction: "Lançar desconto",
+};
+
+const SUBTITLE: Record<PaymentKind, string> = {
+  pay: "Fica guardado com o comprovante, e a pessoa confirma que recebeu.",
+  bonus: "Fica guardado com o comprovante, e a pessoa confirma que recebeu.",
+  transport: "Fica guardado com o comprovante, e a pessoa confirma que recebeu.",
+  advance: "Fica guardado com o comprovante, e a pessoa confirma que recebeu.",
+  deduction: "Fica guardado no histórico dos dois lados e diminui o valor do mês.",
+};
+
+const SAVED: Record<PaymentKind, (amount: string) => string> = {
+  pay: (a) => `Pagamento de ${a} registrado.`,
+  bonus: (a) => `Gratificação de ${a} registrada.`,
+  transport: (a) => `Vale-transporte de ${a} registrado.`,
+  advance: (a) => `Adiantamento de ${a} registrado.`,
+  deduction: (a) => `Desconto de ${a} lançado.`,
+};
+
+const isPaymentKind = (v: string): v is PaymentKind =>
+  (PAYMENT_KINDS as readonly string[]).includes(v);
 
 const route = useRoute();
 const router = useRouter();
@@ -42,20 +73,39 @@ const queryMonth =
     ? route.query.mes
     : null;
 
-const contracts = useResource(
-  () => 0,
-  () => contractsApi.list().then((r) => r.contracts.filter(isWritable)),
+const allContracts = useResource(
+  () => null,
+  queryKeys.contracts,
+  () => contractsApi.list().then((r) => r.contracts),
 );
+const contracts = {
+  ...allContracts,
+  data: computed(() => allContracts.data.value?.filter(isWritable)),
+};
+const invalidate = useInvalidate();
 const queryAgreement = typeof route.query.acordo === "string" ? route.query.acordo : null;
 const contractId = ref(typeof route.query.vinculo === "string" ? route.query.vinculo : "");
-watch(contracts.data, (list) => {
-  if (list && !list.some((c) => c.id === contractId.value)) contractId.value = list[0]?.id ?? "";
-});
+watch(
+  contracts.data,
+  (list) => {
+    if (list && !list.some((c) => c.id === contractId.value)) contractId.value = list[0]?.id ?? "";
+  },
+  { immediate: true },
+);
 const contract = computed(
   () => contracts.data.value?.find((c) => c.id === contractId.value) ?? null,
 );
 
+/** `?tipo=` opens the form on a kind; `?extra=1` is the old "pagamento extra" link. */
+const queryKind: PaymentKind =
+  typeof route.query.tipo === "string" && isPaymentKind(route.query.tipo)
+    ? route.query.tipo
+    : route.query.extra === "1"
+      ? "bonus"
+      : "pay";
+
 const { values, errors, formError, submitting, submit, clearError } = useForm(createPaymentSchema, {
+  kind: queryAgreement ? "pay" : queryKind,
   referenceMonth: queryMonth ?? toYearMonth(today),
   paidOn: today,
   amountCents: null as number | null,
@@ -63,34 +113,47 @@ const { values, errors, formError, submitting, submit, clearError } = useForm(cr
   note: "",
 });
 const agreementId = ref(queryAgreement ?? "");
+const advanceId = ref("");
 const receipt = ref<File | null>(null);
+const isPay = computed(() => values.kind === "pay");
+const handsMoney = computed(() => values.kind !== "deduction");
 
 /** Prefill with what's still owed for the reference month, until the person types their own amount. */
 const touchedAmount = ref(false);
 const summary = useResource(
-  () => (contractId.value ? `${contractId.value}|${values.referenceMonth}` : ""),
-  (key) => {
-    if (!key || !YEAR_MONTH_RE.test(values.referenceMonth)) return Promise.resolve(null);
-    return contractsApi.summary(contractId.value, values.referenceMonth).then((r) => r.summary);
-  },
+  () => ({ id: contractId.value, month: values.referenceMonth }),
+  (s) => (s.id && YEAR_MONTH_RE.test(s.month) ? queryKeys.summary(s) : null),
+  (s) => contractsApi.summary(s.id, s.month).then((r) => r.summary),
 );
-watch(summary.data, (s) => {
-  if (s && !touchedAmount.value) values.amountCents = s.balanceCents > 0 ? s.balanceCents : null;
+watch(
+  [summary.data, isPay],
+  ([s, pay]) => {
+    if (!s || touchedAmount.value) return;
+    values.amountCents = pay && s.balanceCents > 0 ? s.balanceCents : null;
+  },
+  { immediate: true },
+);
+/** Compensation only pays diárias/salário; other kinds go back to Pix. */
+watch(isPay, (pay) => {
+  if (!pay && values.method === "compensation") values.method = "pix";
+  clearError("kind");
+  clearError("method");
 });
 
-const methodOptions = PAYMENT_METHODS.map((m) => ({ value: m, label: PAYMENT_METHOD_LABEL[m] }));
 const contractOptions = computed(() =>
   (contracts.data.value ?? []).map((c) => ({ value: c.id, label: c.workerName })),
 );
 
 /** Open agreements (accepted or still waiting for the worker) a compensation can pay down. */
-const agreements = useResource(
+const allAgreements = useResource(
   () => (values.method === "compensation" ? contractId.value : ""),
-  (id) =>
-    id
-      ? agreementsApi.list(id).then((r) => r.agreements.filter(isOpenAgreement))
-      : Promise.resolve([]),
+  (id) => (id ? queryKeys.agreements(id) : null),
+  (id) => agreementsApi.list(id, { archived: true }).then((r) => r.agreements),
 );
+const agreements = {
+  ...allAgreements,
+  data: computed(() => allAgreements.data.value?.filter(isOpenAgreement)),
+};
 const agreementOptions = computed(() => [
   { value: "", label: "Nenhum: compensação avulsa" },
   ...(agreements.data.value ?? []).map((a) => ({
@@ -102,50 +165,82 @@ const agreementOptions = computed(() => [
 const agreement = computed(
   () => agreements.data.value?.find((a) => a.id === agreementId.value) ?? null,
 );
-watch(agreements.data, (list) => {
-  if (list && agreementId.value && !list.some((a) => a.id === agreementId.value))
-    agreementId.value = "";
+watch(
+  agreements.data,
+  (list) => {
+    if (list && agreementId.value && !list.some((a) => a.id === agreementId.value))
+      agreementId.value = "";
+  },
+  { immediate: true },
+);
+watch(
+  agreement,
+  (a) => {
+    if (!a) return;
+    values.amountCents = nextInstallmentCents(a);
+    touchedAmount.value = true;
+    clearError("amountCents");
+    clearError("note");
+  },
+  { immediate: true },
+);
+watch(contractId, () => {
+  agreementId.value = "";
+  advanceId.value = "";
 });
-watch(agreement, (a) => {
-  if (!a) return;
-  values.amountCents = nextInstallmentCents(a);
-  touchedAmount.value = true;
-  clearError("amountCents");
+
+/** Open adiantamentos a compensation can abate, like an agreement. */
+const allAdvances = useResource(
+  () => (values.method === "compensation" && isPay.value ? contractId.value : ""),
+  (id) => (id ? queryKeys.advances(id) : null),
+  (id) => paymentsApi.advances(id).then((r) => r.advances),
+);
+const openAdvances = computed(() => allAdvances.data.value?.filter(isOpenAdvance) ?? []);
+const advanceOptions = computed(() => [
+  { value: "", label: "Nenhum" },
+  ...openAdvances.value.map((a) => ({
+    value: a.id,
+    label: `Adiantamento de ${formatDateShort(a.paidOn)}`,
+    description: advanceProgress(a).toLowerCase(),
+  })),
+]);
+const advance = computed(() => openAdvances.value.find((a) => a.id === advanceId.value) ?? null);
+watch(agreementId, (id) => id && (advanceId.value = ""));
+watch(advanceId, (id) => {
+  if (!id) return;
+  agreementId.value = "";
   clearError("note");
+  clearError("advanceId");
 });
-watch(contractId, () => (agreementId.value = ""));
 
 const amountHint = computed(() => {
   if (agreement.value) return `Falta ${formatCents(agreement.value.remainingCents)} neste acordo.`;
+  if (advance.value) return `${advanceProgress(advance.value)} deste adiantamento.`;
+  if (!isPay.value) return undefined;
   const s = summary.data.value;
   if (!s) return undefined;
   return s.balanceCents > 0
     ? `Falta pagar ${formatCents(s.balanceCents)} deste mês.`
     : "Este mês já está pago.";
 });
-const noteRequired = computed(() => values.method === "compensation" && !agreementId.value);
+const compensation = computed(() => isPay.value && values.method === "compensation");
+const noteRequired = computed(() => compensation.value && !agreementId.value && !advanceId.value);
+const submitLabel = computed(() => SUBMIT_LABEL[values.kind]);
 
 function onSubmit(): void {
   const input = {
     ...values,
+    method: handsMoney.value ? values.method : null,
     amountCents: values.amountCents ?? 0,
     note: values.note.trim() || null,
-    agreementId:
-      values.method === "compensation" && agreementId.value ? agreementId.value : undefined,
+    agreementId: compensation.value && agreementId.value ? agreementId.value : undefined,
+    advanceId: compensation.value && advanceId.value ? advanceId.value : undefined,
   };
   void submit(async (data) => {
     if (!contract.value) return;
-    const form = new FormData();
-    form.append("referenceMonth", data.referenceMonth);
-    form.append("paidOn", data.paidOn);
-    form.append("amountCents", String(data.amountCents));
-    form.append("method", data.method);
-    if (data.note) form.append("note", data.note);
-    // The API rejects an empty agreementId, so the field is left out entirely.
-    if (data.agreementId) form.append("agreementId", data.agreementId);
-    if (receipt.value) form.append("receipt", receipt.value);
-    await paymentsApi.create(contract.value.id, form);
-    toast.success(`Pagamento de ${formatCents(data.amountCents)} registrado.`);
+    await paymentsApi.create(contract.value.id, paymentFormData(data, receipt.value));
+    void invalidate.records(contract.value.id);
+    toast.success(SAVED[data.kind](formatCents(data.amountCents)));
     // Back to where the form was opened from; a direct visit lands on the person's payments.
     if (previousInApp()) router.back();
     else
@@ -166,28 +261,40 @@ const { to: back } = useBack(
 
 <template>
   <div class="np">
-    <PageHeader
-      :back="back"
-      title="Novo pagamento"
-      subtitle="Fica guardado com o comprovante, e a pessoa confirma que recebeu."
-    />
+    <PageHeader :back="back" title="Novo pagamento" :subtitle="SUBTITLE[values.kind]" />
 
-    <div v-if="contracts.loading.value && !contracts.data.value" aria-busy="true">
-      <Skeleton h="48px" />
-      <Skeleton h="48px" gap="20px" />
-      <Skeleton h="120px" gap="20px" />
+    <div
+      v-if="contracts.loading.value && !contracts.data.value"
+      aria-busy="true"
+      class="np__layout"
+    >
+      <SkeletonForm :fields="['input', 'two', 'input', 'choice', 'drop', 'area']" />
+      <div class="np__panel np__skel">
+        <span class="np__skelwho">
+          <Skeleton w="44px" h="44px" round />
+          <span class="np__skellines">
+            <Skeleton w="60%" h="16px" />
+            <Skeleton w="40%" h="12px" />
+          </span>
+        </span>
+        <Skeleton w="45%" h="12px" />
+        <SkeletonLedger />
+        <Skeleton h="88px" />
+      </div>
     </div>
 
     <EmptyState v-else-if="contracts.error.value" tone="error" title="Não deu para carregar.">
       {{ contracts.error.value.message }}
-      <template #actions><Button @click="contracts.reload">tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="contracts.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <EmptyState v-else-if="contracts.data.value?.length === 0" title="Nenhum vínculo ativo.">
       Cadastre quem trabalha na sua casa para registrar pagamentos.
       <template #actions
-        ><Button to="/equipe/novo" variant="primary" icon="plus"
-          >adicionar profissional</Button
+        ><Button to="/equipe/novo" variant="primary" icon="user-plus"
+          >Adicionar profissional</Button
         ></template
       >
     </EmptyState>
@@ -209,95 +316,92 @@ const { to: back } = useBack(
           <span class="label">para</span> <strong>{{ contract.workerName }}</strong>
         </p>
 
-        <div class="np__two">
-          <Field
-            v-slot="{ id, invalid, describedBy }"
-            label="Mês de referência"
-            :error="errors.referenceMonth"
-          >
-            <MonthField
-              :id="id"
-              v-model="values.referenceMonth"
-              label="Mês de referência"
-              :invalid="invalid"
-              :described-by="describedBy"
-              @update:model-value="clearError('referenceMonth')"
-            />
-          </Field>
-          <Field v-slot="{ id, invalid, describedBy }" label="Pago em" :error="errors.paidOn">
-            <DateField
-              :id="id"
-              v-model="values.paidOn"
-              label="Pago em"
-              :max="today"
-              :invalid="invalid"
-              :described-by="describedBy"
-              @update:model-value="clearError('paidOn')"
-            />
-          </Field>
-        </div>
-
         <Field
-          v-slot="{ id, invalid, describedBy }"
-          label="Valor"
-          :error="
-            errors.amountCents
-              ? values.amountCents
-                ? errors.amountCents
-                : 'Informe o valor'
-              : null
-          "
-          :hint="amountHint"
+          v-slot="{ id, describedBy }"
+          label="Tipo"
+          :error="errors.kind"
+          :hint="KIND_HINT[values.kind]"
         >
-          <MoneyInput
-            :id="id"
-            v-model="values.amountCents"
-            :invalid="invalid"
-            :described-by="describedBy"
-            @update:model-value="
-              touchedAmount = true;
-              clearError('amountCents');
-            "
-          />
-        </Field>
-
-        <Field v-slot="{ id }" label="Como pagou" :error="errors.method">
           <ChoiceField
             :id="id"
-            v-model="values.method"
-            :options="methodOptions"
-            label="Como pagou"
+            v-model="values.kind"
+            :options="KIND_OPTIONS"
+            label="Tipo"
+            breakpoint="lg"
             wrap
-            @update:model-value="clearError('method')"
-          />
-        </Field>
-
-        <Field
-          v-if="values.method === 'compensation'"
-          v-slot="{ id, describedBy }"
-          label="Abater de um acordo"
-          optional
-          :hint="
-            agreements.data.value?.length === 0
-              ? 'Nenhum acordo em aberto. Crie um na aba Acordos da pessoa, ou descreva a compensação abaixo.'
-              : 'A parcela do acordo vem preenchida no valor.'
-          "
-        >
-          <Select
-            :id="id"
-            :model-value="agreementId"
-            :options="agreementOptions"
-            label="Abater de um acordo"
             :described-by="describedBy"
-            :disabled="agreements.loading.value"
-            @update:model-value="(v) => (agreementId = v ?? '')"
+            @update:model-value="clearError('kind')"
           />
         </Field>
 
-        <fieldset class="np__set">
-          <legend class="label">Comprovante <span class="np__opt">opcional</span></legend>
-          <ReceiptDrop v-model="receipt" />
-        </fieldset>
+        <PaymentFields
+          v-model:paid-on="values.paidOn"
+          v-model:amount-cents="values.amountCents"
+          v-model:method="values.method"
+          v-model:receipt="receipt"
+          :kind="values.kind"
+          :errors="errors"
+          :today="today"
+          :amount-hint="amountHint"
+          @clear="clearError"
+          @amount-input="touchedAmount = true"
+        >
+          <template #beside-date>
+            <Field
+              v-slot="{ id, invalid, describedBy }"
+              label="Mês de referência"
+              :error="errors.referenceMonth"
+            >
+              <MonthField
+                :id="id"
+                v-model="values.referenceMonth"
+                label="Mês de referência"
+                :invalid="invalid"
+                :described-by="describedBy"
+                @update:model-value="clearError('referenceMonth')"
+              />
+            </Field>
+          </template>
+          <template #after-method>
+            <Field
+              v-if="compensation && openAdvances.length > 0"
+              v-slot="{ id, describedBy }"
+              label="Abater de um adiantamento"
+              optional
+              :error="errors.advanceId"
+            >
+              <Select
+                :id="id"
+                :model-value="advanceId"
+                :options="advanceOptions"
+                label="Abater de um adiantamento"
+                :described-by="describedBy"
+                @update:model-value="(v) => (advanceId = v ?? '')"
+              />
+            </Field>
+            <Field
+              v-if="compensation"
+              v-slot="{ id, describedBy }"
+              label="Abater de um acordo"
+              optional
+              :hint="
+                agreements.data.value?.length === 0
+                  ? 'Nenhum acordo em aberto. Crie um na aba Acordos da pessoa, ou descreva a compensação abaixo.'
+                  : 'A parcela do acordo vem preenchida no valor.'
+              "
+            >
+              <Select
+                :id="id"
+                :model-value="agreementId"
+                :options="agreementOptions"
+                label="Abater de um acordo"
+                :described-by="describedBy"
+                :disabled="agreements.loading.value"
+                @update:model-value="(v) => (agreementId = v ?? '')"
+              />
+            </Field>
+          </template>
+        </PaymentFields>
 
         <Field
           v-slot="{ id, invalid, describedBy }"
@@ -322,9 +426,9 @@ const { to: back } = useBack(
           />
         </Field>
 
-        <Button type="submit" variant="primary" :loading="submitting" :disabled="!contract"
-          >registrar pagamento</Button
-        >
+        <Button type="submit" variant="primary" :loading="submitting" :disabled="!contract">{{
+          submitLabel
+        }}</Button>
       </form>
       <PaymentsSidePanel
         v-if="contract"
@@ -333,7 +437,7 @@ const { to: back } = useBack(
         :month="values.referenceMonth"
         :summary="summary.data.value ?? null"
         :loading="summary.loading.value"
-        :highlight-pix="values.method === 'pix'"
+        :highlight-pix="handsMoney && values.method === 'pix'"
       />
     </div>
   </div>
@@ -364,6 +468,28 @@ const { to: back } = useBack(
   }
 }
 
+.np__skel {
+  display: grid;
+  gap: var(--s-5);
+  padding: var(--s-6);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-3);
+  box-shadow: var(--shadow-1);
+}
+
+.np__skelwho {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.np__skellines {
+  flex: 1;
+  display: grid;
+  gap: 6px;
+}
+
 .np__form {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -375,38 +501,6 @@ const { to: back } = useBack(
   gap: var(--s-2);
   align-items: baseline;
   font-size: var(--t-20);
-}
-
-.np__two {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-5);
-}
-
-@media (min-width: 520px) {
-  .np__two {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--s-3);
-  }
-}
-
-.np__set {
-  border: 0;
-  padding: 0;
-  min-width: 0;
-}
-
-.np__set legend {
-  padding: 0;
-  margin-bottom: var(--s-3);
-}
-
-.np__opt {
-  margin-left: var(--s-1);
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
-  color: var(--ink-3);
 }
 
 .np__form > :deep(.btn) {

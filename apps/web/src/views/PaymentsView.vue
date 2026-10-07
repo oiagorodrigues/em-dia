@@ -3,14 +3,18 @@ import {
   DEFAULT_TIMEZONE,
   formatCents,
   formatYearMonth,
+  handsMoney,
   nowInZone,
+  PAYMENT_KIND_LABEL,
   PAYMENT_METHOD_LABEL,
   PAYMENT_METHODS,
   RECEIPT_MIME_TYPES,
   type Payment,
 } from "@emdia/shared";
 import { computed, ref, useTemplateRef } from "vue";
+import { useRouter } from "vue-router";
 import { errorMessage, paymentsApi } from "@/api";
+import PaymentEditSheet from "@/components/feature/PaymentEditSheet.vue";
 import ReceiptStub from "@/components/feature/ReceiptStub.vue";
 import ReceiptViewer from "@/components/feature/ReceiptViewer.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
@@ -23,32 +27,42 @@ import KpiCard from "@/components/ui/KpiCard.vue";
 import Select from "@/components/ui/Select.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import TableActions from "@/components/ui/TableActions.vue";
+import Tooltip from "@/components/ui/Tooltip.vue";
 import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
+import { useInvalidate } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import { useTeamPayments } from "@/composables/teamPayments.ts";
 import { isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
 import {
+  advanceProgress,
+  formatSigned,
+  KIND_OPTIONS,
+  kindNoun,
+  kindTone,
   matchesPaymentFilters,
   paymentTotals,
   paymentYears,
+  receivedStatus,
+  signedCents,
   type PaymentRow,
 } from "@/lib/payments.ts";
+import AdvancesPanel from "@/components/feature/AdvancesPanel.vue";
 import { receiptProblem } from "@/lib/receipt.ts";
-import type { Column } from "@/lib/table.ts";
+import { spansAround, type Column } from "@/lib/table.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
 const auth = useAuthStore();
 const toast = useToastStore();
+const router = useRouter();
 const wide = useMediaQuery(MQ.md);
-const lg = useMediaQuery(MQ.lg);
 
 const thisYear = Number(nowInZone(DEFAULT_TIMEZONE).date.slice(0, 4));
 const { state, clear } = useTableState({
   defaultSort: { key: "pago", dir: "desc" },
-  filters: ["pessoa", "ano", "forma", "recebido"],
+  filters: ["pessoa", "ano", "tipo", "forma", "recebido"],
 });
 
 const year = computed(() => {
@@ -56,6 +70,7 @@ const year = computed(() => {
   return Number.isInteger(n) && n >= 2000 && n <= thisYear ? n : thisYear;
 });
 const payments = useTeamPayments(() => year.value);
+const invalidate = useInvalidate();
 
 const contracts = computed(() =>
   [...(payments.data.value?.contracts ?? [])].sort((a, b) =>
@@ -87,9 +102,16 @@ const receivedOptions = [
   { value: "sim", label: "Recebido" },
   { value: "nao", label: "Sem “recebi”" },
 ];
+const kindOptions = [{ value: "", label: "Todos os tipos" }, ...KIND_OPTIONS];
+const openAdvances = computed(() =>
+  (payments.data.value?.advances ?? []).map((a) => ({
+    payment: a.payment,
+    who: contracts.value.length > 1 ? personOf(a.contract) : undefined,
+  })),
+);
 
 function methodText(r: PaymentRow): string {
-  const label = PAYMENT_METHOD_LABEL[r.payment.method];
+  const label = r.payment.method ? PAYMENT_METHOD_LABEL[r.payment.method] : "—";
   return r.agreement ? `${label} · ${r.agreement}` : label;
 }
 
@@ -109,6 +131,14 @@ const columns = computed<Column<PaymentRow>[]>(() => [
     sortable: true,
     sortFirst: "desc",
     searchable: true,
+    priority: 2,
+  },
+  {
+    key: "tipo",
+    label: "Tipo",
+    value: (r) => PAYMENT_KIND_LABEL[r.payment.kind],
+    sortable: true,
+    searchable: true,
   },
   {
     key: "pago",
@@ -119,12 +149,13 @@ const columns = computed<Column<PaymentRow>[]>(() => [
     sortFirst: "desc",
     align: "right",
     mono: true,
+    priority: 1,
   },
   {
     key: "valor",
     label: "Valor",
-    value: (r) => r.payment.amountCents,
-    format: (r) => formatCents(r.payment.amountCents),
+    value: (r) => signedCents(r.payment),
+    format: (r) => formatSigned(r.payment),
     sortable: true,
     sortFirst: "desc",
     align: "right",
@@ -138,7 +169,6 @@ const columns = computed<Column<PaymentRow>[]>(() => [
     searchable: true,
     hideBelow: "lg",
   },
-  { key: "comprovante", label: "Comprovante", value: (r) => !!r.payment.receipt },
   {
     key: "recebido",
     label: "Recebido",
@@ -150,14 +180,19 @@ const columns = computed<Column<PaymentRow>[]>(() => [
 const filter = (r: PaymentRow) =>
   matchesPaymentFilters(r, {
     pessoa: state.filters.pessoa,
+    tipo: state.filters.tipo,
     forma: state.filters.forma,
     recebido: state.filters.recebido,
   });
 const filterCount = computed(
   () =>
-    [state.filters.pessoa, state.filters.forma, state.filters.recebido, state.filters.ano].filter(
-      Boolean,
-    ).length,
+    [
+      state.filters.pessoa,
+      state.filters.tipo,
+      state.filters.forma,
+      state.filters.recebido,
+      state.filters.ano,
+    ].filter(Boolean).length,
 );
 const yearTotals = computed(() => paymentTotals(rows.value.filter(filter)));
 
@@ -180,10 +215,12 @@ async function run(row: PaymentRow, task: () => Promise<void>): Promise<void> {
 function replace(updated: Payment): void {
   payments.mutate((prev) => ({
     contracts: prev?.contracts ?? [],
+    advances: prev?.advances ?? [],
     rows: (prev?.rows ?? []).map((r) =>
       r.payment.id === updated.id ? { ...r, payment: updated } : r,
     ),
   }));
+  void invalidate.records(updated.contractId, payments);
 }
 
 function acknowledge(row: PaymentRow): Promise<void> {
@@ -211,15 +248,17 @@ function onFile(e: Event): void {
   const file = input.files?.[0];
   input.value = "";
   const row = attaching.value;
-  if (!file || !row) return;
+  if (file && row) void uploadReceipt(row, file);
+}
+function uploadReceipt(row: PaymentRow, file: File): Promise<void> {
   const problem = receiptProblem(file);
   if (problem) {
     toast.error(problem);
-    return;
+    return Promise.resolve();
   }
   const form = new FormData();
   form.append("receipt", file);
-  void run(row, async () => {
+  return run(row, async () => {
     replace((await paymentsApi.replaceReceipt(row.contract.id, row.payment.id, form)).payment);
     toast.success("Comprovante anexado.");
   });
@@ -238,15 +277,52 @@ async function confirmRemove(): Promise<void> {
     await paymentsApi.remove(row.contract.id, row.payment.id);
     payments.mutate((prev) => ({
       contracts: prev?.contracts ?? [],
+      advances: prev?.advances ?? [],
       rows: (prev?.rows ?? []).filter((r) => r.payment.id !== row.payment.id),
     }));
-    toast.success("Pagamento removido.");
+    void invalidate.records(row.contract.id, payments);
+    toast.success(
+      row.payment.advanceId
+        ? "Abatimento removido. O adiantamento voltou a ter esse valor."
+        : "Removido.",
+    );
   });
   removeOpen.value = false;
 }
 
+function canManage(row: PaymentRow): boolean {
+  return auth.isEmployer && isWritable(row.contract);
+}
+
+function confirm(row: PaymentRow): Promise<void> {
+  return run(row, async () => {
+    replace((await paymentsApi.confirm(row.contract.id, row.payment.id)).payment);
+    toast.success("Pagamento concluído.");
+  });
+}
+
+const editOpen = ref(false);
+const editing = ref<PaymentRow | null>(null);
+function edit(row: PaymentRow): void {
+  editing.value = row;
+  editOpen.value = true;
+}
+function onSaved(p: Payment): void {
+  replace(p);
+  toast.success("Pagamento atualizado.");
+}
+
+async function replaceViewed(file: File): Promise<void> {
+  const p = viewing.value;
+  const row = rows.value.find((r) => r.payment.id === p?.id);
+  if (!row) return;
+  await uploadReceipt(row, file);
+  viewing.value = rows.value.find((r) => r.payment.id === row.payment.id)?.payment ?? p;
+}
+
 function inlineActions(row: PaymentRow): InlineAction[] {
   const out: InlineAction[] = [];
+  if (!handsMoney(row.payment)) return out;
   if (auth.isWorker && !row.payment.acknowledgedAt)
     out.push({
       label: "Recebi",
@@ -255,35 +331,51 @@ function inlineActions(row: PaymentRow): InlineAction[] {
       loading: busyId.value === row.payment.id,
       onClick: () => void acknowledge(row),
     });
-  out.push({
-    label: "Ver pagamentos",
-    icon: "eye",
-    to: {
-      path: `/equipe/${row.contract.id}/pagamentos`,
-      query: { mes: row.payment.referenceMonth },
-    },
-  });
+  // One receipt icon: the viewer (where it can be swapped) or, with none yet, the upload.
+  if (row.payment.receipt)
+    out.push({
+      label: `Ver comprovante de ${formatYearMonth(row.payment.referenceMonth)}`,
+      icon: "receipt",
+      tone: "brand",
+      onClick: () => view(row.payment),
+    });
+  else if (canManage(row))
+    out.push({
+      label: `Anexar comprovante de ${formatYearMonth(row.payment.referenceMonth)}`,
+      icon: "receipt",
+      loading: busyId.value === row.payment.id,
+      onClick: () => pickReceipt(row),
+    });
   return out;
 }
 
 function menuItems(row: PaymentRow): MenuItem[] {
-  const items: MenuItem[] = [];
-  if (row.payment.receipt)
-    items.push({ label: "ver comprovante", icon: "paperclip", onSelect: () => view(row.payment) });
-  if (auth.isEmployer && isWritable(row.contract)) {
-    items.push({
-      label: row.payment.receipt ? "trocar comprovante" : "anexar comprovante",
-      icon: "paperclip",
-      onSelect: () => pickReceipt(row),
-    });
-    items.push({ label: "remover", icon: "trash", danger: true, onSelect: () => askRemove(row) });
+  const items: MenuItem[] = [
+    {
+      label: "Ver pagamentos da pessoa",
+      icon: "eye",
+      onSelect: () =>
+        void router.push({
+          path: `/equipe/${row.contract.id}/pagamentos`,
+          query: { mes: row.payment.referenceMonth },
+        }),
+    },
+  ];
+  if (canManage(row)) {
+    items.push({ label: "Editar", icon: "pencil", onSelect: () => edit(row) });
+    if (!row.payment.acknowledgedAt && handsMoney(row.payment))
+      items.push({
+        label: "Marcar como concluído",
+        icon: "check",
+        onSelect: () => void confirm(row),
+      });
+    items.push({ label: "Remover", icon: "trash", danger: true, onSelect: () => askRemove(row) });
   }
   return items;
 }
 
 const canRegister = computed(() => auth.isEmployer && contracts.value.some(isWritable));
-const firstColspan = 3;
-const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
+const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown, "valor");
 </script>
 
 <template>
@@ -297,9 +389,13 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
       "
     >
       <template v-if="canRegister" #actions>
-        <Button to="/pagamentos/novo" variant="primary" icon="wallet-plus"
-          >registrar pagamento</Button
-        >
+        <Button
+          to="/pagamentos/novo"
+          variant="primary"
+          icon="wallet-plus"
+          icon-only
+          label="Registrar pagamento"
+        />
       </template>
     </PageHeader>
 
@@ -311,7 +407,7 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
         :value="formatCents(yearTotals.cents)"
         :amount="yearTotals.cents"
         :format="formatCents"
-        :caption="yearTotals.count === 1 ? '1 pagamento' : `${yearTotals.count} pagamentos`"
+        :caption="yearTotals.count === 1 ? '1 lançamento' : `${yearTotals.count} lançamentos`"
         :loading="!payments.data.value"
       />
       <KpiCard
@@ -319,18 +415,20 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
         icon="check"
         label="Com “recebi”"
         :value="String(yearTotals.acknowledged)"
-        :caption="`de ${yearTotals.count}`"
+        :caption="`de ${yearTotals.money}`"
         :loading="!payments.data.value"
       />
       <KpiCard
-        :tone="yearTotals.count - yearTotals.acknowledged > 0 ? 'amber' : 'neutral'"
+        :tone="yearTotals.money - yearTotals.acknowledged > 0 ? 'amber' : 'neutral'"
         icon="clock"
         :label="auth.isEmployer ? 'Aguardando “recebi”' : 'Falta confirmar'"
-        :value="String(yearTotals.count - yearTotals.acknowledged)"
+        :value="String(yearTotals.money - yearTotals.acknowledged)"
         :caption="auth.isEmployer ? 'a pessoa confirma pelo app' : 'toque em “recebi”'"
         :loading="!payments.data.value"
       />
     </div>
+
+    <AdvancesPanel :items="openAdvances" :employer="auth.isEmployer" />
 
     <EmptyState
       v-if="payments.error.value"
@@ -338,7 +436,9 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
       title="Não deu para carregar os pagamentos."
     >
       {{ payments.error.value.message }}
-      <template #actions><Button @click="payments.reload">tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="payments.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <DataTable
@@ -352,8 +452,8 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
       :filters-active="filterCount > 0"
       :filter-count="filterCount"
       :loading="payments.loading.value"
-      search-placeholder="Buscar por pessoa, mês ou forma"
-      :count-label="(n) => (n === 1 ? '1 pagamento' : `${n} pagamentos`)"
+      search-placeholder="Buscar por pessoa, mês, tipo ou forma"
+      :count-label="(n) => (n === 1 ? '1 lançamento' : `${n} lançamentos`)"
       :empty-title="`Nenhum pagamento em ${year}.`"
       @clear-filters="onClear"
     >
@@ -371,6 +471,13 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
           @update:model-value="(v) => (state.filters.pessoa = v ?? '')"
           :options="personOptions"
           :label="auth.isEmployer ? 'Pessoa' : 'Quem pagou'"
+          class="pv__filter"
+        />
+        <Select
+          :model-value="state.filters.tipo ?? ''"
+          @update:model-value="(v) => (state.filters.tipo = v ?? '')"
+          :options="kindOptions"
+          label="Tipo"
           class="pv__filter"
         />
         <Select
@@ -394,36 +501,44 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
           <Avatar :name="personOf(row.contract)" :size="32" />
           <span class="pv__who-text">
             <strong class="pv__nowrap">{{ personOf(row.contract) }}</strong>
-            <span v-if="row.payment.note" class="pv__note">{{ row.payment.note }}</span>
+            <Tooltip v-if="row.payment.note" :text="row.payment.note"
+              ><span class="pv__note">{{ row.payment.note }}</span></Tooltip
+            >
           </span>
         </span>
       </template>
       <template #cell-ref="{ row }">
         <span class="pv__nowrap">{{ formatYearMonth(row.payment.referenceMonth) }}</span>
       </template>
+      <template #cell-tipo="{ row }">
+        <span class="pv__method">
+          <StatusChip :tone="kindTone(row.payment.kind)" :dot="false">{{
+            PAYMENT_KIND_LABEL[row.payment.kind]
+          }}</StatusChip>
+          <span v-if="row.payment.kind === 'advance'" class="pv__agreement pv__left">{{
+            advanceProgress(row.payment)
+          }}</span>
+        </span>
+      </template>
+      <template #cell-valor="{ row }">
+        <span :class="{ 'is-minus': row.payment.kind === 'deduction' }">{{
+          formatSigned(row.payment)
+        }}</span>
+      </template>
       <template #cell-forma="{ row }">
         <span class="pv__method">
-          <StatusChip tone="neutral" :dot="false">{{
+          <span v-if="!row.payment.method" class="pv__none">—</span>
+          <StatusChip v-else tone="neutral" :dot="false">{{
             PAYMENT_METHOD_LABEL[row.payment.method]
           }}</StatusChip>
           <span v-if="row.agreement" class="pv__agreement">{{ row.agreement }}</span>
         </span>
       </template>
-      <template #cell-comprovante="{ row }">
-        <button
-          v-if="row.payment.receipt"
-          type="button"
-          class="pv__receipt"
-          :aria-label="`Ver comprovante de ${formatYearMonth(row.payment.referenceMonth)}`"
-          @click="view(row.payment)"
-        >
-          anexado
-        </button>
-        <span v-else class="pv__dash" aria-label="sem comprovante">—</span>
-      </template>
       <template #cell-recebido="{ row }">
-        <StatusChip v-if="row.payment.acknowledgedAt" tone="brand">recebido</StatusChip>
-        <StatusChip v-else tone="amber">aguardando</StatusChip>
+        <span v-if="!handsMoney(row.payment)" class="pv__none">Não se aplica</span>
+        <StatusChip v-else :tone="receivedStatus(row.payment).tone">{{
+          receivedStatus(row.payment).label
+        }}</StatusChip>
       </template>
 
       <template #row-actions="{ row }">
@@ -435,30 +550,36 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
           <p class="pv__card-who">
             <Avatar :name="personOf(row.contract)" :size="28" />
             <strong>{{ personOf(row.contract) }}</strong>
-            <span v-if="row.agreement" class="pv__agreement">· {{ row.agreement }}</span>
           </p>
           <ReceiptStub
             :payment="row.payment"
+            :agreement="row.payment.agreementId ? row.agreement : null"
+            :advance="row.payment.advanceId ? row.agreement : null"
             :can-acknowledge="auth.isWorker"
+            :can-manage="canManage(row)"
             :busy="busyId === row.payment.id"
             @acknowledge="acknowledge(row)"
+            @confirm="confirm(row)"
+            @edit="edit(row)"
+            @remove="askRemove(row)"
+            @attach="uploadReceipt(row, $event)"
             @view="view(row.payment)"
           />
         </div>
       </template>
 
-      <template #footer="{ rows: shown }">
+      <template #footer="{ rows: shown, columns: visible }">
         <tr v-if="wide">
-          <td :colspan="firstColspan" class="pv__foot-label">
-            Total · {{ shown.length === 1 ? "1 pagamento" : `${shown.length} pagamentos` }}
+          <td :colspan="footerSpans(visible)[0]" class="pv__foot-label">
+            Total pago · {{ shown.length === 1 ? "1 lançamento" : `${shown.length} lançamentos` }}
           </td>
           <td class="pv__foot-sum mono">{{ formatCents(paymentTotals(shown).cents) }}</td>
-          <td :colspan="restColspan" class="pv__foot-ack">
-            {{ paymentTotals(shown).acknowledged }} de {{ shown.length }} com “recebi”
+          <td :colspan="footerSpans(visible)[1]" class="pv__foot-ack">
+            {{ paymentTotals(shown).acknowledged }} de {{ paymentTotals(shown).money }} com “recebi”
           </td>
         </tr>
         <p v-else class="pv__foot-card">
-          <span class="label">Total</span>
+          <span class="label">Total pago</span>
           <span class="mono">{{ formatCents(paymentTotals(shown).cents) }}</span>
         </p>
       </template>
@@ -473,7 +594,7 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
           >
           <template v-if="canRegister" #actions>
             <Button to="/pagamentos/novo" variant="primary" icon="wallet-plus"
-              >registrar pagamento</Button
+              >Registrar pagamento</Button
             >
           </template>
         </EmptyState>
@@ -489,16 +610,31 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
       :accept="RECEIPT_MIME_TYPES.join(',')"
       @change="onFile"
     />
-    <ReceiptViewer v-model:open="viewerOpen" :payment="viewing" />
+    <ReceiptViewer
+      v-model:open="viewerOpen"
+      :payment="viewing"
+      :can-replace="
+        auth.isEmployer && rows.some((r) => r.payment.id === viewing?.id && canManage(r))
+      "
+      :replacing="!!viewing && busyId === viewing.id"
+      @replace="replaceViewed"
+    />
+    <PaymentEditSheet
+      v-if="auth.isEmployer"
+      v-model:open="editOpen"
+      :payment="editing?.payment ?? null"
+      :subtitle="editing ? personOf(editing.contract) : undefined"
+      @saved="onSaved"
+    />
     <ConfirmDialog
       v-model:open="removeOpen"
-      title="Remover pagamento?"
+      :title="removing ? `Remover ${kindNoun(removing.payment)}?` : 'Remover?'"
       :message="
         removing
-          ? `O pagamento de ${formatCents(removing.payment.amountCents)} para ${removing.contract.workerName} e o comprovante saem do histórico.`
+          ? `O lançamento de ${formatCents(removing.payment.amountCents)} para ${removing.contract.workerName}${removing.payment.receipt ? ' e o comprovante saem' : ' sai'} do histórico.`
           : undefined
       "
-      confirm-label="remover"
+      confirm-label="Remover"
       :loading="!!removing && busyId === removing.payment.id"
       @confirm="confirmRemove"
     />
@@ -529,7 +665,7 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
 }
 
 .pv__note {
-  max-width: 28ch;
+  max-width: 20ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -544,6 +680,7 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
 }
 
 .pv__agreement {
+  display: block;
   max-width: 22ch;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -552,29 +689,23 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
   color: var(--ink-2);
 }
 
-.pv__receipt {
-  min-height: 32px;
-  padding: 0 var(--s-2);
-  border-radius: var(--r-1);
-  font-size: var(--t-14);
-  color: var(--ink);
-  text-decoration: underline;
-  text-decoration-color: var(--rule);
-  text-underline-offset: 3px;
+.pv__left {
+  max-width: 18ch;
+  white-space: normal;
+  color: var(--amber-ink);
 }
 
-.pv__receipt:hover {
-  background: var(--surface-2);
-  text-decoration-color: currentColor;
+.pv__none {
+  font-size: var(--t-12);
+  color: var(--ink-2);
+}
+
+.is-minus {
+  color: var(--coral-ink);
 }
 
 .pv__nowrap {
   white-space: nowrap;
-}
-
-.pv__dash {
-  font-size: var(--t-12);
-  color: var(--ink-3);
 }
 
 .pv__card {

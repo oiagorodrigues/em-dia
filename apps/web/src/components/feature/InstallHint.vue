@@ -15,9 +15,9 @@ async function onInstall(): Promise<void> {
   <aside v-if="showHint" class="hint" aria-label="Instalar o app">
     <Icon name="install" :size="18" />
     <p class="hint__text">Coloque o <strong>em dia</strong> na tela inicial e abra como app.</p>
-    <button v-if="canPrompt" type="button" class="hint__go" @click="onInstall">instalar</button>
+    <button v-if="canPrompt" type="button" class="hint__go" @click="onInstall">Instalar</button>
     <RouterLink v-else to="/perfil#instalar" class="hint__go" @click="dismissHint"
-      >como?</RouterLink
+      >Como?</RouterLink
     >
     <button type="button" class="hint__x" aria-label="Dispensar dica" @click="dismissHint">
       <Icon name="close" :size="16" />

@@ -2,11 +2,13 @@
 import { createAgreementSchema, formatCents, formatYearMonth, type Agreement } from "@emdia/shared";
 import { computed, ref } from "vue";
 import { agreementsApi, errorMessage } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import Button from "@/components/ui/Button.vue";
 import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
 import DataTable from "@/components/ui/DataTable.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import Field from "@/components/ui/Field.vue";
+import Icon from "@/components/ui/Icon.vue";
 import MoneyInput from "@/components/ui/MoneyInput.vue";
 import MonthField from "@/components/ui/MonthField.vue";
 import Select from "@/components/ui/Select.vue";
@@ -16,7 +18,7 @@ import TableActions from "@/components/ui/TableActions.vue";
 import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
 import { useContract } from "@/composables/contractContext.ts";
 import { useForm } from "@/composables/form.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import {
   agreementProgress,
@@ -36,8 +38,10 @@ const { contract, month, currentMonth } = useContract();
 
 const list = useResource(
   () => contract.value.id,
-  (id) => agreementsApi.list(id).then((r) => r.agreements),
+  queryKeys.agreements,
+  (id) => agreementsApi.list(id, { archived: true }).then((r) => r.agreements),
 );
+const invalidate = useInvalidate();
 
 const writable = computed(() => isWritable(contract.value));
 const canCreate = computed(() => auth.isEmployer && writable.value);
@@ -54,6 +58,7 @@ const STATE_OPTIONS: { value: "" | AgreementState; label: string }[] = [
   { value: "running", label: "Em andamento" },
   { value: "settled", label: "Quitados" },
   { value: "cancelled", label: "Cancelados" },
+  { value: "removed", label: "Removidos" },
 ];
 
 const columns: Column<Agreement>[] = [
@@ -96,7 +101,7 @@ const columns: Column<Agreement>[] = [
   {
     key: "falta",
     label: "Falta",
-    value: (a) => (a.cancelledAt ? 0 : a.remainingCents),
+    value: (a) => (isClosed(a) ? 0 : a.remainingCents),
     sortable: true,
     sortFirst: "desc",
     align: "right",
@@ -124,12 +129,23 @@ const situacao = computed({
   set: (v: string) => (state.filters.situacao = v),
 });
 
+/** Removed agreements only show up when the "Removidos" filter asks for them. */
+const rows = computed(() => {
+  const all = list.data.value ?? [];
+  return situacao.value === "removed" ? all : all.filter((a) => !a.archivedAt);
+});
+
 function filter(a: Agreement): boolean {
   return !state.filters.situacao || agreementStatus(a).state === state.filters.situacao;
 }
 
+function isClosed(a: Agreement): boolean {
+  return !!a.cancelledAt || !!a.archivedAt;
+}
+
 function replace(next: Agreement): void {
   list.mutate((l = []) => l.map((a) => (a.id === next.id ? next : a)));
+  void invalidate.records(contract.value.id, list);
 }
 
 const busyId = ref<string | null>(null);
@@ -145,25 +161,43 @@ async function accept(a: Agreement): Promise<void> {
   }
 }
 
-const cancelling = ref<Agreement | null>(null);
-const cancelOpen = ref(false);
-const cancelBusy = ref(false);
-function askCancel(a: Agreement): void {
-  cancelling.value = a;
-  cancelOpen.value = true;
-}
-async function confirmCancel(): Promise<void> {
-  const a = cancelling.value;
-  if (!a) return;
-  cancelBusy.value = true;
+async function restore(a: Agreement): Promise<void> {
+  busyId.value = a.id;
   try {
-    replace((await agreementsApi.cancel(contract.value.id, a.id)).agreement);
-    cancelOpen.value = false;
-    toast.success("Acordo cancelado. As parcelas já abatidas continuam nos pagamentos.");
+    replace((await agreementsApi.restore(contract.value.id, a.id)).agreement);
+    toast.success("Acordo restaurado.");
   } catch (e) {
     toast.error(errorMessage(e));
   } finally {
-    cancelBusy.value = false;
+    busyId.value = null;
+  }
+}
+
+const removing = ref<Agreement | null>(null);
+const removeOpen = ref(false);
+const removeBusy = ref(false);
+function askRemove(a: Agreement): void {
+  removing.value = a;
+  removeOpen.value = true;
+}
+const removeMessage = computed(() =>
+  removing.value && removing.value.settledCents > 0
+    ? "As parcelas já abatidas saem dos pagamentos e do total pago. Dá para restaurar depois em Situação → Removidos."
+    : "Dá para restaurar depois em Situação → Removidos.",
+);
+async function confirmRemove(): Promise<void> {
+  const a = removing.value;
+  if (!a) return;
+  removeBusy.value = true;
+  try {
+    await agreementsApi.remove(contract.value.id, a.id);
+    await invalidate.records(contract.value.id);
+    removeOpen.value = false;
+    toast.undoable("Acordo removido.", () => void restore(a));
+  } catch (e) {
+    toast.error(errorMessage(e));
+  } finally {
+    removeBusy.value = false;
   }
 }
 
@@ -178,6 +212,15 @@ function actionsFor(a: Agreement): { inline: InlineAction[]; menu: MenuItem[] } 
   const status = agreementStatus(a);
   const inline: InlineAction[] = [];
   const menu: MenuItem[] = [];
+  if (auth.isEmployer && writable.value && status.state === "removed") {
+    inline.push({
+      label: "Restaurar",
+      icon: "undo",
+      loading: busyId.value === a.id,
+      onClick: () => void restore(a),
+    });
+    return { inline, menu };
+  }
   if (auth.isWorker && status.state === "pending" && writable.value)
     inline.push({
       label: "Concordo",
@@ -186,20 +229,20 @@ function actionsFor(a: Agreement): { inline: InlineAction[]; menu: MenuItem[] } 
       loading: busyId.value === a.id,
       onClick: () => void accept(a),
     });
-  if (auth.isEmployer && writable.value && isOpenAgreement(a)) {
+  if (auth.isEmployer && writable.value && isOpenAgreement(a))
     inline.push({
       label: `Abater parcela de ${formatCents(nextInstallmentCents(a))}`,
       icon: "wallet-plus",
       tone: "brand",
       to: payLink(a),
     });
+  if (auth.isEmployer && writable.value)
     menu.push({
-      label: "Cancelar acordo",
+      label: "Remover acordo",
       icon: "trash",
       danger: true,
-      onSelect: () => askCancel(a),
+      onSelect: () => askRemove(a),
     });
-  }
   return { inline, menu };
 }
 
@@ -231,6 +274,7 @@ function onCreate(): void {
   void submit(async (data) => {
     const { agreement } = await agreementsApi.create(contract.value.id, data);
     list.mutate((l = []) => [agreement, ...l]);
+    void invalidate.records(contract.value.id, list);
     formOpen.value = false;
     toast.success(
       contract.value.workerId
@@ -265,12 +309,14 @@ const totals = computed(() => {
       title="Não deu para carregar os acordos."
     >
       {{ list.error.value.message }}
-      <template #actions><Button @click="list.reload">Tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="list.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <DataTable
       v-else
-      :rows="list.data.value ?? []"
+      :rows="rows"
       :columns="columns"
       :row-key="(a) => a.id"
       :state="state"
@@ -295,8 +341,15 @@ const totals = computed(() => {
 
       <template #empty>
         <EmptyState title="Nenhum acordo ainda.">
-          Quando a profissional paga algo com trabalho (uma mesa comprada da casa, um adiantamento
-          grande), o acordo guarda o total e cada parcela abatida no pagamento do mês.
+          <template #mark><Icon name="handshake" :size="32" /></template>
+          <template v-if="auth.isEmployer"
+            >Para quando a profissional paga algo com trabalho, como um adiantamento. Você abate uma
+            parte em cada pagamento.</template
+          >
+          <template v-else
+            >Quando você pagar algo com trabalho, como um adiantamento, o acordo aparece
+            aqui.</template
+          >
         </EmptyState>
       </template>
 
@@ -312,7 +365,7 @@ const totals = computed(() => {
             :aria-label="`${agreementProgress(row)}% abatido`"
             ><span
               class="ag__fill"
-              :class="{ 'is-off': row.cancelledAt }"
+              :class="{ 'is-off': isClosed(row) }"
               :style="{ width: `${agreementProgress(row)}%` }"
           /></span>
         </div>
@@ -325,7 +378,7 @@ const totals = computed(() => {
       </template>
 
       <template #cell-falta="{ row }">
-        <span v-if="row.cancelledAt" class="ag__muted">—</span>
+        <span v-if="isClosed(row)" class="ag__muted">—</span>
         <span v-else :class="{ 'is-amber': row.remainingCents > 0 }">{{
           formatCents(row.remainingCents)
         }}</span>
@@ -354,7 +407,7 @@ const totals = computed(() => {
           <span class="ag__bar" aria-hidden="true"
             ><span
               class="ag__fill"
-              :class="{ 'is-off': row.cancelledAt }"
+              :class="{ 'is-off': isClosed(row) }"
               :style="{ width: `${agreementProgress(row)}%` }"
           /></span>
           <dl class="ag__nums">
@@ -364,7 +417,7 @@ const totals = computed(() => {
             </div>
             <div>
               <dt>Falta</dt>
-              <dd class="mono">{{ row.cancelledAt ? "—" : formatCents(row.remainingCents) }}</dd>
+              <dd class="mono">{{ isClosed(row) ? "—" : formatCents(row.remainingCents) }}</dd>
             </div>
             <div>
               <dt>Total</dt>
@@ -450,13 +503,13 @@ const totals = computed(() => {
     </Sheet>
 
     <ConfirmDialog
-      v-model:open="cancelOpen"
-      :title="`Cancelar o acordo ${cancelling?.description ?? ''}?`"
-      message="As parcelas já abatidas continuam nos pagamentos. O que falta deixa de ser cobrado."
-      confirm-label="Cancelar acordo"
+      v-model:open="removeOpen"
+      :title="`Remover o acordo ${removing?.description ?? ''}?`"
+      :message="removeMessage"
+      confirm-label="Remover acordo"
       cancel-label="Voltar"
-      :loading="cancelBusy"
-      @confirm="confirmCancel"
+      :loading="removeBusy"
+      @confirm="confirmRemove"
     />
   </div>
 </template>

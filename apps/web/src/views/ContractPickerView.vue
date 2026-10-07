@@ -3,6 +3,7 @@ import { OCCUPATION_LABEL } from "@emdia/shared";
 import { computed, watch } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { contractsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import PageHeader from "@/components/layout/PageHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
@@ -19,7 +20,8 @@ const router = useRouter();
 const routeName = computed(() => (tab === "card" ? "contract-card" : "contract-payments"));
 
 const { data, error, loading, reload } = useResource(
-  () => 0,
+  () => null,
+  queryKeys.contracts,
   () => contractsApi.list().then((r) => r.contracts),
 );
 
@@ -34,12 +36,16 @@ const sorted = computed(() =>
 );
 
 // With a single contract there is nothing to choose; go straight to it.
-watch(data, (list) => {
-  const active = list?.filter((c) => c.status === "active") ?? [];
-  if (list && active.length === 1 && list.length === 1) {
-    void router.replace({ name: routeName.value, params: { id: active[0]!.id } });
-  }
-});
+watch(
+  data,
+  (list) => {
+    const active = list?.filter((c) => c.status === "active") ?? [];
+    if (list && active.length === 1 && list.length === 1) {
+      void router.replace({ name: routeName.value, params: { id: active[0]!.id } });
+    }
+  },
+  { immediate: true },
+);
 
 const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
 </script>
@@ -48,13 +54,18 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
   <div class="pk">
     <PageHeader :title="title" :subtitle="auth.isEmployer ? 'De quem?' : 'De qual casa?'" />
 
-    <div v-if="loading || (data && data.length === 1)" aria-busy="true">
-      <Skeleton h="72px" />
-      <Skeleton h="72px" gap="8px" />
-    </div>
+    <ul v-if="loading || (data && data.length === 1)" class="pk__list" aria-busy="true">
+      <li v-for="i in 3" :key="i" class="pk__item">
+        <span class="pk__who pk__skel">
+          <Skeleton :w="['45%', '38%', '52%'][i - 1]" h="16px" />
+          <Skeleton w="30%" h="12px" />
+        </span>
+        <Skeleton w="18px" h="18px" />
+      </li>
+    </ul>
     <EmptyState v-else-if="error" tone="error" title="Não deu para carregar.">
       {{ error.message }}
-      <template #actions><Button @click="reload">tentar de novo</Button></template>
+      <template #actions><Button icon="refresh" @click="reload">Tentar de novo</Button></template>
     </EmptyState>
     <EmptyState
       v-else-if="sorted.length === 0"
@@ -63,10 +74,10 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
       "
     >
       <template #actions>
-        <Button v-if="auth.isEmployer" to="/equipe/novo" variant="primary" icon="plus"
-          >adicionar profissional</Button
+        <Button v-if="auth.isEmployer" to="/equipe/novo" variant="primary" icon="user-plus"
+          >Adicionar profissional</Button
         >
-        <Button v-else to="/entrar-no-vinculo" variant="primary" icon="key">tenho um código</Button>
+        <Button v-else to="/entrar-no-vinculo" variant="primary" icon="key">Tenho um código</Button>
       </template>
     </EmptyState>
     <ul v-else class="pk__list">
@@ -82,7 +93,7 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
               >{{ OCCUPATION_LABEL[c.occupation] }} · {{ c.householdName }}</span
             >
           </span>
-          <Stamp v-if="c.status === 'ended'" text="encerrado" tone="ink" size="sm" />
+          <Stamp v-if="c.status === 'ended'" text="Encerrado" tone="ink" size="sm" />
           <Icon name="chevron-right" />
         </RouterLink>
       </li>
@@ -135,6 +146,10 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
   flex: 1;
   display: grid;
   min-width: 0;
+}
+
+.pk__skel {
+  gap: 6px;
 }
 
 .pk__name {

@@ -1,7 +1,7 @@
 import type {
-  AdjustmentKind,
   EntryStatus,
   IsoDate,
+  PaymentKind,
   PaymentMethod,
   Role,
   Schedule,
@@ -87,12 +87,6 @@ interface SeedContract {
   visits?: IsoDate[];
   /** Expected days that were not plain worked days. */
   exceptions?: Record<IsoDate, DayPlan>;
-  adjustments?: {
-    month: YearMonth;
-    kind: AdjustmentKind;
-    amountCents: number;
-    description: string;
-  }[];
   agreements?: {
     key: string;
     description: string;
@@ -106,9 +100,14 @@ interface SeedContract {
   payments: {
     month: YearMonth;
     paidOn: IsoDate;
-    method: PaymentMethod;
+    /** Defaults to "pay". */
+    kind?: PaymentKind;
+    method: PaymentMethod | null;
     amountCents?: number;
+    /** Names an adiantamento so later entries can abate it. */
+    key?: string;
     agreement?: string;
+    advance?: string;
     note?: string;
     receipt?: boolean;
     acknowledgedAt?: string;
@@ -140,21 +139,6 @@ const MARIA_CONTRACT: SeedContract = {
     "2026-08-18": { status: "absent", note: "Não avisou" },
     "2026-09-22": { status: "excused", note: "Consulta médica" },
   },
-  adjustments: [
-    {
-      month: "2026-08",
-      kind: "transport",
-      amountCents: 4000,
-      description: "Vale-transporte de agosto",
-    },
-    {
-      month: "2026-09",
-      kind: "bonus",
-      amountCents: 5000,
-      description: "Faxina pesada depois da festa",
-    },
-    { month: "2026-09", kind: "advance", amountCents: 10000, description: "Vale pedido no dia 15" },
-  ],
   agreements: [
     {
       key: "mesa",
@@ -169,10 +153,45 @@ const MARIA_CONTRACT: SeedContract = {
   payments: [
     {
       month: "2026-08",
+      paidOn: "2026-08-04",
+      kind: "transport",
+      method: "cash",
+      amountCents: 4000,
+      note: "Vale-transporte de agosto",
+      acknowledgedAt: "2026-08-04T19:00:00.000Z",
+    },
+    {
+      month: "2026-08",
       paidOn: "2026-09-04",
       method: "pix",
       receipt: true,
       acknowledgedAt: "2026-09-04T19:30:00.000Z",
+    },
+    {
+      month: "2026-09",
+      paidOn: "2026-09-15",
+      kind: "advance",
+      method: "pix",
+      amountCents: 36000,
+      key: "vale",
+      note: "Vale pedido no dia 15",
+      acknowledgedAt: "2026-09-15T21:00:00.000Z",
+    },
+    {
+      month: "2026-09",
+      paidOn: "2026-09-19",
+      kind: "bonus",
+      method: "cash",
+      amountCents: 5000,
+      note: "Faxina pesada depois da festa",
+    },
+    {
+      month: "2026-09",
+      paidOn: "2026-09-25",
+      method: "compensation",
+      amountCents: 18000,
+      advance: "vale",
+      note: "Diária de 25/09 abatida do adiantamento",
     },
     {
       month: "2026-09",
@@ -209,16 +228,24 @@ const OTHER_CONTRACTS: SeedContract[] = [
       "2026-09-16": { status: "absent", note: "Não veio e não avisou" },
       "2026-10-02": { status: "excused", note: "Filho doente" },
     },
-    adjustments: [
-      {
-        month: "2026-09",
-        kind: "transport",
-        amountCents: 22000,
-        description: "Vale-transporte de setembro",
-      },
-    ],
     payments: [
       { month: "2026-08", paidOn: "2026-09-04", method: "transfer" },
+      {
+        month: "2026-09",
+        paidOn: "2026-09-01",
+        kind: "transport",
+        method: "transfer",
+        amountCents: 22000,
+        note: "Vale-transporte de setembro",
+      },
+      {
+        month: "2026-09",
+        paidOn: "2026-09-30",
+        kind: "deduction",
+        method: null,
+        amountCents: 19200,
+        note: "INSS (parte da profissional)",
+      },
       { month: "2026-09", paidOn: "2026-10-05", method: "transfer" },
     ],
   },
@@ -282,15 +309,15 @@ const OTHER_CONTRACTS: SeedContract[] = [
       "2026-09-07": { status: "holiday", note: "Independência" },
       "2026-09-13": { status: "day_off", note: "Folga combinada" },
     },
-    adjustments: [
+    payments: [
       {
         month: "2026-08",
+        paidOn: "2026-08-21",
         kind: "bonus",
+        method: "pix",
         amountCents: 15000,
-        description: "Noite extra no hospital",
+        note: "Noite extra no hospital",
       },
-    ],
-    payments: [
       { month: "2026-08", paidOn: "2026-09-05", method: "pix" },
       { month: "2026-09", paidOn: "2026-10-05", method: "pix" },
     ],
@@ -372,7 +399,6 @@ async function balanceFor(
     contract,
     month,
     entries: await r.entries.listByMonth(contract.id, month),
-    adjustments: await r.adjustments.listByMonth(contract.id, month),
     payments: await r.payments.listByMonth(contract.id, month),
     today,
   }).balanceCents;
@@ -480,15 +506,6 @@ async function seed(): Promise<void> {
         updatedAt: "2026-10-01T12:00:00.000Z",
       });
     }
-    for (const a of seed.adjustments ?? []) {
-      await r.adjustments.insert({
-        id: newId(),
-        contractId,
-        ...a,
-        createdBy: anaId,
-        createdAt: `${a.month}-15T12:00:00.000Z`,
-      });
-    }
     const agreementIds = new Map<string, string>();
     for (const a of seed.agreements ?? []) {
       const id = newId();
@@ -502,6 +519,7 @@ async function seed(): Promise<void> {
         startMonth: a.startMonth,
         acceptedAt: a.acceptedAt,
         cancelledAt: null,
+        archivedAt: null,
         createdBy: anaId,
         createdAt: a.createdAt,
       });
@@ -518,18 +536,25 @@ async function seed(): Promise<void> {
         );
       }
     }
+    const advanceIds = new Map<string, string>();
     for (const p of seed.payments) {
       const id = newId();
+      if (p.key) advanceIds.set(p.key, id);
       const createdAt = `${p.paidOn}T15:00:00.000Z`;
+      const kind = p.kind ?? "pay";
       await r.payments.insert({
         id,
         contractId,
         referenceMonth: p.month,
         paidOn: p.paidOn,
         amountCents: p.amountCents ?? (await balanceFor(r, located, p.month, today)),
+        kind,
         method: p.method,
         note: p.note ?? null,
         agreementId: p.agreement ? (agreementIds.get(p.agreement) ?? null) : null,
+        advanceId: p.advance ? (advanceIds.get(p.advance) ?? null) : null,
+        settledCents: null,
+        remainingCents: null,
         receipt: p.receipt
           ? {
               mimeType: "image/png",
@@ -540,6 +565,8 @@ async function seed(): Promise<void> {
           : null,
         receiptFile: p.receipt ? receiptFile : null,
         acknowledgedAt: p.acknowledgedAt ?? null,
+        acknowledgedBy: p.acknowledgedAt ? linkedWorkerId : null,
+        acknowledgedByRole: p.acknowledgedAt && linkedWorkerId ? "worker" : null,
         createdBy: anaId,
         createdAt,
       });

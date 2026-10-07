@@ -8,7 +8,7 @@ const {
   title,
   subtitle,
   back,
-  backLabel = "voltar",
+  backLabel = "Voltar",
 } = defineProps<{
   title: string;
   subtitle?: string;

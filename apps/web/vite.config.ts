@@ -5,6 +5,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import { defineConfig } from "vite-plus";
 
 const INK = "#15171C";
+const API_TARGET = `http://localhost:${process.env.API_PORT ?? "3000"}`;
 const PAPER = "#FAF7F2";
 
 export default defineConfig({
@@ -86,13 +87,13 @@ export default defineConfig({
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
   },
   server: {
-    port: 5173,
+    port: Number(process.env.WEB_PORT ?? 5173),
     strictPort: true,
-    proxy: { "/api": { target: "http://localhost:3000", changeOrigin: false } },
+    proxy: { "/api": { target: API_TARGET, changeOrigin: false } },
   },
   preview: {
     port: 4173,
-    proxy: { "/api": { target: "http://localhost:3000", changeOrigin: false } },
+    proxy: { "/api": { target: API_TARGET, changeOrigin: false } },
   },
   test: {
     environment: "happy-dom",

@@ -7,6 +7,7 @@ import CodeBoxes from "@/components/feature/CodeBoxes.vue";
 import InviteSignedInNotice from "@/components/feature/InviteSignedInNotice.vue";
 import Button from "@/components/ui/Button.vue";
 import Stamp from "@/components/ui/Stamp.vue";
+import { useInvalidate } from "@/composables/resource.ts";
 import { firstName } from "@/lib/format.ts";
 import { INVITE_ALPHABET, INVITE_LENGTH, normalizeInviteCode } from "@/lib/invite.ts";
 
@@ -20,6 +21,7 @@ const fromLink = typeof route.query.convite === "string" ? route.query.convite :
 const error = ref<string | null>(null);
 const submitting = ref(false);
 const joined = ref<Contract | null>(null);
+const invalidate = useInvalidate();
 
 const complete = computed(() => code.value.replace(/\s/g, "").length === INVITE_LENGTH);
 
@@ -38,6 +40,7 @@ async function join(): Promise<void> {
   submitting.value = true;
   try {
     joined.value = (await contractsApi.join(clean)).contract;
+    void invalidate.all();
   } catch (e) {
     error.value =
       e instanceof ApiError && e.code === "NOT_FOUND"
@@ -58,7 +61,7 @@ async function join(): Promise<void> {
         {{ OCCUPATION_LABEL[joined.occupation] }} em {{ joined.householdName }}. A partir de agora
         você bate o ponto pelo celular e acompanha seus pagamentos.
       </p>
-      <Button variant="primary" icon="clock" @click="router.replace('/')">ir bater o ponto</Button>
+      <Button variant="primary" icon="clock" @click="router.replace('/')">Ir bater o ponto</Button>
     </template>
     <template v-else>
       <h1 class="page-title">Entrar no vínculo</h1>
@@ -77,7 +80,7 @@ async function join(): Promise<void> {
         />
         <p v-if="error" id="join-err" class="join__err" role="alert">{{ error }}</p>
         <Button type="submit" variant="primary" :disabled="!complete" :loading="submitting"
-          >entrar</Button
+          >Entrar</Button
         >
       </form>
     </template>

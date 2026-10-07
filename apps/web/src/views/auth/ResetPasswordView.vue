@@ -35,21 +35,21 @@ function onSubmit(): void {
       title="Link incompleto"
       lede="Esse link de nova senha não tem o código. Peça outro."
     />
-    <Button to="/esqueci-senha" variant="primary" block>pedir novo link</Button>
+    <Button to="/esqueci-senha" variant="primary" block>Pedir novo link</Button>
   </template>
   <template v-else-if="done">
     <AuthHeader
       title="Senha nova salva"
       lede="Por segurança, saímos de todos os aparelhos. Entre com a senha nova."
     />
-    <Button to="/entrar" variant="primary" block>entrar</Button>
+    <Button to="/entrar" variant="primary" block>Entrar</Button>
   </template>
   <template v-else>
     <AuthHeader title="Nova senha" lede="Escolha uma senha que você não usa em outro lugar." />
     <form class="stack" novalidate @submit.prevent="onSubmit">
       <p v-if="formError || errors.token" class="form-error" role="alert">
         {{ formError ?? "Link inválido ou expirado." }}
-        <RouterLink v-if="errors.token || formError" to="/esqueci-senha">pedir outro</RouterLink>
+        <RouterLink v-if="errors.token || formError" to="/esqueci-senha">Pedir outro</RouterLink>
       </p>
       <Field
         v-slot="{ id, invalid, describedBy }"
@@ -66,7 +66,7 @@ function onSubmit(): void {
           @update:model-value="clearError('password')"
         />
       </Field>
-      <Button type="submit" variant="primary" block :loading="submitting">salvar senha</Button>
+      <Button type="submit" variant="primary" block :loading="submitting">Salvar senha</Button>
     </form>
   </template>
 </template>

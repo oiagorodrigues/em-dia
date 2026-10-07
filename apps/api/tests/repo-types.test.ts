@@ -1,6 +1,5 @@
 import type {
   ActivityItem,
-  Adjustment,
   Agreement,
   Contract,
   Household,
@@ -21,7 +20,6 @@ type Result<F> = F extends (...args: never[]) => Promise<infer R> ? R : never;
 const proofs = [
   same<Result<Repos["households"]["findById"]>, Household | undefined>(true),
   same<Result<Repos["entries"]["listByMonth"]>, WorkEntry[]>(true),
-  same<Result<Repos["adjustments"]["listByMonth"]>, Adjustment[]>(true),
   same<Result<Repos["agreements"]["list"]>, Agreement[]>(true),
   same<Result<Repos["audit"]["listByContract"]>, ActivityItem[]>(true),
   same<NonNullable<Result<Repos["contracts"]["findById"]>>["contract"], Contract>(true),

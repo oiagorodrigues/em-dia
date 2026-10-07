@@ -88,13 +88,13 @@ export function todayInfo(item: DashboardItem, today: IsoDate): TodayInfo {
   const expected = item.summary.expectedDates.includes(today);
   const e = item.today;
   if (e && e.status === "worked") {
-    if (e.checkOut) return { expected, state: "done", text: `saiu ${e.checkOut}` };
-    if (e.checkIn) return { expected, state: "in", text: `entrou ${e.checkIn}` };
+    if (e.checkOut) return { expected, state: "done", text: `Saiu ${e.checkOut}` };
+    if (e.checkIn) return { expected, state: "in", text: `Entrou ${e.checkIn}` };
   }
-  if (e && e.status === "absent") return { expected, state: "absent", text: "faltou" };
+  if (e && e.status === "absent") return { expected, state: "absent", text: "Faltou" };
   if (e && e.status !== "worked")
-    return { expected, state: "off", text: e.status === "holiday" ? "feriado" : "folga" };
-  if (expected) return { expected, state: "waiting", text: "ainda não chegou" };
+    return { expected, state: "off", text: e.status === "holiday" ? "Feriado" : "Folga" };
+  if (expected) return { expected, state: "waiting", text: "Ainda não chegou" };
   return { expected, state: "none", text: "—" };
 }
 

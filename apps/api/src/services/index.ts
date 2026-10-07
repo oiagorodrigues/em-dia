@@ -5,7 +5,6 @@ import type { Mailer } from "../lib/mailer.ts";
 import { createBlobStore } from "../lib/blob-store.ts";
 import { createFileStore, type FileStore } from "../lib/storage.ts";
 import { createRepos, type Database } from "../repos/index.ts";
-import { adjustmentsService } from "./adjustments.ts";
 import { agreementsService } from "./agreements.ts";
 import { authService } from "./auth.ts";
 import type { ServiceDeps } from "./context.ts";
@@ -54,7 +53,6 @@ export function createServices({
     households: householdsService(deps),
     contracts: contractsService(deps),
     entries: entriesService(deps),
-    adjustments: adjustmentsService(deps),
     payments: paymentsService(deps),
     agreements: agreementsService(deps),
     reports: reportsService(deps),

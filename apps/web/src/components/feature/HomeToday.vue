@@ -5,6 +5,7 @@ import { RouterLink } from "vue-router";
 import { entriesApi, errorMessage } from "@/api";
 import Avatar from "@/components/ui/Avatar.vue";
 import Button from "@/components/ui/Button.vue";
+import Skeleton from "@/components/ui/Skeleton.vue";
 import { isWritable } from "@/lib/contract.ts";
 import { clockStateOf } from "@/lib/entry.ts";
 import { formatDayMonth, WEEKDAY_LONG } from "@/lib/format.ts";
@@ -12,7 +13,11 @@ import { teamStatus, todayInfo } from "@/lib/team.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { weekdayOf } from "@emdia/shared";
 
-const { items, today } = defineProps<{ items: readonly DashboardItem[]; today: IsoDate }>();
+const {
+  items,
+  today,
+  loading = false,
+} = defineProps<{ items: readonly DashboardItem[]; today: IsoDate; loading?: boolean }>();
 const emit = defineEmits<{ reload: [] }>();
 
 const toast = useToastStore();
@@ -58,7 +63,17 @@ async function clock(item: DashboardItem, action: "in" | "out"): Promise<void> {
       <h2 id="ht-title" class="section-title">Hoje</h2>
       <p class="ht__date">{{ WEEKDAY_LONG[weekdayOf(today)] }}, {{ formatDayMonth(today) }}</p>
     </header>
-    <p v-if="rows.length === 0" class="ht__empty">Ninguém previsto para hoje.</p>
+    <ul v-if="loading" class="ht__list" aria-busy="true">
+      <li v-for="i in 2" :key="i" class="ht__row">
+        <Skeleton w="36px" h="36px" round />
+        <span class="ht__who ht__skel">
+          <Skeleton :w="i === 1 ? '55%' : '45%'" h="14px" />
+          <Skeleton w="35%" h="12px" />
+        </span>
+        <Skeleton w="96px" h="44px" />
+      </li>
+    </ul>
+    <p v-else-if="rows.length === 0" class="ht__empty">Ninguém previsto para hoje.</p>
     <ul v-else class="ht__list">
       <li v-for="{ item, info, clock: state } in rows" :key="item.contract.id" class="ht__row">
         <Avatar :name="item.contract.workerName" :size="36" />
@@ -127,6 +142,10 @@ async function clock(item: DashboardItem, action: "in" | "out"): Promise<void> {
   flex: 1;
   display: grid;
   min-width: 0;
+}
+
+.ht__skel {
+  gap: 6px;
 }
 
 .ht__name {

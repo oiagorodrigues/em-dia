@@ -3,11 +3,11 @@ import type { BoardCellKind } from "@/lib/board.ts";
 import BoardCell from "./BoardCell.vue";
 
 const ITEMS: { kind: BoardCellKind; text: string }[] = [
-  { kind: "worked", text: "trabalhou" },
-  { kind: "absent", text: "falta" },
-  { kind: "soft", text: "justificada, folga ou feriado" },
-  { kind: "missing", text: "previsto sem registro" },
-  { kind: "planned", text: "previsto" },
+  { kind: "worked", text: "Trabalhou" },
+  { kind: "absent", text: "Falta" },
+  { kind: "soft", text: "Justificada, folga ou feriado" },
+  { kind: "missing", text: "Previsto sem registro" },
+  { kind: "planned", text: "Previsto" },
 ];
 </script>
 

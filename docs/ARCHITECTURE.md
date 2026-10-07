@@ -3,7 +3,7 @@
 ## System diagram
 
 ```
-  Browser (PWA, Vue 3.6)                     Server (Node 24)
+  Browser (PWA, Vue 3.5)                     Server (Node 24)
  +-------------------------+   HTTPS    +--------------------------------------+
  | views                   |  /api/v1   | server.ts | vercel.ts  (entries)     |
  |  components/{ui,feature}| ---------> | runtime.ts (wiring, boot checks)     |
@@ -61,8 +61,8 @@ Source is under `apps/web/src`:
 
 `api -> stores -> composables -> components/{ui,feature} -> views`
 
-- `api`: typed fetch client. Holds nothing but request logic and the in-memory access token hook.
-- `stores`: Pinia stores. Call `api`, expose state and actions.
+- `api`: typed fetch client, plus the query cache options and query key factories (`query.ts`, `keys.ts`). Holds nothing but request and cache logic and the in-memory access token hook. The cache itself is Pinia Colada's `_pc_query` Pinia store, installed in `main.ts`.
+- `stores`: Pinia stores. Call `api`, expose state and actions. The auth store empties the query cache on logout through `useQueryCache()` and `clearQueryCache` from `api/query.ts`.
 - `composables`: reusable logic over stores (month navigation, clock, install prompt).
 - `components/ui`: presentational primitives (button, sheet, month switcher). Props in, events out. They never import `stores`, `api` or `pinia`.
 - `components/feature`: domain components (time card, payment stub). May use stores and composables.
@@ -86,7 +86,7 @@ Generated column detail: [generated/db-schema.md](generated/README.md).
 - `households`: owned by an employer user; has a timezone.
 - `contracts`: household + worker (nullable until the invite is used), occupation, pay type, rate in cents, expected times, start and end dates, status, and the agreed schedule: `schedule_kind` (`weekly`, `month_days`, `per_month`, `on_demand`), `schedule_weekdays` (JSON), `every_weeks` (1 to 4), `month_days` (JSON), `visits_per_month`, plus `deduct_absences` (monthly pay only). Schedule logic lives in `packages/shared/src/schedule.ts`; migration 003 converted the old weekday list. Migration 004 added `archived_at` (logical removal), `contact_email` and `contact_phone` (typed by the employer before the worker has an account).
 - `work_entries`: one per contract per date. Status, check-in/out, break, derived minutes, creator, confirmer.
-- `adjustments`: bonus, transport, advance, deduction per contract and month, in cents.
+- `payments.kind` (pay, bonus, transport, advance, deduction) replaces the old `adjustments` table (dropped in migration 0003); `payments.advance_id` links an abatement to its adiantamento.
 - `agreements`: contract, description, total and installment in cents, start month, accepted/cancelled timestamps.
 - `payments`: contract, optional agreement, reference month, paid date, amount in cents, method, receipt metadata (stored filename, mime, size, display name), acknowledged-at.
 - `refresh_tokens`: hashed token, family id, expiry, revoked-at, replaced-by.

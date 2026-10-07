@@ -19,6 +19,7 @@ import Icon from "@/components/ui/Icon.vue";
 import PasswordInput from "@/components/ui/PasswordInput.vue";
 import { useForm } from "@/composables/form.ts";
 import { useInstallPrompt } from "@/composables/install.ts";
+import { useInvalidate } from "@/composables/resource.ts";
 import { useTheme, type ThemeMode } from "@/composables/theme.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
@@ -28,6 +29,8 @@ const toast = useToastStore();
 const router = useRouter();
 const { mode } = useTheme();
 const installer = useInstallPrompt();
+/** Contracts and team lists carry the name, phone and Pix key shown to the other party. */
+const invalidate = useInvalidate();
 
 /* After "sair" or deleting the account the store forgets the user before the route changes,
  * so the page must render (briefly) without one. */
@@ -43,6 +46,7 @@ function saveMe(): void {
   void me.submit(async (data) => {
     const { user: updated } = await meApi.update(data);
     auth.setUser(updated);
+    void invalidate.all();
     toast.success("Dados salvos.");
   }, input);
 }
@@ -53,6 +57,7 @@ function savePix(): void {
     async (data) => {
       const { user: updated } = await meApi.update(data);
       auth.setUser(updated);
+      void invalidate.all();
       toast.success(updated.pixKey ? "Chave Pix salva." : "Chave Pix removida.");
     },
     { pixKey: pix.values.pixKey?.trim() || null },

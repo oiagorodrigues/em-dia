@@ -69,6 +69,11 @@ export function cellKind(
   return "none";
 }
 
+/** Days that open the day editor from the board; outside the contract there is nothing to record. */
+export function dayOpens(cell: Pick<BoardCell, "kind">): boolean {
+  return cell.kind !== "outside";
+}
+
 const KIND_TEXT: Record<Exclude<BoardCellKind, "worked" | "absent" | "soft">, string> = {
   missing: "previsto, sem registro",
   planned: "previsto",
@@ -137,9 +142,9 @@ export function stripDates(month: YearMonth, today: IsoDate): IsoDate[] {
 }
 
 export const BOARD_STATUS_FILTERS = [
-  { value: "", label: "ativos" },
-  { value: "encerrados", label: "encerrados" },
-  { value: "todos", label: "todos" },
+  { value: "", label: "Ativos" },
+  { value: "encerrados", label: "Encerrados" },
+  { value: "todos", label: "Todos" },
 ] as const;
 
 /** "" (default) = ativos. Removed contracts never reach the board. */

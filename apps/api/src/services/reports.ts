@@ -6,6 +6,8 @@ import {
   describeSchedule,
   ENTRY_STATUS_LABEL,
   estimateMonthCost,
+  handsMoney,
+  PAYMENT_KIND_LABEL,
   PAYMENT_METHOD_LABEL,
   formatDuration,
   formatYearMonth,
@@ -28,16 +30,14 @@ export function reportsService(deps: ServiceDeps) {
 
   /** Queries run concurrently: against a remote database each one is a round trip. */
   async function summarize({ contract, timezone }: LocatedContract, month: YearMonth) {
-    const [entries, adjustments, payments] = await Promise.all([
+    const [entries, payments] = await Promise.all([
       repos.entries.listByMonth(contract.id, month),
-      repos.adjustments.listByMonth(contract.id, month),
       repos.payments.listByMonth(contract.id, month),
     ]);
     const summary = computeMonthSummary({
       contract,
       month,
       entries,
-      adjustments,
       payments,
       today: todayIn(timezone),
     });
@@ -72,19 +72,25 @@ export function reportsService(deps: ServiceDeps) {
     ): Promise<{ filename: string; csv: string }> {
       const located = await loadContract(deps, actor, contractId);
       const { contract } = located;
-      const [{ summary, entries, payments: monthPayments }, agreements] = await Promise.all([
-        summarize(located, month),
-        repos.agreements.list(contract.id),
-      ]);
+      const [{ summary, entries, payments: monthPayments }, agreements, advances] =
+        await Promise.all([
+          summarize(located, month),
+          repos.agreements.list(contract.id),
+          repos.payments.listAdvances(contract.id),
+        ]);
       const agreementNames = new Map(agreements.map((a) => [a.id, a.description]));
+      const advanceDates = new Map(advances.map((a) => [a.id, a.paidOn]));
       const payments = [...monthPayments].reverse().map((p) => {
         const agreement = p.agreementId ? agreementNames.get(p.agreementId) : undefined;
-        const method = PAYMENT_METHOD_LABEL[p.method];
+        const advancedOn = p.advanceId ? advanceDates.get(p.advanceId) : undefined;
+        const method = p.method ? PAYMENT_METHOD_LABEL[p.method] : "";
+        const source = agreement ?? (advancedOn ? `adiantamento de ${brDate(advancedOn)}` : null);
         return [
           brDate(p.paidOn),
-          agreement ? `${method}: ${agreement}` : method,
+          PAYMENT_KIND_LABEL[p.kind],
+          source ? `${method}: ${source}` : method,
           centsToDecimal(p.amountCents),
-          p.acknowledgedAt ? "Sim" : "Não",
+          handsMoney(p) ? (p.acknowledgedAt ? "Sim" : "Não") : "",
           p.note ?? "",
         ];
       });
@@ -141,13 +147,20 @@ export function reportsService(deps: ServiceDeps) {
         ["Faltas justificadas", summary.excused],
         ["Valor bruto (R$)", centsToDecimal(summary.grossCents)],
         ["Desconto por faltas (R$)", centsToDecimal(summary.absenceDeductionCents)],
-        ["Ajustes (R$)", centsToDecimal(summary.adjustmentsCents)],
+        [
+          "Gratificações, vale-transporte e descontos (R$)",
+          centsToDecimal(summary.adjustmentsCents),
+        ],
         ["Total devido (R$)", centsToDecimal(summary.dueCents)],
         ["Pago (R$)", centsToDecimal(summary.paidCents)],
         ["Saldo (R$)", centsToDecimal(summary.balanceCents)],
+        [
+          "Adiantamentos ainda a abater (R$)",
+          centsToDecimal(advances.reduce((sum, a) => sum + (a.remainingCents ?? 0), 0)),
+        ],
         [],
         ["Pagamentos"],
-        ["Data", "Forma", "Valor (R$)", "Recebido", "Observação"],
+        ["Data", "Tipo", "Forma", "Valor (R$)", "Recebido", "Observação"],
         ...payments,
       ]);
       return { filename: `extrato-${month}.csv`, csv };

@@ -3,7 +3,9 @@ import { describeSchedule, OCCUPATION_LABEL, type Contract } from "@emdia/shared
 import { computed, nextTick, onBeforeUnmount, reactive, useTemplateRef, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import { contractsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ContactActions from "@/components/feature/ContactActions.vue";
+import ContractTabSkeleton from "@/components/feature/ContractTabSkeleton.vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import Button from "@/components/ui/Button.vue";
 import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
@@ -15,7 +17,7 @@ import Skeleton from "@/components/ui/Skeleton.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import { provideContract, useMonthQuery } from "@/composables/contractContext.ts";
 import { useContractRemoval } from "@/composables/contractRemoval.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { contactChannels, contractStatus, isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
@@ -29,17 +31,24 @@ const auth = useAuthStore();
 const route = useRoute();
 const { month, currentMonth, setMonth } = useMonthQuery();
 
-const { data, error, loading, reload, mutate } = useResource(
+const { data, error, loading, reload, mutate, key } = useResource(
   () => id,
+  queryKeys.contract,
   (cid) => contractsApi.get(cid).then((r) => r.contract),
 );
 
 // Tabs only render once `data` is loaded, so children always see a contract.
 const contract = computed(() => data.value as Contract);
 
+const invalidate = useInvalidate();
+function replaceContract(next: Contract): void {
+  mutate(next);
+  void invalidate.contract(next.id, { key });
+}
+
 const { confirmOpen, removing, restoring, askRemove, confirmRemove, restore } = useContractRemoval(
   data,
-  (next) => mutate(next),
+  replaceContract,
 );
 
 provideContract({
@@ -47,7 +56,7 @@ provideContract({
   month,
   currentMonth,
   setMonth,
-  replaceContract: (next) => mutate(next),
+  replaceContract,
   askRemove,
   restore,
   restoring,
@@ -58,7 +67,6 @@ const tabs = computed(() => {
     { name: "contract-overview", label: "Visão geral" },
     { name: "contract-card", label: "Cartão" },
     { name: "contract-payments", label: "Pagamentos" },
-    { name: "contract-extras", label: "Extras" },
     { name: "contract-agreements", label: "Acordos" },
     { name: "contract-history", label: "Histórico" },
   ];
@@ -80,7 +88,7 @@ const menuItems = computed<MenuItem[]>(() => {
   if (!data.value) return [];
   if (data.value.archivedAt)
     return [{ label: "Restaurar", icon: "undo", onSelect: () => void restore() }];
-  return [{ label: "Remover da equipe", icon: "archive", danger: true, onSelect: askRemove }];
+  return [{ label: "Remover da equipe", icon: "trash", danger: true, onSelect: askRemove }];
 });
 
 const backNav = useBack(auth.isEmployer ? "/equipe" : "/");
@@ -125,10 +133,33 @@ onBeforeUnmount(() => resize.disconnect());
 <template>
   <div class="cv">
     <div v-if="loading && !data" class="cv__head" aria-busy="true">
-      <Skeleton w="30%" h="14px" />
-      <Skeleton w="60%" h="36px" gap="10px" />
-      <Skeleton h="44px" gap="24px" />
-      <Skeleton h="420px" gap="24px" />
+      <div class="pf">
+        <span class="cv__back"><Skeleton w="64px" h="14px" /></span>
+        <div class="pf__row">
+          <Skeleton :w="wide ? '64px' : '48px'" :h="wide ? '64px' : '48px'" round />
+          <div class="pf__id cv__skelid">
+            <Skeleton w="min(320px, 70%)" h="clamp(1.75rem, 3vw, 2.5rem)" />
+            <Skeleton w="min(240px, 50%)" h="14px" />
+          </div>
+          <div v-if="auth.isEmployer" class="pf__actions">
+            <Skeleton w="176px" h="44px" />
+            <Skeleton w="96px" h="44px" class="pf__edit" />
+            <Skeleton w="44px" h="44px" />
+          </div>
+        </div>
+      </div>
+      <div class="tabs-wrap" aria-hidden="true">
+        <div class="tabs">
+          <span
+            v-for="tab in tabs"
+            :key="tab.name"
+            class="tabs__item"
+            :class="{ 'is-active': route.name === tab.name }"
+            >{{ tab.label }}</span
+          >
+        </div>
+      </div>
+      <ContractTabSkeleton :tab="String(route.name ?? '')" :month="month" />
     </div>
 
     <EmptyState
@@ -145,7 +176,7 @@ onBeforeUnmount(() => resize.disconnect());
       }}
       <template #actions>
         <Button to="/" icon="arrow-left">Voltar ao início</Button>
-        <Button v-if="error.code !== 'NOT_FOUND'" variant="ghost" @click="reload"
+        <Button v-if="error.code !== 'NOT_FOUND'" variant="ghost" icon="refresh" @click="reload"
           >Tentar de novo</Button
         >
       </template>
@@ -154,7 +185,7 @@ onBeforeUnmount(() => resize.disconnect());
     <template v-else-if="data">
       <header class="pf">
         <RouterLink :to="backNav.to.value" class="cv__back" @click.prevent="backNav.go"
-          ><Icon name="arrow-left" :size="18" /> voltar</RouterLink
+          ><Icon name="arrow-left" :size="18" /> Voltar</RouterLink
         >
         <div class="pf__row">
           <Avatar :name="title" :size="wide ? 64 : 48" />
@@ -176,19 +207,21 @@ onBeforeUnmount(() => resize.disconnect());
           <div v-if="auth.isEmployer" class="pf__actions">
             <ContactActions v-if="channels" :channels="channels" />
             <Button
-              v-if="writable"
+              v-if="writable && route.name !== 'contract-payments'"
               :to="{ path: '/pagamentos/novo', query: { vinculo: data.id, mes: month } }"
               variant="primary"
-              icon="plus"
-              >Registrar pagamento</Button
-            >
+              icon="wallet-plus"
+              icon-only
+              label="Registrar pagamento"
+            />
             <Button
               v-if="writable"
               :to="{ name: 'contract-settings', params: { id }, query: route.query }"
               icon="pencil"
+              icon-only
+              label="Editar"
               class="pf__edit"
-              >Editar</Button
-            >
+            />
             <Menu :items="menuItems" label="Mais ações" />
           </div>
         </div>
@@ -257,7 +290,17 @@ onBeforeUnmount(() => resize.disconnect());
 
 .cv__head {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
+}
+
+.cv__skelid {
+  display: grid;
   gap: var(--s-2);
+}
+
+.cv__head .tabs__item.is-active {
+  box-shadow: inset 0 -3px 0 var(--brand);
 }
 
 .cv__back {
@@ -324,7 +367,7 @@ onBeforeUnmount(() => resize.disconnect());
     flex-basis: 100%;
   }
   /* The Ajustes tab is one tap away; the row keeps contact, payment and the menu. */
-  .pf__edit {
+  .pf__actions :deep(.pf__edit) {
     display: none;
   }
 }

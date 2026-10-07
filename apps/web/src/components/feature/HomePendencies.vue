@@ -1,18 +1,29 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router";
 import Icon from "@/components/ui/Icon.vue";
+import Skeleton from "@/components/ui/Skeleton.vue";
 import type { Pendency } from "@/lib/team.ts";
 
-const { items, limit = 6 } = defineProps<{ items: readonly Pendency[]; limit?: number }>();
+const {
+  items,
+  limit = 6,
+  loading = false,
+} = defineProps<{ items: readonly Pendency[]; limit?: number; loading?: boolean }>();
 </script>
 
 <template>
   <section class="hp sheet" aria-labelledby="hp-title">
     <header class="hp__head">
       <h2 id="hp-title" class="section-title">Pendências</h2>
-      <span v-if="items.length" class="hp__count mono">{{ items.length }}</span>
+      <span v-if="items.length && !loading" class="hp__count mono">{{ items.length }}</span>
     </header>
-    <p v-if="items.length === 0" class="hp__empty">
+    <ul v-if="loading" class="hp__list" aria-busy="true">
+      <li v-for="i in 3" :key="i" class="hp__item">
+        <Skeleton w="8px" h="8px" round />
+        <Skeleton :w="['70%', '55%', '62%'][i - 1]" h="14px" />
+      </li>
+    </ul>
+    <p v-else-if="items.length === 0" class="hp__empty">
       <Icon name="check" :size="18" />
       Tudo em dia.
     </p>
@@ -25,7 +36,7 @@ const { items, limit = 6 } = defineProps<{ items: readonly Pendency[]; limit?: n
         </RouterLink>
       </li>
     </ul>
-    <p v-if="items.length > limit" class="hp__more">e mais {{ items.length - limit }}</p>
+    <p v-if="items.length > limit" class="hp__more">E mais {{ items.length - limit }}</p>
   </section>
 </template>
 

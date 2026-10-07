@@ -6,8 +6,8 @@ const { tone = "neutral", dot = true } = defineProps<{ tone?: Tone; dot?: boolea
 
 <template>
   <span class="chip" :class="`chip--${tone}`"
-    ><span v-if="dot" class="chip__dot" aria-hidden="true" /><slot
-  /></span>
+    ><span v-if="dot" class="chip__dot" aria-hidden="true" /><span class="chip__text"><slot /></span
+  ></span>
 </template>
 
 <style scoped>
@@ -22,6 +22,15 @@ const { tone = "neutral", dot = true } = defineProps<{ tone?: Tone; dot?: boolea
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
+}
+
+/* Chip text often comes from data or mid-sentence labels; chips always read in sentence case. */
+.chip__text {
+  display: inline-block;
+}
+
+.chip__text::first-letter {
+  text-transform: uppercase;
 }
 
 .chip__dot {

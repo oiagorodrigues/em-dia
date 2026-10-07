@@ -1,9 +1,7 @@
 import type {
   ActivityItem,
-  Adjustment,
   Agreement,
   Contract,
-  CreateAdjustmentInput,
   CreateAgreementInput,
   CreateContractInput,
   DashboardItem,
@@ -17,6 +15,7 @@ import type {
   RegisterInput,
   UpdateContractInput,
   UpdateMeInput,
+  UpdatePaymentInput,
   UpsertEntryInput,
   WorkEntry,
   YearMonth,
@@ -120,23 +119,11 @@ export const entriesApi = {
     }),
 };
 
-export const adjustmentsApi = {
-  list: (contractId: string, month: YearMonth) =>
-    request<{ adjustments: Adjustment[] }>(`/contracts/${enc(contractId)}/adjustments`, {
-      query: { month },
-    }),
-  create: (contractId: string, body: CreateAdjustmentInput) =>
-    request<{ adjustment: Adjustment }>(`/contracts/${enc(contractId)}/adjustments`, {
-      method: "POST",
-      body,
-    }),
-  remove: (contractId: string, id: string) =>
-    request<void>(`/contracts/${enc(contractId)}/adjustments/${enc(id)}`, { method: "DELETE" }),
-};
-
 export const agreementsApi = {
-  list: (contractId: string) =>
-    request<{ agreements: Agreement[] }>(`/contracts/${enc(contractId)}/agreements`),
+  list: (contractId: string, opts: { archived?: boolean } = {}) =>
+    request<{ agreements: Agreement[] }>(`/contracts/${enc(contractId)}/agreements`, {
+      query: { include: opts.archived ? "archived" : undefined },
+    }),
   create: (contractId: string, body: CreateAgreementInput) =>
     request<{ agreement: Agreement }>(`/contracts/${enc(contractId)}/agreements`, {
       method: "POST",
@@ -152,11 +139,21 @@ export const agreementsApi = {
       `/contracts/${enc(contractId)}/agreements/${enc(id)}/cancel`,
       { method: "POST" },
     ),
+  remove: (contractId: string, id: string) =>
+    request<void>(`/contracts/${enc(contractId)}/agreements/${enc(id)}`, { method: "DELETE" }),
+  restore: (contractId: string, id: string) =>
+    request<{ agreement: Agreement }>(
+      `/contracts/${enc(contractId)}/agreements/${enc(id)}/restore`,
+      { method: "POST" },
+    ),
 };
 
 export const paymentsApi = {
   list: (contractId: string, year: number) =>
     request<{ payments: Payment[] }>(`/contracts/${enc(contractId)}/payments`, { query: { year } }),
+  /** Every adiantamento of the contract, whatever its year, with what is left to abate. */
+  advances: (contractId: string) =>
+    request<{ advances: Payment[] }>(`/contracts/${enc(contractId)}/advances`),
   create: (contractId: string, form: FormData) =>
     request<{ payment: Payment }>(`/contracts/${enc(contractId)}/payments`, {
       method: "POST",
@@ -180,6 +177,16 @@ export const paymentsApi = {
       {
         method: "POST",
       },
+    ),
+  update: (contractId: string, paymentId: string, body: UpdatePaymentInput) =>
+    request<{ payment: Payment }>(`/contracts/${enc(contractId)}/payments/${enc(paymentId)}`, {
+      method: "PATCH",
+      body,
+    }),
+  confirm: (contractId: string, paymentId: string) =>
+    request<{ payment: Payment }>(
+      `/contracts/${enc(contractId)}/payments/${enc(paymentId)}/confirm`,
+      { method: "POST" },
     ),
 };
 

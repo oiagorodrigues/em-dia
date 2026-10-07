@@ -10,6 +10,9 @@ import {
   monthName,
   parseYearMonth,
   PAY_TYPE_LABEL,
+  countsAsPaid,
+  handsMoney,
+  PAYMENT_KIND_LABEL,
   PAYMENT_METHOD_LABEL,
   shiftMonth,
   toYearMonth,
@@ -18,6 +21,7 @@ import {
 import { computed } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { contractsApi, entriesApi, paymentsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ContactActions from "@/components/feature/ContactActions.vue";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import KpiCard from "@/components/ui/KpiCard.vue";
@@ -28,6 +32,7 @@ import { useResource } from "@/composables/resource.ts";
 import { contactChannels, describeEstimate, estimateGap, isWritable } from "@/lib/contract.ts";
 import { ENTRY_TONE } from "@/lib/entry.ts";
 import { formatDateShort, WEEKDAY_SHORT } from "@/lib/format.ts";
+import { formatSigned } from "@/lib/payments.ts";
 import { attendanceText } from "@/lib/schedule.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 
@@ -45,16 +50,17 @@ const future = computed(() => month.value > currentMonth);
 const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 const year = computed(() => parseYearMonth(month.value).year);
 
-const key = computed(() => `${contract.value.id}|${month.value}`);
-const summary = useResource(key, () =>
-  contractsApi.summary(contract.value.id, month.value).then((r) => r.summary),
+const scope = computed(() => ({ id: contract.value.id, month: month.value }));
+const summary = useResource(scope, queryKeys.summary, (s) =>
+  contractsApi.summary(s.id, s.month).then((r) => r.summary),
 );
-const entries = useResource(key, () =>
-  entriesApi.list(contract.value.id, month.value).then((r) => r.entries),
+const entries = useResource(scope, queryKeys.entries, (s) =>
+  entriesApi.list(s.id, s.month).then((r) => r.entries),
 );
 const payments = useResource(
-  () => `${contract.value.id}|${year.value}`,
-  () => paymentsApi.list(contract.value.id, year.value).then((r) => r.payments),
+  () => ({ id: contract.value.id, year: year.value }),
+  queryKeys.payments,
+  (s) => paymentsApi.list(s.id, s.year).then((r) => r.payments),
 );
 
 const s = computed(() => summary.data.value);
@@ -62,7 +68,7 @@ const kind = computed(() => contract.value.schedule.kind);
 
 const projectedKpis = computed(() => {
   const e = estimate.value;
-  const unit = kind.value === "per_month" ? "visitas" : "dias";
+  const unit = kind.value === "per_month" ? "Visitas" : "Dias";
   return [
     {
       tone: "brand" as const,
@@ -111,19 +117,20 @@ const average = computed(() => estimateAverageMonthlyCost(contract.value, month.
 const kpis = computed(() => {
   const sum = s.value;
   const owed = sum ? Math.max(0, sum.balanceCents) : 0;
-  const paidThisMonth = payments.data.value?.filter((p) => p.referenceMonth === month.value) ?? [];
+  const paidThisMonth =
+    payments.data.value?.filter((p) => p.referenceMonth === month.value && countsAsPaid(p)) ?? [];
   return [
     {
       tone: "brand" as const,
       icon: "clock" as const,
-      label: "horas",
+      label: "Horas",
       value: sum ? formatDuration(sum.totalMinutes) : "",
       caption: `em ${monthLabel.value}`,
     },
     {
       tone: "amber" as const,
       icon: "calendar" as const,
-      label: kind.value === "per_month" ? "visitas" : "dias",
+      label: kind.value === "per_month" ? "Visitas" : "Dias",
       value: sum ? attendanceText(sum, kind.value) : "",
       caption: sum
         ? sum.absences
@@ -138,14 +145,14 @@ const kpis = computed(() => {
     {
       tone: "amber" as const,
       icon: "coins" as const,
-      label: auth.isEmployer ? "a pagar" : "a receber",
+      label: auth.isEmployer ? "A pagar" : "A receber",
       value: formatCents(owed),
       caption: sum ? `de ${formatCents(sum.dueCents)}` : undefined,
     },
     {
       tone: "brand" as const,
       icon: "wallet" as const,
-      label: "pago",
+      label: "Pago",
       value: sum ? formatCents(sum.paidCents) : "",
       caption: payments.data.value
         ? paidThisMonth.length === 1
@@ -266,7 +273,7 @@ function tabLink(name: string) {
         <section v-if="future" class="sheet ov__box is-projected" aria-labelledby="ov-cost">
           <div class="ov__boxhead">
             <h2 id="ov-cost" class="ov__title">Custo previsto de {{ monthLabel }}</h2>
-            <span class="ov__tag">previsto</span>
+            <span class="ov__tag">Previsto</span>
           </div>
           <p class="ov__proj mono">
             {{ estimate.cents === null ? "—" : formatCents(estimate.cents) }}
@@ -281,7 +288,7 @@ function tabLink(name: string) {
         <section v-else class="sheet ov__box" aria-labelledby="ov-cost">
           <div class="ov__boxhead">
             <h2 id="ov-cost" class="ov__title">Custo de {{ monthLabel }}</h2>
-            <span v-if="partial" class="ov__hint">realizado até hoje</span>
+            <span v-if="partial" class="ov__hint">Realizado até hoje</span>
           </div>
           <div v-if="!cost" aria-busy="true">
             <Skeleton h="20px" />
@@ -290,7 +297,7 @@ function tabLink(name: string) {
           <dl v-else class="ov__bars">
             <div class="ov__bar">
               <dt>
-                estimado
+                Estimado
                 <span class="ov__why">{{ estimateText ?? estimateGap(contract) }}</span>
               </dt>
               <dd class="mono">{{ cost.est === null ? "—" : formatCents(cost.est) }}</dd>
@@ -300,8 +307,8 @@ function tabLink(name: string) {
             </div>
             <div class="ov__bar">
               <dt>
-                realizado
-                <span class="ov__why">horas, dias, faltas e extras do mês</span>
+                Realizado
+                <span class="ov__why">Horas, dias, faltas e extras do mês</span>
               </dt>
               <dd class="mono">{{ formatCents(cost.due) }}</dd>
               <span class="ov__track" aria-hidden="true"
@@ -373,9 +380,16 @@ function tabLink(name: string) {
             <li v-for="p in lastPayments" :key="p.id" class="ov__pay">
               <span class="ov__ref">{{ formatYearMonth(p.referenceMonth) }}</span>
               <span class="ov__paid mono">{{ formatDateShort(p.paidOn) }}</span>
-              <span class="ov__method">{{ PAYMENT_METHOD_LABEL[p.method] }}</span>
-              <span class="ov__amount mono">{{ formatCents(p.amountCents) }}</span>
-              <StatusChip :tone="p.acknowledgedAt ? 'brand' : 'amber'">{{
+              <span class="ov__method">{{
+                p.kind === "pay" && p.method
+                  ? PAYMENT_METHOD_LABEL[p.method]
+                  : PAYMENT_KIND_LABEL[p.kind]
+              }}</span>
+              <span class="ov__amount mono" :class="{ 'is-minus': p.kind === 'deduction' }">{{
+                formatSigned(p)
+              }}</span>
+              <StatusChip v-if="!handsMoney(p)" tone="neutral" :dot="false">sem recebi</StatusChip>
+              <StatusChip v-else :tone="p.acknowledgedAt ? 'brand' : 'amber'">{{
                 p.acknowledgedAt ? "recebido" : "sem confirmação"
               }}</StatusChip>
             </li>
@@ -663,6 +677,10 @@ function tabLink(name: string) {
   font-weight: 600;
   text-align: right;
   white-space: nowrap;
+}
+
+.ov__amount.is-minus {
+  color: var(--coral-ink);
 }
 
 .ov__terms {

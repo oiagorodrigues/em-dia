@@ -15,13 +15,14 @@ import {
 } from "@emdia/shared";
 import { computed, useTemplateRef } from "vue";
 import { teamApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import TeamTable from "@/components/feature/TeamTable.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import Select from "@/components/ui/Select.vue";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import { useSlidingIndicator } from "@/lib/motion.ts";
 import {
@@ -48,7 +49,10 @@ const month = computed({
 });
 const future = computed(() => isFutureMonth(month.value, today));
 
-const team = useResource(month, (m) => teamApi.list(m, { archived: true }));
+const team = useResource(month, queryKeys.teamWithArchived, (m) =>
+  teamApi.list(m, { archived: true }),
+);
+const invalidate = useInvalidate();
 const items = computed(() => team.data.value?.items ?? []);
 
 const tab = computed<TeamTab>({
@@ -117,7 +121,13 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
       "
     >
       <template #actions>
-        <Button to="/equipe/novo" variant="primary" icon="plus">Adicionar profissional</Button>
+        <Button
+          to="/equipe/novo"
+          variant="primary"
+          icon="user-plus"
+          icon-only
+          label="Adicionar profissional"
+        />
       </template>
     </PageHeader>
 
@@ -147,7 +157,9 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
       class="col-span-12"
     >
       {{ team.error.value.message }}
-      <template #actions><Button @click="team.reload">Tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="team.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <div v-else class="col-span-12">
@@ -162,7 +174,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
         :filters-active="filterCount > 0 || tab !== 'ativos'"
         :filter-count="filterCount"
         :loading="team.loading.value && !team.data.value"
-        @reload="team.reload"
+        @reload="invalidate.all"
         @clear-filters="clearFilters"
       >
         <template #filters>
@@ -187,7 +199,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
             Cadastre a diarista, babá ou cuidadora. Você recebe um código para a pessoa entrar e
             bater o ponto pelo celular.
             <template #actions>
-              <Button to="/equipe/novo" variant="primary" icon="plus"
+              <Button to="/equipe/novo" variant="primary" icon="user-plus"
                 >Adicionar profissional</Button
               >
             </template>

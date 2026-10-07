@@ -11,7 +11,7 @@ import { RouterLink, useRouter } from "vue-router";
 import Avatar from "@/components/ui/Avatar.vue";
 import Icon from "@/components/ui/Icon.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
-import { rowTotals, type BoardRow } from "@/lib/board.ts";
+import { dayOpens, rowTotals, type BoardRow } from "@/lib/board.ts";
 import { WEEKDAY_LETTER } from "@/lib/format.ts";
 import type { SortDir, SortState } from "@/lib/table.ts";
 import BoardCell from "./BoardCell.vue";
@@ -33,7 +33,10 @@ const {
   projected?: boolean;
 }>();
 
-const emit = defineEmits<{ sort: [key: string, firstDir: SortDir] }>();
+const emit = defineEmits<{
+  sort: [key: string, firstDir: SortDir];
+  day: [row: BoardRow, date: IsoDate];
+}>();
 const router = useRouter();
 
 const days = computed(() => rows[0]?.cells ?? []);
@@ -72,9 +75,17 @@ function cellsOf(tr: Element | null): HTMLElement[] {
   return tr ? [...tr.querySelectorAll<HTMLElement>(".bcell")] : [];
 }
 
+/** The day a board cell stands for, when it can be opened. */
+function openableDate(row: BoardRow, el: Element | null): IsoDate | null {
+  const date = el?.closest<HTMLElement>(".bcell")?.dataset.date;
+  const cell = date ? row.cells.find((c) => c.date === date) : undefined;
+  return cell && dayOpens(cell) ? cell.date : null;
+}
+
 /**
- * Rows are Tab stops; arrows move between days (and rows) inside the board,
- * Enter opens the person's card, Esc goes back to the row.
+ * Rows are Tab stops; arrows move between days (and rows) inside the board.
+ * Enter or Space on a day opens it in place, Enter on the row opens the person's card,
+ * Esc goes back to the row.
  */
 function onKeydown(e: KeyboardEvent, row: BoardRow, currentMonth: YearMonth): void {
   const tr = e.currentTarget as HTMLElement;
@@ -91,11 +102,17 @@ function onKeydown(e: KeyboardEvent, row: BoardRow, currentMonth: YearMonth): vo
 
   switch (e.key) {
     case "Enter":
-      if (target === tr || onCell) {
+    case " ": {
+      const date = onCell ? openableDate(row, target) : null;
+      if (date) {
+        e.preventDefault();
+        emit("day", row, date);
+      } else if (target === tr && e.key === "Enter") {
         e.preventDefault();
         void router.push(cardLink(row, currentMonth));
       }
       return;
+    }
     case "ArrowRight":
       return move(
         onCell
@@ -122,7 +139,13 @@ function onKeydown(e: KeyboardEvent, row: BoardRow, currentMonth: YearMonth): vo
 }
 
 function onClick(e: MouseEvent, row: BoardRow, currentMonth: YearMonth): void {
-  if ((e.target as Element).closest("a, button")) return;
+  const target = e.target as Element;
+  if (target.closest("a, button")) return;
+  if (target.closest(".bcell")) {
+    const date = openableDate(row, target);
+    if (date) emit("day", row, date);
+    return;
+  }
   void router.push(cardLink(row, currentMonth));
 }
 </script>
@@ -201,7 +224,7 @@ function onClick(e: MouseEvent, row: BoardRow, currentMonth: YearMonth): void {
                     v-if="row.item.contract.status === 'ended'"
                     tone="neutral"
                     :dot="false"
-                    >encerrado</StatusChip
+                    >Encerrado</StatusChip
                   >
                 </span>
               </span>
@@ -213,7 +236,14 @@ function onClick(e: MouseEvent, row: BoardRow, currentMonth: YearMonth): void {
             class="bg__td"
             :class="{ 'is-today': c.isToday, 'is-weekend': c.isWeekend }"
           >
-            <BoardCell :kind="c.kind" :label="c.label" :tip="c.tip" focusable />
+            <BoardCell
+              :kind="c.kind"
+              :label="dayOpens(c) ? `${c.label}. Abrir o dia` : c.label"
+              :tip="c.tip"
+              :data-date="c.date"
+              :action="dayOpens(c)"
+              focusable
+            />
           </td>
           <td class="bg__total mono" :class="{ 'is-projected': projected }">
             {{ rowTotalsOf.get(row.item.contract.id)!.hours }}

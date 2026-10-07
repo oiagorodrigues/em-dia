@@ -39,6 +39,9 @@ export const ICON_PATHS = {
     "M9 11a6 3 0 1 0 0-.01zM3 11v4c0 1.7 2.7 3 6 3s6-1.3 6-3M15 8.5c3 .3 6 1.4 6 2.8v4c0 1.7-2.7 3-6 3",
   more: "M4 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0M18 12a1 1 0 1 0 2 0a1 1 0 1 0-2 0",
   search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4",
+  "zoom-in": "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M11 8v6M8 11h6",
+  "zoom-out": "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4M8 11h6",
+  fit: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5",
   users:
     "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20c.8-3.4 3.3-5 6.5-5s5.7 1.6 6.5 5M16 4.3a3.5 3.5 0 0 1 0 6.4M18 15.2c1.8.7 3 2.3 3.5 4.8",
   phone:
@@ -59,6 +62,49 @@ export const ICON_PATHS = {
   /* arrow leaving a door */
   "clock-out": "M10 4H5v16h5M10 12h11M17 8l4 4-4 4",
   filter: "M4 5h16l-6 7.5V19l-4-2v-4.5z",
+  "user-plus":
+    "M10 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM3 20.5c1.1-3.6 3.7-5.5 7-5.5 1.6 0 3 .4 4.2 1.3M18 14v6M15 17h6",
+  refresh: "M20 12a8 8 0 1 1-2.3-5.7L20 8.5M20 4v4.5h-4.5",
+  "sidebar-collapse": "M4 4h16v16H4zM9 4v16M15.5 9.5 13 12l2.5 2.5",
+  "sidebar-expand": "M4 4h16v16H4zM9 4v16M13 9.5l2.5 2.5-2.5 2.5",
+  handshake:
+    "M11 17l2 2a1 1 0 1 0 3-3M14 14l2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4M21 3l1 11h-2M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3M3 4h8",
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;
+
+/**
+ * One icon per action across the app (DESIGN.md "Icons"). Pick from here instead of choosing
+ * an icon per screen, so "remover" or "registrar pagamento" look the same everywhere.
+ */
+export const ACTION_ICON = {
+  add: "plus",
+  addWorker: "user-plus",
+  registerPayment: "wallet-plus",
+  view: "eye",
+  edit: "pencil",
+  remove: "trash",
+  restore: "undo",
+  confirm: "check",
+  receipt: "receipt",
+  attach: "upload",
+  download: "download",
+  open: "external",
+  copy: "copy",
+  share: "share",
+  link: "link",
+  whatsapp: "message",
+  email: "mail",
+  inviteCode: "key",
+  back: "arrow-left",
+  previous: "arrow-left",
+  next: "arrow-right",
+  retry: "refresh",
+  clockIn: "clock-in",
+  clockOut: "clock-out",
+  close: "close",
+  logout: "logout",
+  install: "install",
+} as const satisfies Record<string, IconName>;
+
+export type ActionName = keyof typeof ACTION_ICON;

@@ -98,6 +98,70 @@ describe("agreements", () => {
   });
 });
 
+describe("removing an agreement", () => {
+  test("DELETE archives it and hides its installments; restore brings both back", async () => {
+    const id = (await createAgreement()).body.agreement.id as string;
+    const installment = await pay({ amountCents: 20000, agreementId: id });
+    await pay({ amountCents: 30000, method: "pix", paidOn: "2026-10-04" });
+
+    const url = `${base}/agreements/${id}`;
+    expect((await t.http().delete(url).auth(worker.token, as)).status).toBe(403);
+    expect((await t.http().delete(url).auth(employer.token, as)).status).toBe(204);
+    expect((await t.http().delete(url).auth(employer.token, as)).status).toBe(204);
+
+    const list = await t.http().get(`${base}/agreements`).auth(worker.token, as);
+    expect(list.body.agreements).toHaveLength(0);
+    const all = await t.http().get(`${base}/agreements?include=archived`).auth(worker.token, as);
+    expect(all.body.agreements[0]).toMatchObject({
+      id,
+      archivedAt: "2026-10-06T15:00:00.000Z",
+      settledCents: 20000,
+    });
+
+    const payments = await t.http().get(`${base}/payments`).auth(worker.token, as);
+    expect(payments.body.payments.map((p: { method: string }) => p.method)).toEqual(["pix"]);
+    const summary = await t.http().get(`${base}/summary?month=2026-09`).auth(worker.token, as);
+    expect(summary.body.summary.paidCents).toBe(30000);
+    expect(
+      (
+        await t
+          .http()
+          .post(`${base}/payments/${installment.body.payment.id}/acknowledge`)
+          .auth(worker.token, as)
+      ).status,
+    ).toBe(404);
+    expect((await t.http().post(`${url}/accept`).auth(worker.token, as)).status).toBe(404);
+    const blocked = await pay({ amountCents: 100, agreementId: id });
+    expect(blocked.body.error.details.fieldErrors.agreementId).toBeDefined();
+
+    expect((await t.http().post(`${url}/restore`).auth(worker.token, as)).status).toBe(403);
+    const restored = await t.http().post(`${url}/restore`).auth(employer.token, as);
+    expect(restored.status).toBe(200);
+    expect(restored.body.agreement).toMatchObject({ archivedAt: null, settledCents: 20000 });
+    const back = await t.http().get(`${base}/summary?month=2026-09`).auth(worker.token, as);
+    expect(back.body.summary.paidCents).toBe(50000);
+
+    const activity = await t.http().get(`${base}/activity`).auth(employer.token, as);
+    const actions = activity.body.activity.map((a: { action: string }) => a.action);
+    expect(actions).toEqual(expect.arrayContaining(["agreement.archive", "agreement.restore"]));
+  });
+
+  test("unknown or foreign agreements answer 404; archived contracts reject it", async () => {
+    expect((await t.http().delete(`${base}/agreements/nope`).auth(employer.token, as)).status).toBe(
+      404,
+    );
+    const id = (await createAgreement()).body.agreement.id as string;
+    const stranger = await t.register("employer");
+    expect(
+      (await t.http().delete(`${base}/agreements/${id}`).auth(stranger.token, as)).status,
+    ).toBe(404);
+    await t.http().delete(base).auth(employer.token, as);
+    expect(
+      (await t.http().delete(`${base}/agreements/${id}`).auth(employer.token, as)).status,
+    ).toBe(409);
+  });
+});
+
 describe("compensation payments", () => {
   test("installments settle the agreement, count as paid and are acknowledged like any payment", async () => {
     const id = (await createAgreement()).body.agreement.id as string;
@@ -197,11 +261,30 @@ describe("compensation payments", () => {
     const start = lines.indexOf("Pagamentos");
     expect(lines.slice(start, start + 5)).toEqual([
       "Pagamentos",
-      "Data;Forma;Valor (R$);Recebido;Observação",
-      "02/10/2026;Compensação: Mesa de jantar;200,00;Não;",
-      "03/10/2026;Compensação;50,00;Não;Ficou com a bicicleta",
-      "04/10/2026;Pix;300,00;Não;",
+      "Data;Tipo;Forma;Valor (R$);Recebido;Observação",
+      "02/10/2026;Diárias/salário;Compensação: Mesa de jantar;200,00;Não;",
+      "03/10/2026;Diárias/salário;Compensação;50,00;Não;Ficou com a bicicleta",
+      "04/10/2026;Diárias/salário;Pix;300,00;Não;",
     ]);
+  });
+
+  test("the statement lists every kind, abatements with their adiantamento", async () => {
+    const advance = await pay({
+      kind: "advance",
+      amountCents: 36000,
+      method: "pix",
+      paidOn: "2026-09-10",
+    });
+    await pay({ amountCents: 18000, advanceId: advance.body.payment.id, paidOn: "2026-09-12" });
+    await pay({ kind: "deduction", method: undefined, amountCents: 5000, paidOn: "2026-09-13" });
+    const csv = await t.http().get(`${base}/statement.csv?month=2026-09`).auth(employer.token, as);
+    const lines = csv.text.split("\r\n");
+    expect(lines).toContain("10/09/2026;Adiantamento;Pix;360,00;Não;");
+    expect(lines).toContain(
+      "12/09/2026;Diárias/salário;Compensação: adiantamento de 10/09/2026;180,00;Não;",
+    );
+    expect(lines).toContain("13/09/2026;Desconto;;50,00;;");
+    expect(lines).toContain("Adiantamentos ainda a abater (R$);180,00");
   });
 
   test("archived contracts reject agreement writes", async () => {

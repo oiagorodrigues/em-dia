@@ -1,5 +1,4 @@
 import type { Database, Executor } from "../db/index.ts";
-import { adjustmentsRepo } from "./adjustments.ts";
 import { agreementsRepo } from "./agreements.ts";
 import { auditRepo } from "./audit.ts";
 import { contractsRepo } from "./contracts.ts";
@@ -19,7 +18,6 @@ function bind(db: Executor) {
     contracts: contractsRepo(db),
     invites: invitesRepo(db),
     entries: entriesRepo(db),
-    adjustments: adjustmentsRepo(db),
     payments: paymentsRepo(db),
     agreements: agreementsRepo(db),
     refreshTokens: refreshTokensRepo(db),

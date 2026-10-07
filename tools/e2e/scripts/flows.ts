@@ -192,7 +192,7 @@ async function login(page: Page, email: string, password: string): Promise<void>
   await page.goto(`${BASE}/entrar`);
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Senha", { exact: true }).fill(password);
-  await action(page, /^entrar$/).click();
+  await action(page, /^Entrar$/).click();
 }
 
 function todayRow(page: Page): Locator {
@@ -213,7 +213,7 @@ interface ContractSpec {
   /** 0 = Sunday. Weekly only. */
   weekdays?: number[];
   weekdayPreset?: string;
-  everyWeeks?: "toda semana" | "a cada 2" | "a cada 3";
+  everyWeeks?: "Toda semana" | "A cada 2" | "A cada 3";
   visitsPerMonth?: number;
   deductAbsences?: boolean;
   startedOn: string;
@@ -279,7 +279,7 @@ async function addContract(page: Page, spec: ContractSpec): Promise<string> {
 async function employerSignup(state: State): Promise<void> {
   const { page } = (state.employer = await openSession(state, "employer"));
   await register(page, "Eu contrato", EMPLOYER_NAME, state.employerEmail);
-  await action(page, /^criar conta$/).click();
+  await action(page, /^Criar conta$/).click();
   await page.waitForURL("**/equipe/novo");
 
   await page.goto(BASE);
@@ -312,7 +312,7 @@ async function workerClocksIn(state: State): Promise<void> {
   const code = need(state.inviteCode, 1);
   const { page } = (state.worker = await openSession(state, "worker"));
   await register(page, "Eu trabalho", WORKER_NAME, state.workerEmail, `?convite=${code}`);
-  await action(page, /^criar conta$/).click();
+  await action(page, /^Criar conta$/).click();
   await page.waitForURL(`${BASE}/`);
   await see("the employer's house on the worker home", page.getByText(EMPLOYER_NAME).first());
 
@@ -356,7 +356,7 @@ async function confirmDay(state: State): Promise<void> {
   );
 
   await todayRow(page).click();
-  await see("'confirmado' in the day editor", dialog.getByText(/^confirmado/));
+  await see("'Confirmado' in the day editor", dialog.getByText(/^Confirmado/));
   await action(dialog, "Fechar").click();
 
   await worker.goto(`${BASE}/equipe/${id}`);
@@ -387,32 +387,90 @@ async function markAbsence(state: State): Promise<void> {
   await see("the FALTA stamp", absentRow.getByText(/^falta$/i));
 }
 
-async function addExtra(state: State): Promise<void> {
+/** Vale-transporte is paid at once, so "a pagar" stays put; a desconto lowers it. */
+async function paymentKinds(state: State): Promise<void> {
   const { page } = need(state.employer, 1);
   const id = need(state.contractId, 1);
   const total = page.locator(".ledger__total dd");
-
-  await page.goto(`${BASE}/equipe/${id}`);
-  await see("the monthly total", total);
-  const before = parseCents(await textOf(total));
+  const owed = async () => {
+    await page.goto(`${BASE}/equipe/${id}`);
+    await see("the monthly total", total);
+    return parseCents(await textOf(total));
+  };
+  const before = await owed();
 
   await page.goto(`${BASE}/equipe/${id}/extras`);
+  await page.waitForURL(new RegExp(`/equipe/${id}/pagamentos`));
+
+  await page.goto(`${BASE}/pagamentos/novo?vinculo=${id}`);
   await choose(page, "Tipo", "Vale-transporte");
   await page.getByLabel("Valor", { exact: true }).fill("2000");
-  await action(page, /^lançar em/i).click();
-  await see("the new entry in the list", page.getByRole("list").getByText("Vale-transporte"));
-  await see("the extras net", page.getByText("saldo dos lançamentos"));
-  const net = await textOf(page.locator(".ex__net .mono"));
-  if (parseCents(net) !== 2000) throw new Error(`extras net is "${net}", expected R$ 20,00`);
+  await choose(page, "Como pagou", "Dinheiro");
+  await submitPayment(page, /^Registrar vale-transporte$/);
+  await see(
+    "the vale-transporte in Pagamentos",
+    page.getByRole("article", { name: /Pagamento de R\$\s*20,00/ }).getByText(/Vale-transporte/),
+  );
+  if ((await owed()) !== before)
+    throw new Error("a vale-transporte paid at once changed what is still owed");
+  await see("the line in the ledger", page.getByText("Gratificações, vale e descontos"));
+
+  await page.goto(`${BASE}/pagamentos/novo?vinculo=${id}`);
+  await choose(page, "Tipo", "Desconto");
+  await absent("the method for a desconto", page.getByText("Como pagou"));
+  await absent("the receipt for a desconto", page.locator('input[type="file"]'));
+  await page.getByLabel("Valor do desconto", { exact: true }).fill("1000");
+  await submitPayment(page, /^Lançar desconto$/);
+  const desconto = page.getByRole("article", { name: /Pagamento de R\$\s*10,00/ });
+  await see("the desconto as a negative amount", desconto.getByText(/−\s*R\$\s*10,00/));
+  await see("the desconto without recebi", desconto.getByText(/só diminui o valor do mês/));
+  await poll("the total to drop by R$ 10,00", async () => before - (await owed()) === 1000);
+}
+
+/** An adiantamento changes nothing until a worked day is abated from it in the day editor. */
+async function advanceAbate(state: State): Promise<void> {
+  const id = need(state.contractId, 1);
+  const page = await deskOf(state);
+  const worker = need(state.worker, 2).page;
+
+  await page.goto(`${BASE}/pagamentos/novo?vinculo=${id}`);
+  await choose(page, "Tipo", "Adiantamento");
+  await page.getByLabel("Valor", { exact: true }).fill("30000");
+  await choose(page, "Como pagou", "Pix");
+  await submitPayment(page, /^Registrar adiantamento$/);
+  const panel = page.getByRole("region", { name: "Adiantamentos em aberto" });
+  await see("the open adiantamento", panel.getByText(/Restam R\$\s*300,00 de R\$\s*300,00/));
 
   await page.goto(`${BASE}/equipe/${id}`);
-  await see("the monthly total", total);
-  await see("the extras line in the ledger", page.getByText("Extras e descontos"));
-  const after = await poll("the total to grow by R$ 20,00", async () => {
-    const value = parseCents(await textOf(total));
-    return value - before === 2000 && value;
-  });
-  void after;
+  await todayRow(page).click();
+  const sheet = page.getByRole("dialog");
+  await see("the abate option", sheet.getByText("Abater do adiantamento"));
+  await sheet.getByText("Abater do adiantamento").click();
+  const amount = sheet.getByLabel("Valor abatido", { exact: true });
+  await poll("one diária prefilled", async () => /150,00/.test(await amount.inputValue()));
+  await action(sheet, /^Abater$/).click();
+  await absent("the day editor", sheet);
+
+  await page.goto(`${BASE}/equipe/${id}/pagamentos`);
+  await see(
+    "R$ 150 left on the adiantamento",
+    panel.getByText(/Restam R\$\s*150,00 de R\$\s*300,00/),
+  );
+  await see(
+    "the abatement row",
+    page
+      .getByRole("region", { name: "Pagamentos" })
+      .getByText(/^Adiantamento de \d{2}\/\d{2}\/\d{4}$/)
+      .first(),
+  );
+
+  await worker.goto(`${BASE}/equipe/${id}/pagamentos`);
+  await see(
+    "the open adiantamento for the worker",
+    worker
+      .getByRole("region", { name: "Adiantamentos em aberto" })
+      .getByText(/Restam R\$\s*150,00/),
+  );
 }
 
 async function createPayment(state: State): Promise<void> {
@@ -435,7 +493,7 @@ async function createPayment(state: State): Promise<void> {
   await choose(page, "Como pagou", "Dinheiro");
 
   await page.locator('input[type="file"]').setInputFiles(fake);
-  await action(page, /^registrar pagamento$/).click();
+  await action(page, /^Registrar pagamento$/).click();
   const error = page.locator('p[role="alert"]').filter({ hasText: /\w/ });
   await see("a pt-BR error for the fake .png", error);
   const message = await textOf(error);
@@ -447,7 +505,7 @@ async function createPayment(state: State): Promise<void> {
   await page.getByRole("button", { name: "Remover comprovante" }).click();
   await page.locator('input[type="file"]').setInputFiles(png);
   await see("the receipt preview", page.getByAltText("Prévia do comprovante"));
-  await action(page, /^registrar pagamento$/).click();
+  await action(page, /^Registrar pagamento$/).click();
   await page.waitForURL(/\/equipe\/[^/]+\/pagamentos/);
 
   await see("the payment stub", page.getByRole("article", { name: /Pagamento de R\$\s*50,00/ }));
@@ -585,7 +643,7 @@ async function biweekly(state: State): Promise<void> {
     payType: "Por diária",
     rate: "10000",
     weekdays: [5],
-    everyWeeks: "a cada 2",
+    everyWeeks: "A cada 2",
     startedOn: prevMonthStart,
   });
 
@@ -629,19 +687,24 @@ function teamTable(page: Page): Locator {
   return page.getByRole("region", { name: "Equipe" });
 }
 
+/** Body rows of a DataTable, leaving out the loading skeleton's placeholder rows. */
+function dataRows(region: Locator): Locator {
+  return region.locator('table:not([aria-hidden="true"]) tbody tr');
+}
+
 function personRow(table: Locator, name: string): Locator {
   return table.getByRole("row").filter({ hasText: name });
 }
 
 /** Submits the payment form and waits for the POST to succeed and the form to close, so a later goto cannot abort it. */
-async function submitPayment(page: Page): Promise<void> {
+async function submitPayment(page: Page, button: RegExp = /^Registrar pagamento$/): Promise<void> {
   const [response] = await Promise.all([
     page.waitForResponse(
       (r) =>
         r.request().method() === "POST" &&
         /\/contracts\/[^/]+\/payments$/.test(new URL(r.url()).pathname),
     ),
-    action(page, /^registrar pagamento$/).click(),
+    action(page, button).click(),
   ]);
   if (!response.ok()) throw new Error(`creating the payment returned ${response.status()}`);
   await page.waitForURL((url) => !url.pathname.endsWith("/pagamentos/novo"));
@@ -679,9 +742,9 @@ async function contactInvite(state: State): Promise<void> {
   await action(page, /^Salvar profissional$/).click();
   await see(
     "the e-mail sent notice",
-    page.getByText(/e-mail enviado para/).filter({ hasText: email }),
+    page.getByText(/E-mail enviado para/).filter({ hasText: email }),
   );
-  const wa = page.getByRole("link", { name: /mandar no WhatsApp/ });
+  const wa = page.getByRole("link", { name: /Mandar no WhatsApp/ });
   await see("the WhatsApp link", wa);
   const href = await wa.getAttribute("href");
   if (!href?.startsWith("https://wa.me/55")) throw new Error(`WhatsApp link is "${href}"`);
@@ -718,7 +781,7 @@ async function removeAndRestore(state: State): Promise<void> {
   await page.getByRole("menuitem", { name: "remover" }).click();
   const dialog = page.getByRole("dialog");
   await see("the removal confirmation", dialog.getByText(`remover ${name}?`));
-  await action(dialog, /^remover$/).click();
+  await action(dialog, /^Remover$/).click();
   await poll(`${name} to leave Início`, async () => (await personRow(home, name).count()) === 0);
 
   await page.goto(`${BASE}/equipe`);
@@ -762,7 +825,7 @@ async function teamSearchSortFilter(state: State): Promise<void> {
 
   await page.goto(`${BASE}/equipe`);
   const table = teamTable(page);
-  const rows = table.locator("tbody tr");
+  const rows = dataRows(table);
   await see("the team table", rows);
   const everyone = await rows.count();
   if (everyone < 2) throw new Error(`test bug: expected several people, found ${everyone}`);
@@ -797,7 +860,7 @@ async function teamSearchSortFilter(state: State): Promise<void> {
   await page.waitForURL(/q=antonio/);
 
   await page.reload();
-  await see("the table after reload", table.locator("tbody tr"));
+  await see("the table after reload", rows);
   const url = new URL(page.url());
   for (const [key, value] of [
     ["q", "antonio"],
@@ -825,10 +888,17 @@ async function boardCell(state: State): Promise<void> {
     .locator("th.bg__day")
     .evaluateAll((ths) => ths.findIndex((t) => t.getAttribute("aria-current") === "date"));
   if (dayIndex < 0) throw new Error("the board has no column for today");
-  const cell = row.locator("td.bg__td").nth(dayIndex).getByRole("img");
+  const cell = row.locator("td.bg__td").nth(dayIndex).getByRole("button");
   const label = (await cell.getAttribute("aria-label")) ?? "";
   if (!/trabalhou/.test(label))
     throw new Error(`today's cell is labelled "${label}", expected 'trabalhou'`);
+
+  await cell.click();
+  const sheet = page.getByRole("dialog");
+  await see("the day editor opened in place", sheet.getByText("Pagar este dia agora"));
+  if (!page.url().endsWith("/cartao")) throw new Error(`a day click navigated to ${page.url()}`);
+  await page.keyboard.press("Escape");
+  await sheet.waitFor({ state: "hidden" });
 
   await row.locator("th").first().click();
   await page.waitForURL(new RegExp(`/equipe/${id}`));
@@ -842,7 +912,7 @@ async function paymentsTable(state: State): Promise<void> {
 
   await page.goto(`${BASE}/pagamentos`);
   const table = page.getByRole("region", { name: "Pagamentos" });
-  const rows = table.locator("tbody tr");
+  const rows = dataRows(table);
   await see("the payments table", rows);
   const mine = rows.filter({ hasText: WORKER_NAME });
   await poll("both payments listed with the person's name", async () => (await mine.count()) >= 2);
@@ -945,8 +1015,8 @@ async function futureMonth(state: State): Promise<void> {
 
   const forecast = page.getByRole("region", { name: /^Previsão de/ });
   await see("the forecast section", forecast.first());
-  const tags = await page.getByText("previsto", { exact: true }).count();
-  if (tags < 3) throw new Error(`expected 3 'previsto' KPI tags, found ${tags}`);
+  const tags = await page.getByText("Previsto", { exact: true }).count();
+  if (tags < 2) throw new Error(`expected 2 'previsto' KPI tags (custo, dias), found ${tags}`);
   await absent("the actual-month summary", page.getByRole("region", { name: /^Resumo de/ }));
   await absent(
     "the today and pendencies panel",
@@ -968,7 +1038,7 @@ async function deleteAccount(state: State): Promise<void> {
 
   const { page } = await openSession(state, "leaver");
   await register(page, "Eu trabalho", "Saindo E2E", email, `?convite=${code}`);
-  await action(page, /^criar conta$/i).click();
+  await action(page, /^Criar conta$/i).click();
   await page.waitForURL(`${BASE}/`);
   await action(page, /bater entrada/i).click();
   await see("the check-in time", page.locator('section[aria-label="Hoje"] dd').first());
@@ -1064,7 +1134,7 @@ async function securityChecks(state: State): Promise<void> {
   await anon.page.goto(`${BASE}/entrar`);
   await anon.page.getByLabel("E-mail").fill(state.employerEmail);
   await anon.page.getByLabel("Senha", { exact: true }).fill("senha-errada-123");
-  await action(anon.page, /^entrar$/).click();
+  await action(anon.page, /^Entrar$/).click();
   const alert = anon.page.locator('p[role="alert"]').filter({ hasText: /\w/ });
   await see("an error for the wrong password", alert);
   if (!anon.page.url().includes("/entrar")) throw new Error("left /entrar after a wrong password");
@@ -1090,7 +1160,7 @@ async function forgotPassword(state: State): Promise<void> {
   const { page } = await openSession(state, "reset");
   await page.goto(`${BASE}/esqueci-senha`);
   await page.getByLabel("E-mail").fill(state.employerEmail);
-  await action(page, /^enviar link$/).click();
+  await action(page, /^Enviar link$/).click();
   await see("the confirmation notice", page.getByText("confira seu e-mail"));
 
   const { messages } = (await (await fetch(`${API}/dev/outbox`)).json()) as {
@@ -1102,7 +1172,7 @@ async function forgotPassword(state: State): Promise<void> {
 
   await page.goto(`${BASE}${link}`);
   await page.getByLabel("Senha nova", { exact: true }).fill(NEW_PASSWORD);
-  await action(page, /^salvar senha$/).click();
+  await action(page, /^Salvar senha$/).click();
   await see("the saved-password notice", page.getByText("senha nova salva"));
 
   await login(page, state.employerEmail, NEW_PASSWORD);
@@ -1120,7 +1190,6 @@ const JOURNEYS: [string, (state: State) => Promise<void>][] = [
   ["2  worker signup via invite, clock in and out", workerClocksIn],
   ["3  employer confirms the day, worker sees it", confirmDay],
   ["4  employer marks a past day as absent", markAbsence],
-  ["5  extras change the ledger total", addExtra],
   ["6  payment with receipt, fake .png rejected", createPayment],
   ["7  worker acknowledges the payment", acknowledgePayment],
   ["10 CSV download", downloadCsv],
@@ -1130,8 +1199,10 @@ const JOURNEYS: [string, (state: State) => Promise<void>][] = [
   ["14 contact e-mail and phone: estimate, e-mail sent, WhatsApp", contactInvite],
   ["15 remove and restore from the team table", removeAndRestore],
   ["16 team search, sort and filter survive a reload", teamSearchSortFilter],
-  ["17 board cell for a worked day, row opens the person", boardCell],
+  ["17 board cell opens the day in place, row opens the person", boardCell],
   ["18 payments table lists, filters, worker sees recebi", paymentsTable],
+  ["5  vale-transporte keeps a pagar, desconto lowers it", paymentKinds],
+  ["26 adiantamento: abate a worked day from the day editor", advanceAbate],
   ["20 old /vinculos URL redirects to /equipe", legacyUrl],
   ["21 agreement: create, worker agrees, installment payment", agreement],
   ["22 future month shows forecast KPIs only", futureMonth],
