@@ -1,7 +1,19 @@
 import type { Payment, Receipt, YearMonth } from "@emdia/shared";
-import { and, desc, asc, eq, inArray, isNotNull, isNull, like, type SQL } from "drizzle-orm";
+import {
+  and,
+  desc,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  notExists,
+  or,
+  type SQL,
+} from "drizzle-orm";
 import type { Executor } from "../db/index.ts";
-import { payments } from "../db/schema.ts";
+import { agreements, payments } from "../db/schema.ts";
 import { date, dateOrNull, iso, isoOrNull } from "./convert.ts";
 
 /** `receiptFile` is the storage name; it never leaves the API. */
@@ -41,11 +53,22 @@ export function toPayment({ receiptFile: _file, ...payment }: PaymentRecord): Pa
 }
 
 export function paymentsRepo(db: Executor) {
+  /** Installments of a removed agreement stay in the table but out of every list and total. */
+  const notInRemovedAgreement = or(
+    isNull(payments.agreementId),
+    notExists(
+      db
+        .select({ id: agreements.id })
+        .from(agreements)
+        .where(and(eq(agreements.id, payments.agreementId), isNotNull(agreements.archivedAt))),
+    ),
+  );
+
   const select = async (where: SQL | undefined, limit?: number) => {
     const query = db
       .select()
       .from(payments)
-      .where(where)
+      .where(and(where, notInRemovedAgreement))
       .orderBy(desc(payments.paidOn), desc(payments.createdAt), asc(payments.id));
     return (await (limit ? query.limit(limit) : query)).map(toRecord);
   };
