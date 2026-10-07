@@ -18,6 +18,7 @@ import {
 import { computed } from "vue";
 import { RouterLink, useRoute } from "vue-router";
 import { contractsApi, entriesApi, paymentsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ContactActions from "@/components/feature/ContactActions.vue";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import KpiCard from "@/components/ui/KpiCard.vue";
@@ -45,16 +46,17 @@ const future = computed(() => month.value > currentMonth);
 const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 const year = computed(() => parseYearMonth(month.value).year);
 
-const key = computed(() => `${contract.value.id}|${month.value}`);
-const summary = useResource(key, () =>
-  contractsApi.summary(contract.value.id, month.value).then((r) => r.summary),
+const scope = computed(() => ({ id: contract.value.id, month: month.value }));
+const summary = useResource(scope, queryKeys.summary, (s) =>
+  contractsApi.summary(s.id, s.month).then((r) => r.summary),
 );
-const entries = useResource(key, () =>
-  entriesApi.list(contract.value.id, month.value).then((r) => r.entries),
+const entries = useResource(scope, queryKeys.entries, (s) =>
+  entriesApi.list(s.id, s.month).then((r) => r.entries),
 );
 const payments = useResource(
-  () => `${contract.value.id}|${year.value}`,
-  () => paymentsApi.list(contract.value.id, year.value).then((r) => r.payments),
+  () => ({ id: contract.value.id, year: year.value }),
+  queryKeys.payments,
+  (s) => paymentsApi.list(s.id, s.year).then((r) => r.payments),
 );
 
 const s = computed(() => summary.data.value);

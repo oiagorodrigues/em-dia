@@ -7,6 +7,7 @@ import CodeBoxes from "@/components/feature/CodeBoxes.vue";
 import InviteSignedInNotice from "@/components/feature/InviteSignedInNotice.vue";
 import Button from "@/components/ui/Button.vue";
 import Stamp from "@/components/ui/Stamp.vue";
+import { useInvalidate } from "@/composables/resource.ts";
 import { firstName } from "@/lib/format.ts";
 import { INVITE_ALPHABET, INVITE_LENGTH, normalizeInviteCode } from "@/lib/invite.ts";
 
@@ -20,6 +21,7 @@ const fromLink = typeof route.query.convite === "string" ? route.query.convite :
 const error = ref<string | null>(null);
 const submitting = ref(false);
 const joined = ref<Contract | null>(null);
+const invalidate = useInvalidate();
 
 const complete = computed(() => code.value.replace(/\s/g, "").length === INVITE_LENGTH);
 
@@ -38,6 +40,7 @@ async function join(): Promise<void> {
   submitting.value = true;
   try {
     joined.value = (await contractsApi.join(clean)).contract;
+    void invalidate.all();
   } catch (e) {
     error.value =
       e instanceof ApiError && e.code === "NOT_FOUND"

@@ -9,6 +9,7 @@ import {
 } from "@emdia/shared";
 import { computed, ref, useTemplateRef } from "vue";
 import { agreementsApi, errorMessage, paymentsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ReceiptStub from "@/components/feature/ReceiptStub.vue";
 import ReceiptViewer from "@/components/feature/ReceiptViewer.vue";
 import Button from "@/components/ui/Button.vue";
@@ -20,7 +21,7 @@ import Select from "@/components/ui/Select.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import TableActions from "@/components/ui/TableActions.vue";
 import { useContract } from "@/composables/contractContext.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import { isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
@@ -75,9 +76,11 @@ const recebido = computed({
 });
 
 const payments = useResource(
-  () => `${contract.value.id}|${year.value}`,
-  () => paymentsApi.list(contract.value.id, year.value).then((r) => r.payments),
+  () => ({ id: contract.value.id, year: year.value }),
+  queryKeys.payments,
+  (s) => paymentsApi.list(s.id, s.year).then((r) => r.payments),
 );
+const invalidate = useInvalidate();
 
 const canManage = computed(() => auth.isEmployer && isWritable(contract.value));
 
@@ -142,6 +145,7 @@ const busyId = ref<string | null>(null);
 
 function replace(updated: Payment): void {
   payments.mutate((list = []) => list.map((p) => (p.id === updated.id ? updated : p)));
+  void invalidate.records(contract.value.id, payments);
 }
 
 async function acknowledge(p: Payment): Promise<void> {
@@ -174,6 +178,7 @@ async function remove(p: Payment): Promise<void> {
   try {
     await paymentsApi.remove(contract.value.id, p.id);
     payments.mutate((list = []) => list.filter((x) => x.id !== p.id));
+    void invalidate.records(contract.value.id, payments);
     toast.success("Pagamento excluído.");
   } catch (e) {
     toast.error(errorMessage(e));
@@ -241,6 +246,7 @@ function menuFor(p: Payment): MenuItem[] {
 
 const agreements = useResource(
   () => contract.value.id,
+  queryKeys.agreements,
   (id) => agreementsApi.list(id).then((r) => r.agreements),
 );
 const agreementById = computed(

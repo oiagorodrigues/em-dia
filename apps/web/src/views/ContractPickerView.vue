@@ -3,6 +3,7 @@ import { OCCUPATION_LABEL } from "@emdia/shared";
 import { computed, watch } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { contractsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import PageHeader from "@/components/layout/PageHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
@@ -19,7 +20,8 @@ const router = useRouter();
 const routeName = computed(() => (tab === "card" ? "contract-card" : "contract-payments"));
 
 const { data, error, loading, reload } = useResource(
-  () => 0,
+  () => null,
+  queryKeys.contracts,
   () => contractsApi.list().then((r) => r.contracts),
 );
 

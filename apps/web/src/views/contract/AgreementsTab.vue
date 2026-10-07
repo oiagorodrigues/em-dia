@@ -2,6 +2,7 @@
 import { createAgreementSchema, formatCents, formatYearMonth, type Agreement } from "@emdia/shared";
 import { computed, ref } from "vue";
 import { agreementsApi, errorMessage } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import Button from "@/components/ui/Button.vue";
 import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
 import DataTable from "@/components/ui/DataTable.vue";
@@ -16,7 +17,7 @@ import TableActions from "@/components/ui/TableActions.vue";
 import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
 import { useContract } from "@/composables/contractContext.ts";
 import { useForm } from "@/composables/form.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import {
   agreementProgress,
@@ -36,8 +37,10 @@ const { contract, month, currentMonth } = useContract();
 
 const list = useResource(
   () => contract.value.id,
+  queryKeys.agreements,
   (id) => agreementsApi.list(id).then((r) => r.agreements),
 );
+const invalidate = useInvalidate();
 
 const writable = computed(() => isWritable(contract.value));
 const canCreate = computed(() => auth.isEmployer && writable.value);
@@ -130,6 +133,7 @@ function filter(a: Agreement): boolean {
 
 function replace(next: Agreement): void {
   list.mutate((l = []) => l.map((a) => (a.id === next.id ? next : a)));
+  void invalidate.records(contract.value.id, list);
 }
 
 const busyId = ref<string | null>(null);
@@ -231,6 +235,7 @@ function onCreate(): void {
   void submit(async (data) => {
     const { agreement } = await agreementsApi.create(contract.value.id, data);
     list.mutate((l = []) => [agreement, ...l]);
+    void invalidate.records(contract.value.id, list);
     formOpen.value = false;
     toast.success(
       contract.value.workerId
