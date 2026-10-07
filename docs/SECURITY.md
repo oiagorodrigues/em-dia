@@ -56,7 +56,7 @@ Status values: `todo`, `implemented`, `verified` (a test or manual check proves 
 `DELETE /me` anonymises the account; it does not erase rows.
 
 - Wiped: password hash, phone, Pix key, every session and refresh token. The name becomes "Conta excluída" and the e-mail is replaced, so the address can register again and is no longer personal data in our store.
-- Kept: contracts, work entries, adjustments, agreements, payments, receipts and the audit log, attached to the anonymised user. For a deleted worker, the contract keeps the worker's display name so the employer's records stay readable.
+- Kept: contracts, work entries, agreements, payments of every kind, receipts and the audit log, attached to the anonymised user. For a deleted worker, the contract keeps the worker's display name so the employer's records stay readable.
 - Why: the other party has a legitimate interest in their own pay and hour records (proof of payment, labor disputes), and the data subject's request covers their personal data, not the counterparty's records. This is a design position, not legal advice; review it with counsel before wide release.
 - Re-authentication: the request must carry the account password and the word `EXCLUIR`. A stolen access token alone cannot delete the account.
 - The deletion is audited (`auth.delete_account`).

@@ -86,7 +86,7 @@ Generated column detail: [generated/db-schema.md](generated/README.md).
 - `households`: owned by an employer user; has a timezone.
 - `contracts`: household + worker (nullable until the invite is used), occupation, pay type, rate in cents, expected times, start and end dates, status, and the agreed schedule: `schedule_kind` (`weekly`, `month_days`, `per_month`, `on_demand`), `schedule_weekdays` (JSON), `every_weeks` (1 to 4), `month_days` (JSON), `visits_per_month`, plus `deduct_absences` (monthly pay only). Schedule logic lives in `packages/shared/src/schedule.ts`; migration 003 converted the old weekday list. Migration 004 added `archived_at` (logical removal), `contact_email` and `contact_phone` (typed by the employer before the worker has an account).
 - `work_entries`: one per contract per date. Status, check-in/out, break, derived minutes, creator, confirmer.
-- `adjustments`: bonus, transport, advance, deduction per contract and month, in cents.
+- `payments.kind` (pay, bonus, transport, advance, deduction) replaces the old `adjustments` table (dropped in migration 0003); `payments.advance_id` links an abatement to its adiantamento.
 - `agreements`: contract, description, total and installment in cents, start month, accepted/cancelled timestamps.
 - `payments`: contract, optional agreement, reference month, paid date, amount in cents, method, receipt metadata (stored filename, mime, size, display name), acknowledged-at.
 - `refresh_tokens`: hashed token, family id, expiry, revoked-at, replaced-by.

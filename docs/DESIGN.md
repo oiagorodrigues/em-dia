@@ -22,7 +22,7 @@ Three colors on neutrals. Nothing else.
 | **amber**       | `--amber` / `--amber-wash` / `--amber-ink`                    | `#C48A22` / `#FBF1DC` / `#8A5D10`             | `#E3B25A` / `#33290F` / `#F0CF8E`             | pending (awaiting confirmation, "sem recebi", unused invite), warnings, justified absence / day off / holiday |
 | sidebar         | `--sidebar` / `--sidebar-ink` / `--sidebar-active`            | `#E8EFEB` / `#1E3A30` / `#FFFFFF`             | `#161B19` / `#C9DDD4` / `#20302A`             | a green-gray rail that frames the app                                                                         |
 
-Form values, table text and numbers are `--ink`. Color on a value only when the color carries meaning: money still owed (amber when overdue), negative amounts and deductions (coral), paid/received (green). Avatars use `--brand-wash` with `--brand-ink` initials for everyone. KPI cards are white surfaces with a small icon chip in the color of their meaning (brand for hours/paid, amber for pending, coral only when something is wrong).
+Form values, table text and numbers are `--ink`. Color on a value only when the color carries meaning: money still owed (amber when overdue), negative amounts and deductions (coral), paid/received (green). Payment types follow the same rule: a desconto is a coral chip and a coral amount with a real minus sign ("− R$ 50,00") and "não se aplica" instead of a recebi state; an adiantamento is an amber chip with "restam X de Y" in amber (it is still to be paid down in days); the other types are neutral chips. Avatars use `--brand-wash` with `--brand-ink` initials for everyone. KPI cards are white surfaces with a small icon chip in the color of their meaning (brand for hours/paid, amber for pending, coral only when something is wrong).
 
 Radius: `--r-1: 8px`, `--r-2: 12px`, `--r-3: 16px`. Elevation: `--shadow-1: 0 1px 2px rgb(16 24 20 / 0.05), 0 2px 8px rgb(16 24 20 / 0.04)` at rest, `--shadow-2: 0 4px 12px rgb(16 24 20 / 0.08), 0 12px 32px rgb(16 24 20 / 0.06)` for hover lift, popovers and dialogs. No hard offset shadows anywhere (buttons and the clock included).
 
@@ -66,27 +66,27 @@ Tailwind CSS v4 (`@tailwindcss/vite`) is the layout layer: a 12-column grid (`gr
 
 One action, one icon, everywhere. The map lives in `ACTION_ICON` (`components/ui/icons.ts`); pick from it instead of choosing an icon per screen. All icons share one style: 24px grid, 1.5 stroke, round caps and joins, `currentColor`.
 
-| action                                         | icon                                 |
-| ---------------------------------------------- | ------------------------------------ |
-| adicionar (generic: acordo, extra, registro)   | `plus`                               |
-| adicionar profissional                         | `user-plus`                          |
-| registrar pagamento                            | `wallet-plus` (Pagamentos = wallet)  |
-| ver                                            | `eye`                                |
-| editar                                         | `pencil`                             |
-| remover (contrato, pagamento, extra, registro) | `trash`                              |
-| restaurar                                      | `undo`                               |
-| confirmar / marcar como trabalhados            | `check`                              |
-| comprovante (ver, abrir, trocar)               | `receipt` (printed paper, torn edge) |
-| anexo inside a form                            | `paperclip`                          |
-| anexar arquivo                                 | `upload`                             |
-| baixar / abrir fora                            | `download` / `external`              |
-| copiar / compartilhar / link                   | `copy` / `share` / `link`            |
-| WhatsApp / e-mail                              | `message` / `mail`                   |
-| código de convite                              | `key`                                |
-| voltar / mês anterior / próximo                | `arrow-left` / `arrow-right`         |
-| tentar de novo                                 | `refresh`                            |
-| bater entrada / saída                          | `clock-in` / `clock-out`             |
-| fechar / sair                                  | `close` / `logout`                   |
+| action                                  | icon                                 |
+| --------------------------------------- | ------------------------------------ |
+| adicionar (generic: acordo, registro)   | `plus`                               |
+| adicionar profissional                  | `user-plus`                          |
+| registrar pagamento                     | `wallet-plus` (Pagamentos = wallet)  |
+| ver                                     | `eye`                                |
+| editar                                  | `pencil`                             |
+| remover (contrato, pagamento, registro) | `trash`                              |
+| restaurar                               | `undo`                               |
+| confirmar / marcar como trabalhados     | `check`                              |
+| comprovante (ver, abrir, trocar)        | `receipt` (printed paper, torn edge) |
+| anexo inside a form                     | `paperclip`                          |
+| anexar arquivo                          | `upload`                             |
+| baixar / abrir fora                     | `download` / `external`              |
+| copiar / compartilhar / link            | `copy` / `share` / `link`            |
+| WhatsApp / e-mail                       | `message` / `mail`                   |
+| código de convite                       | `key`                                |
+| voltar / mês anterior / próximo         | `arrow-left` / `arrow-right`         |
+| tentar de novo                          | `refresh`                            |
+| bater entrada / saída                   | `clock-in` / `clock-out`             |
+| fechar / sair                           | `close` / `logout`                   |
 
 ## Icon-only buttons
 
@@ -140,13 +140,13 @@ Every collection is a **table on `md`+ and a list of cards on `sm`**, rendered b
 - empty state and "nenhum resultado para …" state with a clear-filters button;
 - search, filters and sort mirrored in the URL query, so a link or reload keeps them.
 
-Tables: team (dashboard + Equipe), payments (per person and across the team), extras, activity, the month board, the time card.
+Tables: team (dashboard + Equipe), payments of every type (per person and across the team), activity, the month board, the time card.
 
 ### Screens
 
 - **Início (employer)**: header with greeting, month switcher and the actions "adicionar profissional" and "registrar pagamento". Row of 4 KPI cards (a pagar, pago no mês, custo do mês as a "previsto" card from the estimate, pendências: dias sem registro + aguardando confirmação + pagamentos sem "recebi"); the month switcher also goes forward, and future months show projections ("previsto") from `DashboardItem.estimate`. Each KPI has a small caption with context (e.g. "3 pessoas", "de R$ 5.930,00"). Below on `xl`: team table (8 cols) and a right column (4 cols) with **hoje** (who is expected today, their status and a quick "bater entrada") and **pendências** (actionable items that link to the right place). On smaller screens these stack; on `sm` the team is a card list. Team table columns: profissional (avatar, name, função), frequência, hoje, horas, dias (x/y or visitas), a pagar, status; row actions: bater ponto, registrar pagamento, ver cartão, `⋯` (copiar convite, editar, remover).
 - **Equipe** (`/equipe`): the team management module. Status tabs with counts (ativos, convites pendentes, encerrados, removidos), search, filters (função, forma de pagamento), sort; the same table with more columns (forma de pagamento + valor, contato). Removed people show "restaurar". Primary action "adicionar profissional".
-- **Profissional** (`/equipe/:id`, old `/vinculos/:id` redirects): header with avatar, name, função · frequência, status chip, contact actions (WhatsApp, ligar, copiar Pix) and actions (registrar pagamento, editar, `⋯` remover). Tabs: Visão geral, Cartão, Pagamentos, Extras, Acordos, Histórico, Ajustes. **Acordos** lists agreements (descrição, total, abatido, falta, parcela, status: aguardando a profissional concordar / em andamento / quitado / cancelado; removed ones behind the "Removidos" filter with "Restaurar") with "novo acordo" and "Remover acordo" in the row menu; the payment form offers "abater de um acordo" with the installment prefilled. **Visão geral**: KPI mini cards for the month, custo estimado vs. realizado, combinado (frequência, horários, valor, desconto de faltas), contato, últimos registros, últimos pagamentos. **Cartão** on `lg`: time card table (8 cols) + sticky aside (4 cols) with the clock, the month ledger and "marcar como trabalhados".
+- **Profissional** (`/equipe/:id`, old `/vinculos/:id` redirects): header with avatar, name, função · frequência, status chip, contact actions (WhatsApp, ligar, copiar Pix) and actions (registrar pagamento, editar, `⋯` remover). Tabs: Visão geral, Cartão, Pagamentos, Acordos, Histórico, Ajustes. **Pagamentos** lists every payment type (Tipo column and filter) under an "Adiantamentos em aberto" panel when there are any. **Acordos** lists agreements (descrição, total, abatido, falta, parcela, status: aguardando a profissional concordar / em andamento / quitado / cancelado; removed ones behind the "Removidos" filter with "Restaurar") with "novo acordo" and "Remover acordo" in the row menu; the payment form offers "abater de um acordo" with the installment prefilled. **Visão geral**: KPI mini cards for the month, custo estimado vs. realizado, combinado (frequência, horários, valor, desconto de faltas), contato, últimos registros, últimos pagamentos. **Cartão** on `lg`: time card table (8 cols) + sticky aside (4 cols) with the clock, the month ledger and "marcar como trabalhados".
 - **Cartão** (employer, `/cartao`): the **quadro do mês**, a board with one row per person and one column per day of the month. Cells are small rounded squares: worked = brand green with hours on hover/focus, falta = coral, justificada/folga/feriado = amber, previsto sem registro = dashed outline, today highlighted. Row totals (horas, dias, a pagar) at the end, click a row to open that person's card. Below `md` it becomes the list of people with a mini week strip.
 - **Pagamentos** (employer, `/pagamentos`): all payments across the team in one table (pessoa, referência, pago em, valor, forma, comprovante, recebido) with filters (pessoa, ano/mês, forma, recebido) and totals; worker sees their own. The receipt stub stays the card form on `sm`.
 - **Adicionar profissional** (`/equipe/novo`, title "Adicionar profissional", subtitle "Preencha os dados de trabalho e pagamento. Você pode mudar depois."; função is a Select; repetição offers toda semana, a cada 2, a cada 3 and "personalizado: a cada N semanas" up to 12; the absence-deduction switch reads "Descontar faltas sem justificativa" with "Cada falta sem justificativa desconta 1/30 do salário. Ex.: salário de R$ 3.000 → R$ 100 por falta."; the submit button is "Salvar profissional") : form column + sticky **resumo** panel on `lg` (below the form on smaller screens). Sections: quem é (nome, função), contato opcional (e-mail, telefone: "se você preencher, a gente manda o link de cadastro"), pagamento (forma, valor, descontar faltas), frequência, horários, início. The resumo shows the frequency in words and the **custo estimado** from `estimateMonthCost`: "R$ 1.620,00 em outubro · 9 diárias × R$ 180,00", for hourly "9 dias × 8h × R$ 25,00", for monthly the salary, plus "média de R$ 1.580,00 por mês" from `estimateAverageMonthlyCost`; when it can't be priced it says why ("informe os horários para estimar"). After saving: a success view titled "Cadastro de {nome} concluído" that explains the invite is optional and lets the worker use the app on their phone to bater o ponto and confirm days, with the invite (code, link, "e-mail enviado para …" when sent, a WhatsApp button when a phone is known, copiar link).

@@ -2,21 +2,21 @@
 
 Grades per domain and layer: A (done, tested, documented), B (works, minor gaps), C (works, notable gaps), D (partial), F (missing). `-` means the layer does not apply. Graded after the MVP landed.
 
-| Domain                 | shared | db  | repos | services | http | stores | components | views | tests | docs |
-| ---------------------- | ------ | --- | ----- | -------- | ---- | ------ | ---------- | ----- | ----- | ---- |
-| Auth and RBAC          | A      | A   | B     | A        | A    | B      | B          | B     | A     | B    |
-| Contracts and invites  | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Team management        | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Agreements and account | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Time card and clock    | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Adjustments            | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Payments and receipts  | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Summary and statement  | A      | -   | B     | A        | A    | -      | B          | B     | B     | B    |
-| Activity log           | -      | A   | B     | B        | B    | -      | B          | B     | C     | B    |
-| Dashboard              | -      | -   | B     | B        | B    | -      | B          | B     | B     | B    |
-| PWA and offline        | -      | -   | -     | -        | B    | -      | B          | B     | C     | B    |
-| Security               | B      | A   | B     | A        | A    | B      | B          | -     | A     | B    |
-| Reliability            | -      | B   | -     | -        | B    | -      | -          | -     | C     | B    |
+| Domain                  | shared | db  | repos | services | http | stores | components | views | tests | docs |
+| ----------------------- | ------ | --- | ----- | -------- | ---- | ------ | ---------- | ----- | ----- | ---- |
+| Auth and RBAC           | A      | A   | B     | A        | A    | B      | B          | B     | A     | B    |
+| Contracts and invites   | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Team management         | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Agreements and account  | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Time card and clock     | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Payment types, advances | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Payments and receipts   | A      | A   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Summary and statement   | A      | -   | B     | A        | A    | -      | B          | B     | B     | B    |
+| Activity log            | -      | A   | B     | B        | B    | -      | B          | B     | C     | B    |
+| Dashboard               | -      | -   | B     | B        | B    | -      | B          | B     | B     | B    |
+| PWA and offline         | -      | -   | -     | -        | B    | -      | B          | B     | C     | B    |
+| Security                | B      | A   | B     | A        | A    | B      | B          | -     | A     | B    |
+| Reliability             | -      | B   | -     | -        | B    | -      | -          | -     | C     | B    |
 
 Evidence at grading time (2026-10-06): api 199 tests (supertest: RBAC, auth, entries, payments, reports, team, agreements, account deletion, static serving), web 159 tests plus `vue-tsc`, shared 38, harness 18, 25 browser journeys defined in `tools/e2e` (pass results pending: not re-run when this was written). Repos are graded B because they are tested only through services and http.
 
@@ -27,8 +27,8 @@ List each gap under the grade that caused it. Keep entries short and link to the
 - Reliability tests (C): no backup or restore procedure is automated or tested. Planned in [0002](exec-plans/active/0002-next.md).
 - PWA tests (C): offline reads and the update prompt are checked by hand and by e2e navigation, with no unit tests for the service worker flow.
 - Activity tests (C): audit rows are asserted for some mutations, not every endpoint. Two controls stay at `implemented` in [SECURITY](SECURITY.md).
-- Web components (B): unit tests cover `DataTable` (including column fitting and truncation), `MoneyInput`, table state, `TimeCard`, `DayEditor` (pay-the-day section), `ReceiptDrop` (drag state), `ReceiptViewer` (zoom), the employer home KPIs, `SkeletonTable`, `Tooltip` (delay, focus, Escape), icon-only `Button`, the sidebar collapse, the api client, the query cache layer (`useResource`, invalidation) and the router guard; most forms, including the payment edit sheet and the "Novo lançamento" sheet, are covered only through the e2e journeys and API tests. Journey 17 checks that a board day opens the editor in place; the pay-the-day flow itself has no e2e journey yet.
-- Payments (2026-10-07): edit, employer confirmation and extra payments have supertest and shared unit coverage, including audit rows for `payment.update` and `payment.confirm`; no e2e journey covers them yet.
+- Web components (B): unit tests cover `DataTable` (including column fitting and truncation), `MoneyInput`, table state, `TimeCard`, `DayEditor` (pay-the-day and abate-from-adiantamento sections), the "Tipo" field of Novo pagamento, `ReceiptDrop` (drag state), `ReceiptViewer` (zoom), the employer home KPIs, `SkeletonTable`, `Tooltip` (delay, focus, Escape), icon-only `Button`, the sidebar collapse, the api client, the query cache layer (`useResource`, invalidation) and the router guard; most forms, including the payment edit sheet, are covered only through the e2e journeys and API tests. Journey 17 checks that a board day opens the editor in place; the pay-the-day flow itself has no e2e journey yet.
+- Payments (2026-10-07): edit and employer confirmation have supertest and shared unit coverage, including audit rows for `payment.update` and `payment.confirm`; no e2e journey covers them yet. Payment types (2026-10-07): summary math per kind and the rules are unit tested in shared; desconto rules, advance abatement caps, removal blocks and the 0003 migration (legacy adjustments and extra payments keep each month's due and paid) have supertest coverage; journeys 5 and 26 cover vale-transporte, desconto and abating a day. The payment edit sheet is not unit tested.
 - Mail: SMTP transport exists but is only tested against the dev outbox, not a real server.
 - Accessibility: no automated audit (axe) yet; checked by design rules only.
 

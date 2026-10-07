@@ -82,19 +82,14 @@ One entry per contract per date. Either party can create/edit. The entry is conf
 | POST   | `/contracts/:id/entries/:date/confirm` | –                   | `{ entry }`. 403 if caller created it.                                                                                                                                         |
 | POST   | `/contracts/:id/clock`                 | `clockSchema`       | `{ entry }`. `in`: creates/updates today's entry status `worked`, `checkIn = now`. 409 if already checked in. `out`: sets `checkOut = now`. 409 if no check-in or already out. |
 
-## Adjustments (extras, vales, descontos) – employer writes, both read
-
-| Method | Path                                | Body                     | Response                        |
-| ------ | ----------------------------------- | ------------------------ | ------------------------------- |
-| GET    | `/contracts/:id/adjustments?month=` | –                        | `{ adjustments: Adjustment[] }` |
-| POST   | `/contracts/:id/adjustments`        | `createAdjustmentSchema` | 201 `{ adjustment }`            |
-| DELETE | `/contracts/:id/adjustments/:adjId` | –                        | 204                             |
-
 ## Payments + receipts
+
+Every entry of the payments list is a `Payment` with a `kind` (`PAYMENT_KINDS`): `pay` (diárias/salário, default), `bonus` (gratificação), `transport` (vale-transporte), `advance` (adiantamento), `deduction` (desconto). The adjustments API (`/contracts/:id/adjustments`) is gone; migration `0003_payment_kinds` moved its rows here.
 
 | Method | Path                                       | Who      | Body                                                                                   | Response                                                                                                                                                                                 |
 | ------ | ------------------------------------------ | -------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | GET    | `/contracts/:id/payments?year=YYYY`        | both     | –                                                                                      | `{ payments: Payment[] }` newest first                                                                                                                                                   |
+| GET    | `/contracts/:id/advances`                  | both     | –                                                                                      | `{ advances: Payment[] }` every `advance` of the contract, any year, newest first, with `settledCents`/`remainingCents`                                                                  |
 | POST   | `/contracts/:id/payments`                  | employer | `multipart/form-data`: fields of `createPaymentSchema` + optional file field `receipt` | 201 `{ payment }`                                                                                                                                                                        |
 | PUT    | `/contracts/:id/payments/:pid/receipt`     | employer | multipart file `receipt`                                                               | `{ payment }` (replaces)                                                                                                                                                                 |
 | GET    | `/contracts/:id/payments/:pid/receipt`     | both     | –                                                                                      | file stream, `Content-Type` from stored mime, `Content-Disposition: inline; filename="comprovante-<month>.<ext>"`, `Cache-Control: private, no-store`, `X-Content-Type-Options: nosniff` |
@@ -103,22 +98,38 @@ One entry per contract per date. Either party can create/edit. The entry is conf
 | POST   | `/contracts/:id/payments/:pid/confirm`     | employer | –                                                                                      | `{ payment }` "concluído" without waiting for the worker (`payment:confirm`)                                                                                                             |
 | PATCH  | `/contracts/:id/payments/:pid`             | employer | JSON `updatePaymentSchema` (any subset of the create fields, at least one)             | `{ payment }`                                                                                                                                                                            |
 
-`Payment` carries `isExtra`, `acknowledgedAt`, `acknowledgedBy` and `acknowledgedByRole`. Acknowledge and confirm both set the three `acknowledged*` fields, are idempotent and keep the first confirmation; they are audited as `payment.acknowledge` and `payment.confirm`.
+`Payment` carries `kind`, `method` (`null` when no money changed hands), `advanceId`, the derived `settledCents`/`remainingCents` (set only for `advance`, null otherwise), `acknowledgedAt`, `acknowledgedBy` and `acknowledgedByRole`. Acknowledge and confirm both set the three `acknowledged*` fields, are idempotent and keep the first confirmation; they are audited as `payment.acknowledge` and `payment.confirm`.
 
-PATCH merges the input onto the stored payment and checks the merged result with `paymentRuleIssues` (same rules as create: an agreement needs method `compensation`, compensation without agreement needs a note, compensation cannot be `isExtra`); errors come back as 400 `fieldErrors`. A linked agreement must still have room for the amount increase. Changing `referenceMonth`, `paidOn`, `amountCents`, `method` or `agreementId` clears the `acknowledged*` fields; `note` and `isExtra` do not. Audited as `payment.update` with `meta.changed` and `meta.reopened`.
+How each kind counts (`computeMonthSummary`, helpers `countsAsPaid`/`handsMoney` in `packages/shared/src/payment.ts`):
 
-`isExtra` (multipart `"true"`/`"false"`, or a JSON boolean) marks a payment made on top of the month's pay. `computeMonthSummary` adds extra payments to `adjustmentsCents` and to `paidCents`, so `balanceCents` is unaffected.
+| kind        | due (`adjustmentsCents`) | paid (`paidCents`)                  | method   | receipt, recebi, concluir |
+| ----------- | ------------------------ | ----------------------------------- | -------- | ------------------------- |
+| `pay`       | –                        | + amount                            | required | yes                       |
+| `bonus`     | + amount                 | + amount (when it has a method)     | required | yes                       |
+| `transport` | + amount                 | + amount (when it has a method)     | required | yes                       |
+| `advance`   | –                        | – (its abatements count, see below) | required | yes                       |
+| `deduction` | − amount                 | –                                   | `null`   | no (409 `CONFLICT`)       |
+
+A `bonus`/`transport` with `method: null` exists only from the migration (an old Extras adjustment: due only); the API never creates one, and an edit may keep it methodless as long as the kind stays.
+
+Rules (`paymentRuleIssues`, shared by create and the merged PATCH; 400 `fieldErrors`): a `deduction` has no method and no `agreementId`/`advanceId`; every other kind needs a method; `compensation` is only for `pay`; an `agreementId` or an `advanceId` needs method `compensation`, not both; compensation with neither needs a note. A desconto with a receipt file is rejected (`fieldErrors.receipt`) and nothing is stored.
+
+Adiantamentos: an abatement is a `pay` payment with method `compensation` and `advanceId` pointing at an `advance` of the same contract (else `fieldErrors.advanceId` "Adiantamento não encontrado"). Its amount cannot exceed the advance's `remainingCents` (`fieldErrors.amountCents`, checked again inside the insert transaction). `remainingCents = max(0, amountCents − sum of linked abatements)`. `DELETE` of an advance with abatements answers 409 with the abated amount; a PATCH cannot change its kind or lower its amount below what was abated (400). Deleting an abatement restores the remaining balance. Audit `payment.create` carries `meta.kind` and, for abatements, `meta.advanceId`; `payment.delete` carries `meta.kind`.
+
+PATCH merges the input onto the stored payment. A linked agreement or advance must still have room for the amount increase. Changing `kind`, `referenceMonth`, `paidOn`, `amountCents`, `method`, `agreementId` or `advanceId` clears the `acknowledged*` fields (and turning an entry into a desconto always does); `note` does not. Turning an entry into a desconto drops its method; one with a receipt cannot become a desconto. Audited as `payment.update` with `meta.changed` and `meta.reopened`.
+
+`latest` (the dashboard's `lastPayment`) skips entries without a method.
 
 Receipt rules: max `RECEIPT_MAX_BYTES` (5 MB), type detected from magic bytes (not the client mime) and must be in `RECEIPT_MIME_TYPES`; stored outside any static dir under a random filename; original filename sanitised and kept only for display.
 
 ## Summary, statement, activity, dashboard
 
-| Method | Path                                  | Response                                                                                                                                                        |
-| ------ | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/contracts/:id/summary?month=`       | `{ summary: MonthSummary }` computed with `computeMonthSummary` (payments filtered by `referenceMonth`)                                                         |
-| GET    | `/contracts/:id/statement.csv?month=` | `text/csv; charset=utf-8` with BOM, `;` separator (Excel pt-BR), one row per day + totals. Cells starting with `= + - @` are prefixed with `'` (CSV injection). |
-| GET    | `/contracts/:id/activity?limit=50`    | `{ activity: ActivityItem[] }` newest first                                                                                                                     |
-| GET    | `/dashboard`                          | `{ items: DashboardItem[], month: YearMonth, today: IsoDate }` current month for every active contract the caller can see                                       |
+| Method | Path                                  | Response                                                                                                                                                                                                                                                                                                                                                       |
+| ------ | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/contracts/:id/summary?month=`       | `{ summary: MonthSummary }` computed with `computeMonthSummary` (payments filtered by `referenceMonth`)                                                                                                                                                                                                                                                        |
+| GET    | `/contracts/:id/statement.csv?month=` | `text/csv; charset=utf-8` with BOM, `;` separator (Excel pt-BR), one row per day + totals (the adjustments line reads "Gratificações, vale-transporte e descontos", plus "Adiantamentos ainda a abater") and the month's payments with a Tipo column; abatements name their adiantamento. Cells starting with `= + - @` are prefixed with `'` (CSV injection). |
+| GET    | `/contracts/:id/activity?limit=50`    | `{ activity: ActivityItem[] }` newest first                                                                                                                                                                                                                                                                                                                    |
+| GET    | `/dashboard`                          | `{ items: DashboardItem[], month: YearMonth, today: IsoDate }` current month for every active contract the caller can see                                                                                                                                                                                                                                      |
 
 ## Health
 
@@ -139,7 +150,7 @@ Additions to `Contract`: `contactEmail`, `contactPhone` (typed by the employer b
 
 `InviteDelivery` = `{ code, expiresAt, signupUrl, emailSent, whatsappUrl }`. `signupUrl` is `WEB_ORIGIN/criar-conta?convite=CODE`. `whatsappUrl` is `https://wa.me/55<digits>?text=<message with signupUrl>` when a phone is known (contact or linked profile), else null: WhatsApp has no free sending API, so the employer taps the link to send it. E-mail goes through SMTP when `SMTP_URL` is set; in development it lands in `/api/v1/dev/outbox`.
 
-Archived contracts are read-only: writes to entries, clock, adjustments and payments return 409 `CONFLICT` ("Este vínculo foi removido"). The worker keeps read access to history and sees the contract as removed. `/dashboard` never includes archived contracts.
+Archived contracts are read-only: writes to entries, clock and payments return 409 `CONFLICT` ("Este vínculo foi removido"). The worker keeps read access to history and sees the contract as removed. `/dashboard` never includes archived contracts.
 
 Shared estimate helpers (`packages/shared/src/estimate.ts`): `estimateMonthCost` (rate × expected days, × hours per day for hourly, fixed for monthly) and `estimateAverageMonthlyCost` (12-month average). Both return `null` when the schedule can't be priced (on demand, or hourly without expected times).
 
