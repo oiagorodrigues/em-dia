@@ -36,12 +36,16 @@ const sorted = computed(() =>
 );
 
 // With a single contract there is nothing to choose; go straight to it.
-watch(data, (list) => {
-  const active = list?.filter((c) => c.status === "active") ?? [];
-  if (list && active.length === 1 && list.length === 1) {
-    void router.replace({ name: routeName.value, params: { id: active[0]!.id } });
-  }
-});
+watch(
+  data,
+  (list) => {
+    const active = list?.filter((c) => c.status === "active") ?? [];
+    if (list && active.length === 1 && list.length === 1) {
+      void router.replace({ name: routeName.value, params: { id: active[0]!.id } });
+    }
+  },
+  { immediate: true },
+);
 
 const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
 </script>

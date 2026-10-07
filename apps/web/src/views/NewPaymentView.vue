@@ -54,9 +54,13 @@ const contracts = {
 const invalidate = useInvalidate();
 const queryAgreement = typeof route.query.acordo === "string" ? route.query.acordo : null;
 const contractId = ref(typeof route.query.vinculo === "string" ? route.query.vinculo : "");
-watch(contracts.data, (list) => {
-  if (list && !list.some((c) => c.id === contractId.value)) contractId.value = list[0]?.id ?? "";
-});
+watch(
+  contracts.data,
+  (list) => {
+    if (list && !list.some((c) => c.id === contractId.value)) contractId.value = list[0]?.id ?? "";
+  },
+  { immediate: true },
+);
 const contract = computed(
   () => contracts.data.value?.find((c) => c.id === contractId.value) ?? null,
 );
@@ -79,9 +83,13 @@ const summary = useResource(
   (s) => (s.id && YEAR_MONTH_RE.test(s.month) ? queryKeys.summary(s) : null),
   (s) => contractsApi.summary(s.id, s.month).then((r) => r.summary),
 );
-watch(summary.data, (s) => {
-  if (s && !touchedAmount.value) values.amountCents = s.balanceCents > 0 ? s.balanceCents : null;
-});
+watch(
+  summary.data,
+  (s) => {
+    if (s && !touchedAmount.value) values.amountCents = s.balanceCents > 0 ? s.balanceCents : null;
+  },
+  { immediate: true },
+);
 
 const contractOptions = computed(() =>
   (contracts.data.value ?? []).map((c) => ({ value: c.id, label: c.workerName })),
@@ -108,17 +116,25 @@ const agreementOptions = computed(() => [
 const agreement = computed(
   () => agreements.data.value?.find((a) => a.id === agreementId.value) ?? null,
 );
-watch(agreements.data, (list) => {
-  if (list && agreementId.value && !list.some((a) => a.id === agreementId.value))
-    agreementId.value = "";
-});
-watch(agreement, (a) => {
-  if (!a) return;
-  values.amountCents = nextInstallmentCents(a);
-  touchedAmount.value = true;
-  clearError("amountCents");
-  clearError("note");
-});
+watch(
+  agreements.data,
+  (list) => {
+    if (list && agreementId.value && !list.some((a) => a.id === agreementId.value))
+      agreementId.value = "";
+  },
+  { immediate: true },
+);
+watch(
+  agreement,
+  (a) => {
+    if (!a) return;
+    values.amountCents = nextInstallmentCents(a);
+    touchedAmount.value = true;
+    clearError("amountCents");
+    clearError("note");
+  },
+  { immediate: true },
+);
 watch(contractId, () => (agreementId.value = ""));
 
 const amountHint = computed(() => {
