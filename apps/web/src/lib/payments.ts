@@ -1,18 +1,29 @@
 import {
+  countsAsPaid,
+  formatCents,
+  handsMoney,
+  PAYMENT_KIND_DUE_SIGN,
+  PAYMENT_KIND_LABEL,
+  PAYMENT_KINDS,
   toYearMonth,
   type Contract,
   type CreatePaymentInput,
   type IsoDate,
   type Payment,
+  type PaymentKind,
   type PaymentMethod,
   type YearMonth,
 } from "@emdia/shared";
+import { formatDateShort } from "./format.ts";
 import type { Tone } from "./tone.ts";
 
 export interface PaymentRow {
   payment: Payment;
   contract: Contract;
-  /** Description of the agreement a compensation pays down, e.g. "Mesa de jantar". */
+  /**
+   * What a compensation pays down: the agreement's description ("Mesa de jantar") or the
+   * adiantamento it abates ("Adiantamento de 15/09/2026").
+   */
   agreement?: string | null;
 }
 
@@ -27,24 +38,99 @@ export function receivedStatus(p: Pick<Payment, "acknowledgedAt" | "acknowledged
   return { label: "Recebido", tone: "brand", done: true };
 }
 
+/** Options of the "Tipo" field, in the order the form shows them. */
+export const KIND_OPTIONS = PAYMENT_KINDS.map((k) => ({ value: k, label: PAYMENT_KIND_LABEL[k] }));
+
+/** What each kind does to the month, said once for the form and the list. */
+export const KIND_HINT: Record<PaymentKind, string> = {
+  pay: "Paga as diárias ou o salário do mês.",
+  bonus:
+    "Dinheiro a mais, como uma festa ou um sábado. Entra no valor do mês e já conta como pago.",
+  transport: "Dinheiro da passagem. Entra no valor do mês e já conta como pago.",
+  advance:
+    "Dinheiro adiantado. Não muda o mês agora: depois, no cartão, abata os dias trabalhados dele.",
+  deduction: "Não é dinheiro entregue: só diminui o valor a pagar do mês. Não tem recibo.",
+};
+
+const KIND_NOUN: Record<PaymentKind, string> = {
+  pay: "pagamento",
+  bonus: "gratificação",
+  transport: "vale-transporte",
+  advance: "adiantamento",
+  deduction: "desconto",
+};
+
+/** What to call the entry in a sentence: "Remover desconto", "Excluir abatimento de R$ 180". */
+export function kindNoun(p: Pick<Payment, "kind" | "advanceId">): string {
+  return p.advanceId ? "abatimento" : KIND_NOUN[p.kind];
+}
+
+/** Desconto lowers the month; every other kind reads as a positive amount. */
+export function signedCents(p: Pick<Payment, "kind" | "amountCents">): number {
+  return PAYMENT_KIND_DUE_SIGN[p.kind] < 0 ? -p.amountCents : p.amountCents;
+}
+
+/** "− R$ 50,00" for a desconto, "R$ 50,00" otherwise; the minus is a real minus sign. */
+export function formatSigned(p: Pick<Payment, "kind" | "amountCents">): string {
+  const cents = signedCents(p);
+  return cents < 0 ? `− ${formatCents(-cents)}` : formatCents(cents);
+}
+
+export function kindTone(kind: PaymentKind): Tone {
+  if (kind === "deduction") return "coral";
+  if (kind === "advance") return "amber";
+  return "neutral";
+}
+
+/** "restam R$ 180,00 de R$ 360,00", or "todo abatido". */
+export function advanceProgress(p: Pick<Payment, "amountCents" | "remainingCents">): string {
+  const remaining = p.remainingCents ?? 0;
+  if (remaining === 0) return `Todo abatido (${formatCents(p.amountCents)})`;
+  return `Restam ${formatCents(remaining)} de ${formatCents(p.amountCents)}`;
+}
+
+/** "Adiantamento de 15/09" for an abatement, given the advances it may point at. */
+export function abatementLabel(
+  p: Pick<Payment, "advanceId">,
+  advances: readonly Pick<Payment, "id" | "paidOn">[],
+): string | null {
+  if (!p.advanceId) return null;
+  const advance = advances.find((a) => a.id === p.advanceId);
+  return advance ? `Adiantamento de ${formatDateShort(advance.paidOn)}` : "Adiantamento";
+}
+
 /** Filters of the Pagamentos page; "" means "todos". */
 export interface PaymentFilters {
   pessoa: string;
+  tipo: string;
   forma: string;
   recebido: string;
 }
 
 export function matchesPaymentFilters(row: PaymentRow, f: Partial<PaymentFilters>): boolean {
-  if (f.pessoa && row.contract.id !== f.pessoa) return false;
-  if (f.forma && row.payment.method !== f.forma) return false;
-  if (f.recebido === "sim" && !row.payment.acknowledgedAt) return false;
-  if (f.recebido === "nao" && row.payment.acknowledgedAt) return false;
+  return (!f.pessoa || row.contract.id === f.pessoa) && matchesPaymentFields(row.payment, f);
+}
+
+/** The filters that look at the payment alone, shared by the team and the person's tables. */
+export function matchesPaymentFields(
+  p: Payment,
+  f: Partial<Pick<PaymentFilters, "tipo" | "forma" | "recebido">>,
+): boolean {
+  if (f.tipo && p.kind !== f.tipo) return false;
+  if (f.forma && p.method !== f.forma) return false;
+  // "Recebido" only asks about money handed over; a desconto is neither.
+  if (f.recebido && !handsMoney(p)) return false;
+  if (f.recebido === "sim" && !p.acknowledgedAt) return false;
+  if (f.recebido === "nao" && p.acknowledgedAt) return false;
   return true;
 }
 
 export interface PaymentTotals {
   count: number;
+  /** What counts as paid: adiantamentos only through their abated days, descontos never. */
   cents: number;
+  /** Entries where money changed hands, the only ones that take a "recebi". */
+  money: number;
   acknowledged: number;
 }
 
@@ -52,31 +138,31 @@ export function paymentTotals(rows: readonly PaymentRow[]): PaymentTotals {
   return rows.reduce(
     (t, r) => ({
       count: t.count + 1,
-      cents: t.cents + r.payment.amountCents,
+      cents: t.cents + (countsAsPaid(r.payment) ? r.payment.amountCents : 0),
+      money: t.money + (handsMoney(r.payment) ? 1 : 0),
       acknowledged: t.acknowledged + (r.payment.acknowledgedAt ? 1 : 0),
     }),
-    { count: 0, cents: 0, acknowledged: 0 },
+    { count: 0, cents: 0, money: 0, acknowledged: 0 },
   );
 }
 
 /** Multipart body of POST /payments. The API rejects empty optional fields, so they are left out. */
-export function paymentFormData(
-  input: CreatePaymentInput & { isExtra?: boolean },
-  receipt: File | null,
-): FormData {
+export function paymentFormData(input: CreatePaymentInput, receipt: File | null): FormData {
   const form = new FormData();
+  form.append("kind", input.kind);
   form.append("referenceMonth", input.referenceMonth);
   form.append("paidOn", input.paidOn);
   form.append("amountCents", String(input.amountCents));
-  form.append("method", input.method);
+  if (input.method) form.append("method", input.method);
   if (input.note) form.append("note", input.note);
   if (input.agreementId) form.append("agreementId", input.agreementId);
-  if (input.isExtra) form.append("isExtra", "true");
-  if (receipt) form.append("receipt", receipt);
+  if (input.advanceId) form.append("advanceId", input.advanceId);
+  if (receipt && input.method) form.append("receipt", receipt);
   return form;
 }
 
 export interface DayPaymentDraft {
+  kind: PaymentKind;
   referenceMonth: YearMonth;
   paidOn: IsoDate;
   amountCents: number | null;
@@ -90,11 +176,30 @@ export function dayPaymentDraft(
   today: IsoDate,
 ): DayPaymentDraft {
   return {
+    kind: "pay",
     referenceMonth: toYearMonth(date),
     paidOn: today,
     amountCents: contract.payType === "daily" ? contract.rateCents : null,
     method: "pix",
   };
+}
+
+/**
+ * What one worked day is worth, to abate it from an adiantamento: the diária, the hours
+ * worked times the rate, or a thirtieth of the salary (the same rate absences use).
+ */
+export function dayValueCents(
+  contract: Pick<Contract, "payType" | "rateCents">,
+  minutes: number,
+): number | null {
+  switch (contract.payType) {
+    case "daily":
+      return contract.rateCents;
+    case "hourly":
+      return minutes > 0 ? Math.round((minutes * contract.rateCents) / 60) : null;
+    case "monthly":
+      return Math.round(contract.rateCents / 30);
+  }
 }
 
 /** Years with possible payments, newest first: from the oldest contract start up to this year. */

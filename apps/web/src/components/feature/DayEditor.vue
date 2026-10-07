@@ -5,9 +5,11 @@ import {
   ENTRY_STATUSES,
   formatCents,
   formatDuration,
+  isOpenAdvance,
   monthName,
   parseYearMonth,
   shiftMinutes,
+  toYearMonth,
   upsertEntrySchema,
   weekdayOf,
   type Contract,
@@ -19,16 +21,25 @@ import {
 } from "@emdia/shared";
 import { computed, ref, watch } from "vue";
 import { entriesApi, errorMessage, paymentsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import Button from "@/components/ui/Button.vue";
 import Field from "@/components/ui/Field.vue";
 import ChoiceField from "@/components/ui/ChoiceField.vue";
+import MoneyInput from "@/components/ui/MoneyInput.vue";
+import Select from "@/components/ui/Select.vue";
+import { useResource } from "@/composables/resource.ts";
 import TimeField from "@/components/ui/TimeField.vue";
 import Sheet from "@/components/ui/Sheet.vue";
 import Stepper from "@/components/ui/Stepper.vue";
 import Toggle from "@/components/ui/Toggle.vue";
 import { useForm } from "@/composables/form.ts";
-import { formatDayMonth, formatRelative, WEEKDAY_LONG } from "@/lib/format.ts";
-import { dayPaymentDraft, paymentFormData } from "@/lib/payments.ts";
+import { formatDateShort, formatDayMonth, formatRelative, WEEKDAY_LONG } from "@/lib/format.ts";
+import {
+  advanceProgress,
+  dayPaymentDraft,
+  dayValueCents,
+  paymentFormData,
+} from "@/lib/payments.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { isWritable } from "@/lib/contract.ts";
@@ -164,17 +175,108 @@ watch(
   { immediate: true },
 );
 
+/**
+ * Instead of paying, the employer can abate the day from an open adiantamento: a compensation
+ * payment linked to it, in the day's month, so the day counts as paid and the advance shrinks.
+ */
+const advances = useResource(
+  () => (open.value && canPay.value ? contract.id : ""),
+  (id) => (id ? queryKeys.advances(id) : null),
+  (id) => paymentsApi.advances(id).then((r) => r.advances),
+);
+/** Oldest first: an advance is paid down in the order it was handed. */
+const openAdvances = computed(() =>
+  [...(advances.data.value ?? [])].filter(isOpenAdvance).reverse(),
+);
+const abateNow = ref(false);
+const advanceId = ref("");
+const abateCents = ref<number | null>(null);
+const abateError = ref<string | null>(null);
+const advance = computed(
+  () => openAdvances.value.find((a) => a.id === advanceId.value) ?? openAdvances.value[0] ?? null,
+);
+const advanceOptions = computed(() =>
+  openAdvances.value.map((a) => ({
+    value: a.id,
+    label: `Adiantamento de ${formatDateShort(a.paidOn)}`,
+    description: advanceProgress(a).toLowerCase(),
+  })),
+);
+const dayMinutes = computed(() =>
+  values.checkIn && values.checkOut
+    ? shiftMinutes(values.checkIn, values.checkOut, values.breakMinutes)
+    : 0,
+);
+const dayValue = computed(() => dayValueCents(contract, dayMinutes.value));
+const abating = computed(() => abateNow.value && worked.value && canPay.value && !!advance.value);
+const abateHint = computed(() => {
+  const a = advance.value;
+  if (!a) return undefined;
+  const left = advanceProgress(a);
+  const remaining = a.remainingCents ?? 0;
+  return dayValue.value !== null && dayValue.value > remaining
+    ? `${left}. O dia vale ${formatCents(dayValue.value)}: o resto fica a pagar.`
+    : `${left}.`;
+});
+
+watch(payNow, (on) => on && (abateNow.value = false));
+watch(abateNow, (on) => {
+  if (!on) return;
+  payNow.value = false;
+  abateError.value = null;
+  const a = advance.value;
+  if (a)
+    abateCents.value = Math.min(dayValue.value ?? a.remainingCents ?? 0, a.remainingCents ?? 0);
+});
+watch(advanceId, () => {
+  const a = advance.value;
+  if (a && abateCents.value !== null && abateCents.value > (a.remainingCents ?? 0))
+    abateCents.value = a.remainingCents;
+});
+watch(
+  () => [open.value, date] as const,
+  ([isOpen]) => {
+    if (!isOpen) return;
+    abateNow.value = false;
+    advanceId.value = "";
+    abateCents.value = null;
+    abateError.value = null;
+  },
+);
+
+function abateInput() {
+  const remaining = advance.value?.remainingCents ?? 0;
+  const amount = abateCents.value ?? 0;
+  if (amount <= 0) abateError.value = "Informe o valor";
+  else if (amount > remaining)
+    abateError.value = `O adiantamento só tem ${formatCents(remaining)} para abater`;
+  else abateError.value = null;
+  return abateError.value || !date || !advance.value
+    ? null
+    : {
+        kind: "pay" as const,
+        referenceMonth: toYearMonth(date),
+        paidOn: date,
+        amountCents: amount,
+        method: "compensation" as const,
+        advanceId: advance.value.id,
+        note: `Dia ${formatDateShort(date).slice(0, 5)} abatido do adiantamento`,
+      };
+}
+
 const payInput = () => ({ ...payValues, amountCents: payValues.amountCents ?? 0 });
 
 async function payDay(): Promise<boolean> {
-  const data = validatePay(payInput());
+  const data = abating.value ? abateInput() : validatePay(payInput());
   if (!data) return false;
   try {
-    const res = await paymentsApi.create(contract.id, paymentFormData(data, receipt.value));
+    const form = paymentFormData(data, abating.value ? null : receipt.value);
+    const res = await paymentsApi.create(contract.id, form);
     emit("paid", res.payment);
     return true;
   } catch (e) {
-    applyPayError(e);
+    if (abating.value) abateError.value = errorMessage(e);
+    else applyPayError(e);
     return false;
   }
 }
@@ -206,19 +308,23 @@ const unchanged = computed(() => {
 });
 const saveLabel = computed(() => {
   if (paying.value) return unchanged.value ? "Pagar" : entry ? "Salvar e pagar" : "Anotar e pagar";
+  if (abating.value)
+    return unchanged.value ? "Abater" : entry ? "Salvar e abater" : "Anotar e abater";
   return entry ? "Salvar" : "Anotar";
 });
 
 function onSave(): void {
   if (!date) return;
   const input = entryInput.value;
-  const withPayment = paying.value;
+  const withAbate = abating.value;
+  const withPayment = paying.value || withAbate;
   // Check the payment before saving the day, so a typo doesn't leave the day saved and unpaid.
-  if (withPayment && !validatePay(payInput())) {
+  if (withPayment && !(withAbate ? abateInput() : validatePay(payInput()))) {
     focusFirstError();
     return;
   }
   const skipEntry = withPayment && unchanged.value;
+  const what = withAbate ? "o abatimento" : "o pagamento";
   void submit(async (data) => {
     if (!skipEntry) {
       const res = await entriesApi.upsert(contract.id, date, data);
@@ -228,17 +334,18 @@ function onSave(): void {
       if (!(await payDay())) {
         toast.error(
           skipEntry
-            ? "O pagamento não foi registrado. Confira e tente de novo."
-            : "Dia anotado, mas o pagamento não foi registrado. Confira e tente de novo.",
+            ? `${withAbate ? "O abatimento" : "O pagamento"} não foi registrado. Confira e tente de novo.`
+            : `Dia anotado, mas ${what} não foi registrado. Confira e tente de novo.`,
         );
         focusFirstError();
         return;
       }
-      const amount = formatCents(payValues.amountCents ?? 0);
+      const amount = formatCents((withAbate ? abateCents.value : payValues.amountCents) ?? 0);
+      const done = withAbate
+        ? `${amount} abatidos do adiantamento`
+        : `pagamento de ${amount} registrado`;
       toast.success(
-        skipEntry
-          ? `Pagamento de ${amount} registrado.`
-          : `Dia anotado e pagamento de ${amount} registrado.`,
+        skipEntry ? `${done[0]!.toUpperCase()}${done.slice(1)}.` : `Dia anotado e ${done}.`,
       );
     } else {
       toast.success(
@@ -385,6 +492,39 @@ async function onRemove(): Promise<void> {
             @clear="clearPayError"
           />
         </div>
+        <template v-if="openAdvances.length > 0">
+          <Toggle v-model="abateNow" label="Abater do adiantamento" :hint="abateHint" />
+          <div v-if="abateNow" class="de__payfields">
+            <Field
+              v-if="openAdvances.length > 1"
+              v-slot="{ id, describedBy }"
+              label="Qual adiantamento"
+            >
+              <Select
+                :id="id"
+                :model-value="advance?.id ?? ''"
+                :options="advanceOptions"
+                label="Qual adiantamento"
+                :described-by="describedBy"
+                @update:model-value="(v) => (advanceId = v ?? '')"
+              />
+            </Field>
+            <Field
+              v-slot="{ id, invalid, describedBy }"
+              label="Valor abatido"
+              :error="abateError"
+              hint="O dia conta como pago e sai do que resta do adiantamento."
+            >
+              <MoneyInput
+                :id="id"
+                v-model="abateCents"
+                :invalid="invalid"
+                :described-by="describedBy"
+                @update:model-value="abateError = null"
+              />
+            </Field>
+          </div>
+        </template>
       </section>
 
       <div v-if="canDelete && !ended" class="de__danger">

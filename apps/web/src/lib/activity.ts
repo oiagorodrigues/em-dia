@@ -1,13 +1,27 @@
 import {
-  ADJUSTMENT_KIND_LABEL,
   ENTRY_STATUS_LABEL,
   formatCents,
   formatYearMonth,
   type ActivityItem,
-  type AdjustmentKind,
   type EntryStatus,
+  type PaymentKind,
 } from "@emdia/shared";
 import { formatDayMonth } from "./format.ts";
+
+const KIND_NOUN: Record<Exclude<PaymentKind, "pay">, string> = {
+  bonus: "uma gratificação",
+  transport: "vale-transporte",
+  advance: "um adiantamento",
+  deduction: "um desconto",
+};
+
+/** History written before adjustments became payment kinds keeps reading as it did. */
+const LEGACY_ADJUSTMENT: Record<string, string> = {
+  bonus: "uma gratificação",
+  transport: "vale-transporte",
+  advance: "um adiantamento (vale)",
+  deduction: "um desconto",
+};
 
 export interface ActivityLine {
   actor: string;
@@ -92,23 +106,34 @@ export function describeActivity(item: ActivityItem, meId: string | null): Activ
     case "entry.clock_out":
       return { actor, text: "bateu a saída", value: str(m, "time") ?? undefined, tone: "neutral" };
     case "adjustment.create": {
-      const kind = str(m, "kind") as AdjustmentKind | null;
-      const label = kind ? (ADJUSTMENT_KIND_LABEL[kind] ?? kind).toLowerCase() : "um lançamento";
+      const label = LEGACY_ADJUSTMENT[str(m, "kind") ?? ""] ?? "um lançamento";
       return { actor, text: `lançou ${label}${ref}`, value: money, tone: "money" };
     }
     case "adjustment.delete": {
-      const kind = str(m, "kind") as AdjustmentKind | null;
-      const label = kind ? (ADJUSTMENT_KIND_LABEL[kind] ?? kind).toLowerCase() : "um lançamento";
+      const label = LEGACY_ADJUSTMENT[str(m, "kind") ?? ""] ?? "um lançamento";
       return { actor, text: `removeu ${label}${ref}`, value: money, tone: "neutral" };
     }
-    case "payment.create":
-      return { actor, text: `registrou um pagamento${ref}`, value: money, tone: "money" };
-    case "payment.delete":
-      return { actor, text: `excluiu um pagamento${ref}`, value: money, tone: "alert" };
+    case "payment.create": {
+      if (str(m, "advanceId"))
+        return { actor, text: `abateu do adiantamento${ref}`, value: money, tone: "money" };
+      const kind = str(m, "kind") as PaymentKind | null;
+      const what = kind && kind !== "pay" ? KIND_NOUN[kind] : "um pagamento";
+      const verb = kind === "deduction" ? "lançou" : "registrou";
+      return { actor, text: `${verb} ${what}${ref}`, value: money, tone: "money" };
+    }
+    case "payment.update":
+      return { actor, text: `editou um lançamento${ref}`, value: money, tone: "neutral" };
+    case "payment.delete": {
+      const kind = str(m, "kind") as PaymentKind | null;
+      const what = kind && kind !== "pay" ? KIND_NOUN[kind] : "um pagamento";
+      return { actor, text: `excluiu ${what}${ref}`, value: money, tone: "alert" };
+    }
     case "payment.receipt":
       return { actor, text: "anexou um comprovante", tone: "neutral" };
     case "payment.acknowledge":
       return { actor, text: "confirmou que recebeu um pagamento", tone: "ok" };
+    case "payment.confirm":
+      return { actor, text: "marcou um pagamento como concluído", tone: "ok" };
     case "contract.create":
       return { actor, text: "criou o vínculo", tone: "neutral" };
     case "contract.update": {
@@ -169,7 +194,7 @@ export function describeActivity(item: ActivityItem, meId: string | null): Activ
 
 export type ActivityGroup = "registros" | "pagamentos" | "vinculo";
 
-/** History filter buckets: days, money (payments, extras, agreements), and the contract itself. */
+/** History filter buckets: days, money (payments of every kind, agreements), and the contract itself. */
 export function activityGroup(action: string): ActivityGroup {
   if (action.startsWith("entry.")) return "registros";
   if (

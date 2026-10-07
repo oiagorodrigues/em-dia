@@ -10,6 +10,9 @@ import {
   monthName,
   parseYearMonth,
   PAY_TYPE_LABEL,
+  countsAsPaid,
+  handsMoney,
+  PAYMENT_KIND_LABEL,
   PAYMENT_METHOD_LABEL,
   shiftMonth,
   toYearMonth,
@@ -29,6 +32,7 @@ import { useResource } from "@/composables/resource.ts";
 import { contactChannels, describeEstimate, estimateGap, isWritable } from "@/lib/contract.ts";
 import { ENTRY_TONE } from "@/lib/entry.ts";
 import { formatDateShort, WEEKDAY_SHORT } from "@/lib/format.ts";
+import { formatSigned } from "@/lib/payments.ts";
 import { attendanceText } from "@/lib/schedule.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 
@@ -113,7 +117,8 @@ const average = computed(() => estimateAverageMonthlyCost(contract.value, month.
 const kpis = computed(() => {
   const sum = s.value;
   const owed = sum ? Math.max(0, sum.balanceCents) : 0;
-  const paidThisMonth = payments.data.value?.filter((p) => p.referenceMonth === month.value) ?? [];
+  const paidThisMonth =
+    payments.data.value?.filter((p) => p.referenceMonth === month.value && countsAsPaid(p)) ?? [];
   return [
     {
       tone: "brand" as const,
@@ -375,9 +380,16 @@ function tabLink(name: string) {
             <li v-for="p in lastPayments" :key="p.id" class="ov__pay">
               <span class="ov__ref">{{ formatYearMonth(p.referenceMonth) }}</span>
               <span class="ov__paid mono">{{ formatDateShort(p.paidOn) }}</span>
-              <span class="ov__method">{{ PAYMENT_METHOD_LABEL[p.method] }}</span>
-              <span class="ov__amount mono">{{ formatCents(p.amountCents) }}</span>
-              <StatusChip :tone="p.acknowledgedAt ? 'brand' : 'amber'">{{
+              <span class="ov__method">{{
+                p.kind === "pay" && p.method
+                  ? PAYMENT_METHOD_LABEL[p.method]
+                  : PAYMENT_KIND_LABEL[p.kind]
+              }}</span>
+              <span class="ov__amount mono" :class="{ 'is-minus': p.kind === 'deduction' }">{{
+                formatSigned(p)
+              }}</span>
+              <StatusChip v-if="!handsMoney(p)" tone="neutral" :dot="false">sem recebi</StatusChip>
+              <StatusChip v-else :tone="p.acknowledgedAt ? 'brand' : 'amber'">{{
                 p.acknowledgedAt ? "recebido" : "sem confirmação"
               }}</StatusChip>
             </li>
@@ -665,6 +677,10 @@ function tabLink(name: string) {
   font-weight: 600;
   text-align: right;
   white-space: nowrap;
+}
+
+.ov__amount.is-minus {
+  color: var(--coral-ink);
 }
 
 .ov__terms {

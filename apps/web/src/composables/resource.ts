@@ -97,7 +97,7 @@ export function useInvalidate() {
   }
 
   return {
-    /** Entries, adjustments, payments or agreements of one contract changed. */
+    /** Entries, payments or agreements of one contract changed. */
     records: (contractId: string, ...fresh: Cached[]) => run(staleAfterRecords(contractId), fresh),
     /** The contract itself changed (edited, ended, removed, restored). */
     contract: (contractId: string, ...fresh: Cached[]) =>

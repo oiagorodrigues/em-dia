@@ -3,9 +3,12 @@ import {
   createPaymentSchema,
   DEFAULT_TIMEZONE,
   formatCents,
+  isOpenAdvance,
   nowInZone,
+  PAYMENT_KINDS,
   toYearMonth,
   YEAR_MONTH_RE,
+  type PaymentKind,
   type PaymentMethod,
 } from "@emdia/shared";
 import { computed, ref, watch } from "vue";
@@ -23,14 +26,42 @@ import Select from "@/components/ui/Select.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import SkeletonForm from "@/components/ui/SkeletonForm.vue";
 import SkeletonLedger from "@/components/ui/SkeletonLedger.vue";
-import Toggle from "@/components/ui/Toggle.vue";
+import ChoiceField from "@/components/ui/ChoiceField.vue";
 import { previousInApp, useBack } from "@/composables/back.ts";
 import { useForm } from "@/composables/form.ts";
 import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { isOpenAgreement, nextInstallmentCents } from "@/lib/agreement.ts";
 import { isWritable } from "@/lib/contract.ts";
-import { paymentFormData } from "@/lib/payments.ts";
+import { formatDateShort } from "@/lib/format.ts";
+import { advanceProgress, KIND_HINT, KIND_OPTIONS, paymentFormData } from "@/lib/payments.ts";
+
+const SUBMIT_LABEL: Record<PaymentKind, string> = {
+  pay: "Registrar pagamento",
+  bonus: "Registrar gratificação",
+  transport: "Registrar vale-transporte",
+  advance: "Registrar adiantamento",
+  deduction: "Lançar desconto",
+};
+
+const SUBTITLE: Record<PaymentKind, string> = {
+  pay: "Fica guardado com o comprovante, e a pessoa confirma que recebeu.",
+  bonus: "Fica guardado com o comprovante, e a pessoa confirma que recebeu.",
+  transport: "Fica guardado com o comprovante, e a pessoa confirma que recebeu.",
+  advance: "Fica guardado com o comprovante, e a pessoa confirma que recebeu.",
+  deduction: "Fica guardado no histórico dos dois lados e diminui o valor do mês.",
+};
+
+const SAVED: Record<PaymentKind, (amount: string) => string> = {
+  pay: (a) => `Pagamento de ${a} registrado.`,
+  bonus: (a) => `Gratificação de ${a} registrada.`,
+  transport: (a) => `Vale-transporte de ${a} registrado.`,
+  advance: (a) => `Adiantamento de ${a} registrado.`,
+  deduction: (a) => `Desconto de ${a} lançado.`,
+};
+
+const isPaymentKind = (v: string): v is PaymentKind =>
+  (PAYMENT_KINDS as readonly string[]).includes(v);
 
 const route = useRoute();
 const router = useRouter();
@@ -65,16 +96,27 @@ const contract = computed(
   () => contracts.data.value?.find((c) => c.id === contractId.value) ?? null,
 );
 
+/** `?tipo=` opens the form on a kind; `?extra=1` is the old "pagamento extra" link. */
+const queryKind: PaymentKind =
+  typeof route.query.tipo === "string" && isPaymentKind(route.query.tipo)
+    ? route.query.tipo
+    : route.query.extra === "1"
+      ? "bonus"
+      : "pay";
+
 const { values, errors, formError, submitting, submit, clearError } = useForm(createPaymentSchema, {
+  kind: queryAgreement ? "pay" : queryKind,
   referenceMonth: queryMonth ?? toYearMonth(today),
   paidOn: today,
   amountCents: null as number | null,
   method: (queryAgreement ? "compensation" : "pix") as PaymentMethod,
   note: "",
-  isExtra: route.query.extra === "1",
 });
 const agreementId = ref(queryAgreement ?? "");
+const advanceId = ref("");
 const receipt = ref<File | null>(null);
+const isPay = computed(() => values.kind === "pay");
+const handsMoney = computed(() => values.kind !== "deduction");
 
 /** Prefill with what's still owed for the reference month, until the person types their own amount. */
 const touchedAmount = ref(false);
@@ -84,12 +126,19 @@ const summary = useResource(
   (s) => contractsApi.summary(s.id, s.month).then((r) => r.summary),
 );
 watch(
-  summary.data,
-  (s) => {
-    if (s && !touchedAmount.value) values.amountCents = s.balanceCents > 0 ? s.balanceCents : null;
+  [summary.data, isPay],
+  ([s, pay]) => {
+    if (!s || touchedAmount.value) return;
+    values.amountCents = pay && s.balanceCents > 0 ? s.balanceCents : null;
   },
   { immediate: true },
 );
+/** Compensation only pays diárias/salário; other kinds go back to Pix. */
+watch(isPay, (pay) => {
+  if (!pay && values.method === "compensation") values.method = "pix";
+  clearError("kind");
+  clearError("method");
+});
 
 const contractOptions = computed(() =>
   (contracts.data.value ?? []).map((c) => ({ value: c.id, label: c.workerName })),
@@ -135,32 +184,63 @@ watch(
   },
   { immediate: true },
 );
-watch(contractId, () => (agreementId.value = ""));
+watch(contractId, () => {
+  agreementId.value = "";
+  advanceId.value = "";
+});
+
+/** Open adiantamentos a compensation can abate, like an agreement. */
+const allAdvances = useResource(
+  () => (values.method === "compensation" && isPay.value ? contractId.value : ""),
+  (id) => (id ? queryKeys.advances(id) : null),
+  (id) => paymentsApi.advances(id).then((r) => r.advances),
+);
+const openAdvances = computed(() => allAdvances.data.value?.filter(isOpenAdvance) ?? []);
+const advanceOptions = computed(() => [
+  { value: "", label: "Nenhum" },
+  ...openAdvances.value.map((a) => ({
+    value: a.id,
+    label: `Adiantamento de ${formatDateShort(a.paidOn)}`,
+    description: advanceProgress(a).toLowerCase(),
+  })),
+]);
+const advance = computed(() => openAdvances.value.find((a) => a.id === advanceId.value) ?? null);
+watch(agreementId, (id) => id && (advanceId.value = ""));
+watch(advanceId, (id) => {
+  if (!id) return;
+  agreementId.value = "";
+  clearError("note");
+  clearError("advanceId");
+});
 
 const amountHint = computed(() => {
   if (agreement.value) return `Falta ${formatCents(agreement.value.remainingCents)} neste acordo.`;
+  if (advance.value) return `${advanceProgress(advance.value)} deste adiantamento.`;
+  if (!isPay.value) return undefined;
   const s = summary.data.value;
   if (!s) return undefined;
   return s.balanceCents > 0
     ? `Falta pagar ${formatCents(s.balanceCents)} deste mês.`
     : "Este mês já está pago.";
 });
-const noteRequired = computed(() => values.method === "compensation" && !agreementId.value);
+const compensation = computed(() => isPay.value && values.method === "compensation");
+const noteRequired = computed(() => compensation.value && !agreementId.value && !advanceId.value);
+const submitLabel = computed(() => SUBMIT_LABEL[values.kind]);
 
 function onSubmit(): void {
   const input = {
     ...values,
+    method: handsMoney.value ? values.method : null,
     amountCents: values.amountCents ?? 0,
     note: values.note.trim() || null,
-    agreementId:
-      values.method === "compensation" && agreementId.value ? agreementId.value : undefined,
-    isExtra: values.method !== "compensation" && values.isExtra,
+    agreementId: compensation.value && agreementId.value ? agreementId.value : undefined,
+    advanceId: compensation.value && advanceId.value ? advanceId.value : undefined,
   };
   void submit(async (data) => {
     if (!contract.value) return;
     await paymentsApi.create(contract.value.id, paymentFormData(data, receipt.value));
     void invalidate.records(contract.value.id);
-    toast.success(`Pagamento de ${formatCents(data.amountCents)} registrado.`);
+    toast.success(SAVED[data.kind](formatCents(data.amountCents)));
     // Back to where the form was opened from; a direct visit lands on the person's payments.
     if (previousInApp()) router.back();
     else
@@ -181,11 +261,7 @@ const { to: back } = useBack(
 
 <template>
   <div class="np">
-    <PageHeader
-      :back="back"
-      title="Novo pagamento"
-      subtitle="Fica guardado com o comprovante, e a pessoa confirma que recebeu."
-    />
+    <PageHeader :back="back" title="Novo pagamento" :subtitle="SUBTITLE[values.kind]" />
 
     <div
       v-if="contracts.loading.value && !contracts.data.value"
@@ -240,11 +316,30 @@ const { to: back } = useBack(
           <span class="label">para</span> <strong>{{ contract.workerName }}</strong>
         </p>
 
+        <Field
+          v-slot="{ id, describedBy }"
+          label="Tipo"
+          :error="errors.kind"
+          :hint="KIND_HINT[values.kind]"
+        >
+          <ChoiceField
+            :id="id"
+            v-model="values.kind"
+            :options="KIND_OPTIONS"
+            label="Tipo"
+            breakpoint="lg"
+            wrap
+            :described-by="describedBy"
+            @update:model-value="clearError('kind')"
+          />
+        </Field>
+
         <PaymentFields
           v-model:paid-on="values.paidOn"
           v-model:amount-cents="values.amountCents"
           v-model:method="values.method"
           v-model:receipt="receipt"
+          :kind="values.kind"
           :errors="errors"
           :today="today"
           :amount-hint="amountHint"
@@ -269,7 +364,23 @@ const { to: back } = useBack(
           </template>
           <template #after-method>
             <Field
-              v-if="values.method === 'compensation'"
+              v-if="compensation && openAdvances.length > 0"
+              v-slot="{ id, describedBy }"
+              label="Abater de um adiantamento"
+              optional
+              :error="errors.advanceId"
+            >
+              <Select
+                :id="id"
+                :model-value="advanceId"
+                :options="advanceOptions"
+                label="Abater de um adiantamento"
+                :described-by="describedBy"
+                @update:model-value="(v) => (advanceId = v ?? '')"
+              />
+            </Field>
+            <Field
+              v-if="compensation"
               v-slot="{ id, describedBy }"
               label="Abater de um acordo"
               optional
@@ -315,16 +426,9 @@ const { to: back } = useBack(
           />
         </Field>
 
-        <Toggle
-          v-if="values.method !== 'compensation'"
-          v-model="values.isExtra"
-          label="Pagamento extra"
-          hint="Fora do valor do mês, como uma festa ou um sábado. Aparece também em Extras e não mexe no saldo do mês."
-        />
-
-        <Button type="submit" variant="primary" :loading="submitting" :disabled="!contract"
-          >Registrar pagamento</Button
-        >
+        <Button type="submit" variant="primary" :loading="submitting" :disabled="!contract">{{
+          submitLabel
+        }}</Button>
       </form>
       <PaymentsSidePanel
         v-if="contract"
@@ -333,7 +437,7 @@ const { to: back } = useBack(
         :month="values.referenceMonth"
         :summary="summary.data.value ?? null"
         :loading="summary.loading.value"
-        :highlight-pix="values.method === 'pix'"
+        :highlight-pix="handsMoney && values.method === 'pix'"
       />
     </div>
   </div>

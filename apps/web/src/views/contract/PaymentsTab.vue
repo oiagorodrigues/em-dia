@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import {
+  countsAsPaid,
   formatCents,
   formatYearMonth,
+  handsMoney,
+  isOpenAdvance,
   parseYearMonth,
+  PAYMENT_KIND_LABEL,
   PAYMENT_METHOD_LABEL,
   RECEIPT_MIME_TYPES,
   type Payment,
@@ -26,7 +30,18 @@ import { useTableState } from "@/composables/tableState.ts";
 import { isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
-import { receivedStatus } from "@/lib/payments.ts";
+import {
+  abatementLabel,
+  advanceProgress,
+  formatSigned,
+  KIND_OPTIONS,
+  kindNoun,
+  kindTone,
+  matchesPaymentFields,
+  receivedStatus,
+  signedCents,
+} from "@/lib/payments.ts";
+import AdvancesPanel from "@/components/feature/AdvancesPanel.vue";
 import { receiptProblem } from "@/lib/receipt.ts";
 import { spansAround, type Column } from "@/lib/table.ts";
 import { useAuthStore } from "@/stores/auth.ts";
@@ -39,7 +54,7 @@ const wide = useMediaQuery(MQ.md);
 
 const { state, active, clear } = useTableState({
   defaultSort: { key: "pago", dir: "desc" },
-  filters: ["ano", "recebido"],
+  filters: ["ano", "tipo", "recebido"],
   prefix: "pg_",
 });
 
@@ -75,15 +90,38 @@ const recebido = computed({
   get: () => state.filters.recebido ?? "",
   set: (v: string) => (state.filters.recebido = v),
 });
+const KIND_FILTER = [{ value: "", label: "Todos os tipos" }, ...KIND_OPTIONS];
+const tipo = computed({
+  get: () => state.filters.tipo ?? "",
+  set: (v: string) => (state.filters.tipo = v),
+});
+const filterCount = computed(() => (state.filters.recebido ? 1 : 0) + (state.filters.tipo ? 1 : 0));
 
 const payments = useResource(
   () => ({ id: contract.value.id, year: year.value }),
   queryKeys.payments,
   (s) => paymentsApi.list(s.id, s.year).then((r) => r.payments),
 );
+/** All adiantamentos, whatever their year: abatements name them and open ones are listed. */
+const advances = useResource(
+  () => contract.value.id,
+  queryKeys.advances,
+  (id) => paymentsApi.advances(id).then((r) => r.advances),
+);
+const openAdvances = computed(() =>
+  (advances.data.value ?? []).filter(isOpenAdvance).map((payment) => ({ payment })),
+);
 const invalidate = useInvalidate();
 
 const canManage = computed(() => auth.isEmployer && isWritable(contract.value));
+
+function advanceName(p: Payment): string | null {
+  return abatementLabel(p, advances.data.value ?? []);
+}
+
+function methodText(p: Payment): string {
+  return p.method ? PAYMENT_METHOD_LABEL[p.method] : "—";
+}
 
 const columns: Column<Payment>[] = [
   {
@@ -92,6 +130,13 @@ const columns: Column<Payment>[] = [
     value: (p) => p.referenceMonth,
     format: (p) => formatYearMonth(p.referenceMonth),
     search: (p) => formatYearMonth(p.referenceMonth),
+    sortable: true,
+    searchable: true,
+  },
+  {
+    key: "tipo",
+    label: "Tipo",
+    value: (p) => PAYMENT_KIND_LABEL[p.kind],
     sortable: true,
     searchable: true,
   },
@@ -108,8 +153,8 @@ const columns: Column<Payment>[] = [
   {
     key: "valor",
     label: "Valor",
-    value: (p) => p.amountCents,
-    format: (p) => formatCents(p.amountCents),
+    value: (p) => signedCents(p),
+    format: (p) => formatSigned(p),
     sortable: true,
     sortFirst: "desc",
     align: "right",
@@ -118,8 +163,8 @@ const columns: Column<Payment>[] = [
   {
     key: "forma",
     label: "Forma",
-    value: (p) => PAYMENT_METHOD_LABEL[p.method],
-    search: (p) => agreementName(p) ?? "",
+    value: methodText,
+    search: (p) => agreementName(p) ?? advanceName(p) ?? "",
     sortable: true,
     searchable: true,
     priority: 2,
@@ -144,12 +189,13 @@ const columns: Column<Payment>[] = [
 const footerSpans = (shown: readonly Column<Payment>[]) => spansAround(shown, "valor");
 
 function filter(p: Payment): boolean {
-  if (state.filters.recebido === "sim") return !!p.acknowledgedAt;
-  if (state.filters.recebido === "nao") return !p.acknowledgedAt;
-  return true;
+  return matchesPaymentFields(p, state.filters);
 }
 
-const total = computed(() => payments.data.value?.reduce((s, p) => s + p.amountCents, 0) ?? 0);
+/** Paid in the year: descontos are not money and adiantamentos count as their days are abated. */
+const total = computed(
+  () => payments.data.value?.reduce((s, p) => s + (countsAsPaid(p) ? p.amountCents : 0), 0) ?? 0,
+);
 const busyId = ref<string | null>(null);
 
 function replace(updated: Payment): void {
@@ -176,7 +222,7 @@ async function remove(p: Payment): Promise<void> {
     setTimeout(() => {
       if (pendingRemove.value === p.id) pendingRemove.value = null;
     }, 6000);
-    toast.show(`Excluir o pagamento de ${formatCents(p.amountCents)}?`, {
+    toast.show(`Excluir ${kindNoun(p)} de ${formatCents(p.amountCents)}?`, {
       timeout: 6000,
       action: { label: "Excluir", run: () => void remove(p) },
     });
@@ -188,7 +234,9 @@ async function remove(p: Payment): Promise<void> {
     await paymentsApi.remove(contract.value.id, p.id);
     payments.mutate((list = []) => list.filter((x) => x.id !== p.id));
     void invalidate.records(contract.value.id, payments);
-    toast.success("Pagamento excluído.");
+    toast.success(
+      p.advanceId ? "Abatimento excluído. O adiantamento voltou a ter esse valor." : "Excluído.",
+    );
   } catch (e) {
     toast.error(errorMessage(e));
   } finally {
@@ -243,6 +291,7 @@ async function confirm(p: Payment): Promise<void> {
 
 /** One receipt icon: opens the viewer (where it can be swapped) or, with none yet, the upload. */
 function inlineFor(p: Payment): InlineAction[] {
+  if (!handsMoney(p)) return [];
   if (p.receipt)
     return [
       {
@@ -266,10 +315,10 @@ function inlineFor(p: Payment): InlineAction[] {
 function menuFor(p: Payment): MenuItem[] {
   if (!canManage.value) return [];
   const items: MenuItem[] = [{ label: "Editar", icon: "pencil", onSelect: () => edit(p) }];
-  if (!p.acknowledgedAt)
+  if (!p.acknowledgedAt && handsMoney(p))
     items.push({ label: "Marcar como concluído", icon: "check", onSelect: () => void confirm(p) });
   items.push({
-    label: "Remover pagamento",
+    label: `Remover ${kindNoun(p)}`,
     icon: "trash",
     danger: true,
     onSelect: () => void remove(p),
@@ -322,6 +371,8 @@ function onClear(): void {
 
 <template>
   <div class="pt">
+    <AdvancesPanel :items="openAdvances" :employer="canManage" />
+
     <EmptyState
       v-if="payments.error.value && !payments.data.value"
       tone="error"
@@ -341,16 +392,17 @@ function onClear(): void {
       :state="state"
       :default-sort="{ key: 'pago', dir: 'desc' }"
       :filter="filter"
-      :filters-active="!!state.filters.recebido"
-      :filter-count="state.filters.recebido ? 1 : 0"
+      :filters-active="filterCount > 0"
+      :filter-count="filterCount"
       :loading="payments.loading.value && !payments.data.value"
       label="Pagamentos"
-      search-placeholder="Buscar mês, forma, observação"
-      :count-label="(n) => (n === 1 ? '1 pagamento' : `${n} pagamentos`)"
+      search-placeholder="Buscar mês, tipo, forma, observação"
+      :count-label="(n) => (n === 1 ? '1 lançamento' : `${n} lançamentos`)"
       @clear-filters="onClear"
     >
       <template #filters>
         <Select v-model="yearModel" :options="yearOptions" label="Ano" class="pt__filter" />
+        <Select v-model="tipo" :options="KIND_FILTER" label="Tipo" class="pt__filter" />
         <Select
           v-model="recebido"
           :options="RECEIVED_OPTIONS"
@@ -383,16 +435,28 @@ function onClear(): void {
         <span class="pt__ref">{{ formatYearMonth(row.referenceMonth) }}</span>
       </template>
 
+      <template #cell-tipo="{ row }">
+        <StatusChip :tone="kindTone(row.kind)" :dot="false">{{
+          PAYMENT_KIND_LABEL[row.kind]
+        }}</StatusChip>
+        <span v-if="row.kind === 'advance'" class="pt__agr pt__left">{{
+          advanceProgress(row)
+        }}</span>
+      </template>
+
+      <template #cell-valor="{ row }">
+        <span :class="{ 'is-minus': row.kind === 'deduction' }">{{ formatSigned(row) }}</span>
+      </template>
+
       <template #cell-forma="{ row }">
-        <span class="pt__method"
-          >{{ PAYMENT_METHOD_LABEL[row.method] }}
-          <StatusChip v-if="row.isExtra" tone="brand" :dot="false">extra</StatusChip></span
-        >
+        <span class="pt__method">{{ methodText(row) }}</span>
         <span v-if="agreementName(row)" class="pt__agr">Acordo: {{ agreementName(row) }}</span>
+        <span v-if="advanceName(row)" class="pt__agr">{{ advanceName(row) }}</span>
       </template>
 
       <template #cell-recebido="{ row }">
-        <StatusChip v-if="row.acknowledgedAt" tone="brand">{{
+        <span v-if="!handsMoney(row)" class="pt__none">Não se aplica</span>
+        <StatusChip v-else-if="row.acknowledgedAt" tone="brand">{{
           receivedStatus(row).label
         }}</StatusChip>
         <Button
@@ -410,7 +474,7 @@ function onClear(): void {
         <TableActions
           :actions="inlineFor(row)"
           :menu="menuFor(row)"
-          :menu-label="`Mais ações do pagamento de ${formatCents(row.amountCents)}`"
+          :menu-label="`Mais ações: ${kindNoun(row)} de ${formatCents(row.amountCents)}`"
         />
       </template>
 
@@ -418,6 +482,7 @@ function onClear(): void {
         <ReceiptStub
           :payment="row"
           :agreement="agreementName(row)"
+          :advance="advanceName(row)"
           :can-acknowledge="auth.isWorker"
           :can-manage="canManage"
           :busy="busyId === row.id"
@@ -493,6 +558,19 @@ function onClear(): void {
   display: block;
   font-size: var(--t-12);
   color: var(--ink-2);
+}
+
+.pt__left {
+  color: var(--amber-ink);
+}
+
+.pt__none {
+  font-size: var(--t-12);
+  color: var(--ink-2);
+}
+
+.is-minus {
+  color: var(--coral-ink);
 }
 
 .pt__tot {

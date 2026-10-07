@@ -3,7 +3,9 @@ import {
   DEFAULT_TIMEZONE,
   formatCents,
   formatYearMonth,
+  handsMoney,
   nowInZone,
+  PAYMENT_KIND_LABEL,
   PAYMENT_METHOD_LABEL,
   PAYMENT_METHODS,
   RECEIPT_MIME_TYPES,
@@ -34,12 +36,19 @@ import { isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
 import {
+  advanceProgress,
+  formatSigned,
+  KIND_OPTIONS,
+  kindNoun,
+  kindTone,
   matchesPaymentFilters,
   paymentTotals,
   paymentYears,
   receivedStatus,
+  signedCents,
   type PaymentRow,
 } from "@/lib/payments.ts";
+import AdvancesPanel from "@/components/feature/AdvancesPanel.vue";
 import { receiptProblem } from "@/lib/receipt.ts";
 import { spansAround, type Column } from "@/lib/table.ts";
 import { useAuthStore } from "@/stores/auth.ts";
@@ -53,7 +62,7 @@ const wide = useMediaQuery(MQ.md);
 const thisYear = Number(nowInZone(DEFAULT_TIMEZONE).date.slice(0, 4));
 const { state, clear } = useTableState({
   defaultSort: { key: "pago", dir: "desc" },
-  filters: ["pessoa", "ano", "forma", "recebido"],
+  filters: ["pessoa", "ano", "tipo", "forma", "recebido"],
 });
 
 const year = computed(() => {
@@ -93,9 +102,16 @@ const receivedOptions = [
   { value: "sim", label: "Recebido" },
   { value: "nao", label: "Sem “recebi”" },
 ];
+const kindOptions = [{ value: "", label: "Todos os tipos" }, ...KIND_OPTIONS];
+const openAdvances = computed(() =>
+  (payments.data.value?.advances ?? []).map((a) => ({
+    payment: a.payment,
+    who: contracts.value.length > 1 ? personOf(a.contract) : undefined,
+  })),
+);
 
 function methodText(r: PaymentRow): string {
-  const label = PAYMENT_METHOD_LABEL[r.payment.method];
+  const label = r.payment.method ? PAYMENT_METHOD_LABEL[r.payment.method] : "—";
   return r.agreement ? `${label} · ${r.agreement}` : label;
 }
 
@@ -118,6 +134,13 @@ const columns = computed<Column<PaymentRow>[]>(() => [
     priority: 2,
   },
   {
+    key: "tipo",
+    label: "Tipo",
+    value: (r) => PAYMENT_KIND_LABEL[r.payment.kind],
+    sortable: true,
+    searchable: true,
+  },
+  {
     key: "pago",
     label: "Pago em",
     value: (r) => r.payment.paidOn,
@@ -131,8 +154,8 @@ const columns = computed<Column<PaymentRow>[]>(() => [
   {
     key: "valor",
     label: "Valor",
-    value: (r) => r.payment.amountCents,
-    format: (r) => formatCents(r.payment.amountCents),
+    value: (r) => signedCents(r.payment),
+    format: (r) => formatSigned(r.payment),
     sortable: true,
     sortFirst: "desc",
     align: "right",
@@ -157,14 +180,19 @@ const columns = computed<Column<PaymentRow>[]>(() => [
 const filter = (r: PaymentRow) =>
   matchesPaymentFilters(r, {
     pessoa: state.filters.pessoa,
+    tipo: state.filters.tipo,
     forma: state.filters.forma,
     recebido: state.filters.recebido,
   });
 const filterCount = computed(
   () =>
-    [state.filters.pessoa, state.filters.forma, state.filters.recebido, state.filters.ano].filter(
-      Boolean,
-    ).length,
+    [
+      state.filters.pessoa,
+      state.filters.tipo,
+      state.filters.forma,
+      state.filters.recebido,
+      state.filters.ano,
+    ].filter(Boolean).length,
 );
 const yearTotals = computed(() => paymentTotals(rows.value.filter(filter)));
 
@@ -187,6 +215,7 @@ async function run(row: PaymentRow, task: () => Promise<void>): Promise<void> {
 function replace(updated: Payment): void {
   payments.mutate((prev) => ({
     contracts: prev?.contracts ?? [],
+    advances: prev?.advances ?? [],
     rows: (prev?.rows ?? []).map((r) =>
       r.payment.id === updated.id ? { ...r, payment: updated } : r,
     ),
@@ -248,10 +277,15 @@ async function confirmRemove(): Promise<void> {
     await paymentsApi.remove(row.contract.id, row.payment.id);
     payments.mutate((prev) => ({
       contracts: prev?.contracts ?? [],
+      advances: prev?.advances ?? [],
       rows: (prev?.rows ?? []).filter((r) => r.payment.id !== row.payment.id),
     }));
     void invalidate.records(row.contract.id, payments);
-    toast.success("Pagamento removido.");
+    toast.success(
+      row.payment.advanceId
+        ? "Abatimento removido. O adiantamento voltou a ter esse valor."
+        : "Removido.",
+    );
   });
   removeOpen.value = false;
 }
@@ -288,6 +322,7 @@ async function replaceViewed(file: File): Promise<void> {
 
 function inlineActions(row: PaymentRow): InlineAction[] {
   const out: InlineAction[] = [];
+  if (!handsMoney(row.payment)) return out;
   if (auth.isWorker && !row.payment.acknowledgedAt)
     out.push({
       label: "Recebi",
@@ -328,7 +363,7 @@ function menuItems(row: PaymentRow): MenuItem[] {
   ];
   if (canManage(row)) {
     items.push({ label: "Editar", icon: "pencil", onSelect: () => edit(row) });
-    if (!row.payment.acknowledgedAt)
+    if (!row.payment.acknowledgedAt && handsMoney(row.payment))
       items.push({
         label: "Marcar como concluído",
         icon: "check",
@@ -372,7 +407,7 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
         :value="formatCents(yearTotals.cents)"
         :amount="yearTotals.cents"
         :format="formatCents"
-        :caption="yearTotals.count === 1 ? '1 pagamento' : `${yearTotals.count} pagamentos`"
+        :caption="yearTotals.count === 1 ? '1 lançamento' : `${yearTotals.count} lançamentos`"
         :loading="!payments.data.value"
       />
       <KpiCard
@@ -380,18 +415,20 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
         icon="check"
         label="Com “recebi”"
         :value="String(yearTotals.acknowledged)"
-        :caption="`de ${yearTotals.count}`"
+        :caption="`de ${yearTotals.money}`"
         :loading="!payments.data.value"
       />
       <KpiCard
-        :tone="yearTotals.count - yearTotals.acknowledged > 0 ? 'amber' : 'neutral'"
+        :tone="yearTotals.money - yearTotals.acknowledged > 0 ? 'amber' : 'neutral'"
         icon="clock"
         :label="auth.isEmployer ? 'Aguardando “recebi”' : 'Falta confirmar'"
-        :value="String(yearTotals.count - yearTotals.acknowledged)"
+        :value="String(yearTotals.money - yearTotals.acknowledged)"
         :caption="auth.isEmployer ? 'a pessoa confirma pelo app' : 'toque em “recebi”'"
         :loading="!payments.data.value"
       />
     </div>
+
+    <AdvancesPanel :items="openAdvances" :employer="auth.isEmployer" />
 
     <EmptyState
       v-if="payments.error.value"
@@ -415,8 +452,8 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
       :filters-active="filterCount > 0"
       :filter-count="filterCount"
       :loading="payments.loading.value"
-      search-placeholder="Buscar por pessoa, mês ou forma"
-      :count-label="(n) => (n === 1 ? '1 pagamento' : `${n} pagamentos`)"
+      search-placeholder="Buscar por pessoa, mês, tipo ou forma"
+      :count-label="(n) => (n === 1 ? '1 lançamento' : `${n} lançamentos`)"
       :empty-title="`Nenhum pagamento em ${year}.`"
       @clear-filters="onClear"
     >
@@ -434,6 +471,13 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
           @update:model-value="(v) => (state.filters.pessoa = v ?? '')"
           :options="personOptions"
           :label="auth.isEmployer ? 'Pessoa' : 'Quem pagou'"
+          class="pv__filter"
+        />
+        <Select
+          :model-value="state.filters.tipo ?? ''"
+          @update:model-value="(v) => (state.filters.tipo = v ?? '')"
+          :options="kindOptions"
+          label="Tipo"
           class="pv__filter"
         />
         <Select
@@ -466,17 +510,33 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
       <template #cell-ref="{ row }">
         <span class="pv__nowrap">{{ formatYearMonth(row.payment.referenceMonth) }}</span>
       </template>
+      <template #cell-tipo="{ row }">
+        <span class="pv__method">
+          <StatusChip :tone="kindTone(row.payment.kind)" :dot="false">{{
+            PAYMENT_KIND_LABEL[row.payment.kind]
+          }}</StatusChip>
+          <span v-if="row.payment.kind === 'advance'" class="pv__agreement pv__left">{{
+            advanceProgress(row.payment)
+          }}</span>
+        </span>
+      </template>
+      <template #cell-valor="{ row }">
+        <span :class="{ 'is-minus': row.payment.kind === 'deduction' }">{{
+          formatSigned(row.payment)
+        }}</span>
+      </template>
       <template #cell-forma="{ row }">
         <span class="pv__method">
-          <StatusChip tone="neutral" :dot="false">{{
+          <span v-if="!row.payment.method" class="pv__none">—</span>
+          <StatusChip v-else tone="neutral" :dot="false">{{
             PAYMENT_METHOD_LABEL[row.payment.method]
           }}</StatusChip>
-          <StatusChip v-if="row.payment.isExtra" tone="brand" :dot="false">extra</StatusChip>
           <span v-if="row.agreement" class="pv__agreement">{{ row.agreement }}</span>
         </span>
       </template>
       <template #cell-recebido="{ row }">
-        <StatusChip :tone="receivedStatus(row.payment).tone">{{
+        <span v-if="!handsMoney(row.payment)" class="pv__none">Não se aplica</span>
+        <StatusChip v-else :tone="receivedStatus(row.payment).tone">{{
           receivedStatus(row.payment).label
         }}</StatusChip>
       </template>
@@ -490,10 +550,11 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
           <p class="pv__card-who">
             <Avatar :name="personOf(row.contract)" :size="28" />
             <strong>{{ personOf(row.contract) }}</strong>
-            <span v-if="row.agreement" class="pv__agreement">· {{ row.agreement }}</span>
           </p>
           <ReceiptStub
             :payment="row.payment"
+            :agreement="row.payment.agreementId ? row.agreement : null"
+            :advance="row.payment.advanceId ? row.agreement : null"
             :can-acknowledge="auth.isWorker"
             :can-manage="canManage(row)"
             :busy="busyId === row.payment.id"
@@ -510,15 +571,15 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
       <template #footer="{ rows: shown, columns: visible }">
         <tr v-if="wide">
           <td :colspan="footerSpans(visible)[0]" class="pv__foot-label">
-            Total · {{ shown.length === 1 ? "1 pagamento" : `${shown.length} pagamentos` }}
+            Total pago · {{ shown.length === 1 ? "1 lançamento" : `${shown.length} lançamentos` }}
           </td>
           <td class="pv__foot-sum mono">{{ formatCents(paymentTotals(shown).cents) }}</td>
           <td :colspan="footerSpans(visible)[1]" class="pv__foot-ack">
-            {{ paymentTotals(shown).acknowledged }} de {{ shown.length }} com “recebi”
+            {{ paymentTotals(shown).acknowledged }} de {{ paymentTotals(shown).money }} com “recebi”
           </td>
         </tr>
         <p v-else class="pv__foot-card">
-          <span class="label">Total</span>
+          <span class="label">Total pago</span>
           <span class="mono">{{ formatCents(paymentTotals(shown).cents) }}</span>
         </p>
       </template>
@@ -567,10 +628,10 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
     />
     <ConfirmDialog
       v-model:open="removeOpen"
-      title="Remover pagamento?"
+      :title="removing ? `Remover ${kindNoun(removing.payment)}?` : 'Remover?'"
       :message="
         removing
-          ? `O pagamento de ${formatCents(removing.payment.amountCents)} para ${removing.contract.workerName} e o comprovante saem do histórico.`
+          ? `O lançamento de ${formatCents(removing.payment.amountCents)} para ${removing.contract.workerName}${removing.payment.receipt ? ' e o comprovante saem' : ' sai'} do histórico.`
           : undefined
       "
       confirm-label="Remover"
@@ -619,12 +680,28 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
 }
 
 .pv__agreement {
+  display: block;
   max-width: 22ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--t-12);
   color: var(--ink-2);
+}
+
+.pv__left {
+  max-width: 18ch;
+  white-space: normal;
+  color: var(--amber-ink);
+}
+
+.pv__none {
+  font-size: var(--t-12);
+  color: var(--ink-2);
+}
+
+.is-minus {
+  color: var(--coral-ink);
 }
 
 .pv__nowrap {

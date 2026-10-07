@@ -12,7 +12,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createApp, defineComponent } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { agreementsApi, contractsApi } from "@/api";
+import { agreementsApi, contractsApi, paymentsApi } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
 import { queryCacheOptions } from "@/api/query.ts";
 import NewPaymentView from "./NewPaymentView.vue";
@@ -41,7 +41,7 @@ const mesa = {
 
 const PaymentFields = defineComponent({
   name: "PaymentFields",
-  props: { amountCents: { type: Number, default: null } },
+  props: { amountCents: { type: Number, default: null }, kind: { type: String, default: "pay" } },
   template: "<div />",
 });
 
@@ -51,6 +51,7 @@ async function setup(query: string, cached: boolean) {
   vi.spyOn(contractsApi, "list").mockResolvedValue({ contracts: [contract] });
   vi.spyOn(contractsApi, "summary").mockResolvedValue({ summary } as never);
   vi.spyOn(agreementsApi, "list").mockResolvedValue({ agreements: [mesa] });
+  vi.spyOn(paymentsApi, "advances").mockResolvedValue({ advances: [] });
   const client = createApp({}).runWithContext(() => useQueryCache(pinia));
   if (cached) {
     client.setQueryData(queryKeys.contracts(), [contract]);
@@ -87,4 +88,28 @@ describe("NewPaymentView prefill", () => {
       expect(fields.props("amountCents")).toBe(10800);
     });
   }
+});
+
+describe("NewPaymentView type field", () => {
+  it("opens on diárias/salário and passes the type to the fields", async () => {
+    const fields = await setup("?vinculo=c1", true);
+    expect(fields.props("kind")).toBe("pay");
+  });
+
+  it("opens on a desconto from the link, without the month's balance as amount", async () => {
+    const fields = await setup("?vinculo=c1&tipo=deduction", true);
+    expect(fields.props("kind")).toBe("deduction");
+    expect(fields.props("amountCents")).toBeNull();
+  });
+
+  it("reads the old extra link as a gratificação", async () => {
+    const fields = await setup("?vinculo=c1&extra=1", true);
+    expect(fields.props("kind")).toBe("bonus");
+  });
+
+  it("names the button after the type", async () => {
+    const fields = await setup("?vinculo=c1&tipo=deduction", true);
+    const button = fields.element.closest("form")?.querySelector('button[type="submit"]');
+    expect(button?.textContent).toContain("Lançar desconto");
+  });
 });

@@ -241,7 +241,7 @@ const ledger = computed(() => {
     ...(s.adjustmentsCents
       ? [
           {
-            label: "Extras e descontos",
+            label: "Gratificações, vale e descontos",
             value: `${s.adjustmentsCents > 0 ? "+" : "−"} ${formatCents(Math.abs(s.adjustmentsCents))}`,
             tone: s.adjustmentsCents < 0 ? ("red" as const) : ("neutral" as const),
           },

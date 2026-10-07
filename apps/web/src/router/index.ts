@@ -74,10 +74,10 @@ export const routes: RouteRecordRaw[] = [
         name: "contract-payments",
         component: () => import("@/views/contract/PaymentsTab.vue"),
       },
+      // Extras live in Pagamentos now; old links land there.
       {
         path: "extras",
-        name: "contract-extras",
-        component: () => import("@/views/contract/ExtrasTab.vue"),
+        redirect: (to) => ({ name: "contract-payments", params: to.params, query: to.query }),
       },
       {
         path: "acordos",

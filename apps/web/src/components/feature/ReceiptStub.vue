@@ -2,6 +2,8 @@
 import {
   formatCents,
   formatYearMonth,
+  handsMoney,
+  PAYMENT_KIND_LABEL,
   PAYMENT_METHOD_LABEL,
   RECEIPT_MIME_TYPES,
   type Payment,
@@ -12,7 +14,7 @@ import Button from "@/components/ui/Button.vue";
 import Icon from "@/components/ui/Icon.vue";
 import Stamp from "@/components/ui/Stamp.vue";
 import { formatDateShort } from "@/lib/format.ts";
-import { receivedStatus } from "@/lib/payments.ts";
+import { advanceProgress, formatSigned, receivedStatus } from "@/lib/payments.ts";
 import ReceiptThumb from "./ReceiptThumb.vue";
 
 const {
@@ -21,6 +23,7 @@ const {
   canManage = false,
   busy = false,
   agreement = null,
+  advance = null,
 } = defineProps<{
   payment: Payment;
   canAcknowledge?: boolean;
@@ -28,6 +31,8 @@ const {
   busy?: boolean;
   /** Description of the agreement a compensation payment pays down. */
   agreement?: string | null;
+  /** "Adiantamento de 15/09/2026" when the payment abates days from one. */
+  advance?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -48,6 +53,14 @@ function onPick(e: Event): void {
 }
 
 const status = computed(() => receivedStatus(payment));
+const money = computed(() => handsMoney(payment));
+const methodText = computed(() => {
+  if (payment.method) return PAYMENT_METHOD_LABEL[payment.method];
+  return payment.kind === "deduction" ? "Não é dinheiro entregue" : "Sem forma de pagamento";
+});
+const kindName = computed(() =>
+  payment.kind === "pay" ? "pagamento" : PAYMENT_KIND_LABEL[payment.kind].toLowerCase(),
+);
 
 const fileName = computed(() =>
   payment.receipt ? sanitizeFilename(payment.receipt.originalName) : null,
@@ -62,21 +75,61 @@ const fileName = computed(() =>
     <div class="stub__main">
       <p class="label">
         ref. {{ formatYearMonth(payment.referenceMonth) }}
-        <span v-if="payment.isExtra" class="stub__extra">· extra</span>
+        <span v-if="payment.kind !== 'pay'" class="stub__kind" :class="`is-${payment.kind}`"
+          >· {{ PAYMENT_KIND_LABEL[payment.kind] }}</span
+        >
       </p>
-      <p class="stub__amount mono">{{ formatCents(payment.amountCents) }}</p>
+      <p class="stub__amount mono" :class="{ 'is-minus': !money }">
+        {{ formatSigned(payment) }}
+      </p>
       <p class="stub__meta">
-        <span>{{ PAYMENT_METHOD_LABEL[payment.method] }}</span>
+        <span>{{ methodText }}</span>
         <span aria-hidden="true">·</span>
-        <span class="mono">Pago em {{ formatDateShort(payment.paidOn) }}</span>
+        <span class="mono"
+          >{{ money ? "Pago em" : "Data" }} {{ formatDateShort(payment.paidOn) }}</span
+        >
+      </p>
+      <p v-if="payment.kind === 'advance'" class="stub__note stub__left">
+        {{ advanceProgress(payment) }}
       </p>
       <p v-if="agreement" class="stub__note">Acordo: {{ agreement }}</p>
+      <p v-if="advance" class="stub__note">Abatido do {{ advance.toLowerCase() }}</p>
       <p v-if="payment.note" class="stub__note">{{ payment.note }}</p>
     </div>
 
     <div class="stub__perf" aria-hidden="true" />
 
-    <div class="stub__side">
+    <div v-if="!money" class="stub__side">
+      <p class="stub__noreceipt">
+        {{
+          payment.kind === "deduction"
+            ? "Desconto: só diminui o valor do mês"
+            : "Lançado sem pagamento separado"
+        }}
+      </p>
+      <div v-if="canManage" class="stub__ack">
+        <button
+          type="button"
+          class="stub__remove"
+          :aria-label="`Editar ${kindName} de ${formatCents(payment.amountCents)}`"
+          :disabled="busy"
+          @click="emit('edit')"
+        >
+          <Icon name="pencil" :size="18" />
+        </button>
+        <button
+          type="button"
+          class="stub__remove"
+          :aria-label="`Excluir ${kindName} de ${formatCents(payment.amountCents)}`"
+          :disabled="busy"
+          @click="emit('remove')"
+        >
+          <Icon name="trash" :size="18" />
+        </button>
+      </div>
+    </div>
+
+    <div v-else class="stub__side">
       <button v-if="payment.receipt" type="button" class="stub__receipt" @click="emit('view')">
         <ReceiptThumb
           :contract-id="payment.contractId"
@@ -167,8 +220,18 @@ const fileName = computed(() =>
   min-width: 0;
 }
 
-.stub__extra {
+.stub__kind {
   color: var(--brand-ink);
+}
+
+.stub__kind.is-deduction,
+.stub__amount.is-minus {
+  color: var(--coral-ink);
+}
+
+.stub__kind.is-advance,
+.stub__left {
+  color: var(--amber-ink);
 }
 
 .stub__amount {

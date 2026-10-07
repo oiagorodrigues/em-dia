@@ -36,6 +36,20 @@ describe("describeActivity", () => {
     });
   });
 
+  it("names the payment kind and abatements", () => {
+    const text = (meta: ActivityItem["meta"]) =>
+      describeActivity(item("payment.create", meta), "u1").text;
+    expect(text({ kind: "pay", referenceMonth: "2026-09" })).toBe(
+      "registrou um pagamento de setembro 2026",
+    );
+    expect(text({ kind: "deduction" })).toBe("lançou um desconto");
+    expect(text({ kind: "advance" })).toBe("registrou um adiantamento");
+    expect(text({ kind: "pay", advanceId: "p1" })).toBe("abateu do adiantamento");
+    expect(describeActivity(item("adjustment.create", { kind: "bonus" }), "u1").text).toBe(
+      "lançou uma gratificação",
+    );
+  });
+
   it("survives missing meta and unknown actions", () => {
     expect(describeActivity(item("payment.create"), "u1").value).toBeUndefined();
     expect(

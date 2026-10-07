@@ -125,7 +125,7 @@ const invite = computed(() => {
       <p v-else class="ep__reason">{{ estimate.reason }}</p>
     </section>
     <p class="ep__foot">
-      Conta feita com os dias previstos. Faltas, extras e vales mudam o valor do mês.
+      Conta feita com os dias previstos. Faltas, gratificações e descontos mudam o valor do mês.
     </p>
   </aside>
 </template>

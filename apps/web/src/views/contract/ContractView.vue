@@ -67,7 +67,6 @@ const tabs = computed(() => {
     { name: "contract-overview", label: "Visão geral" },
     { name: "contract-card", label: "Cartão" },
     { name: "contract-payments", label: "Pagamentos" },
-    { name: "contract-extras", label: "Extras" },
     { name: "contract-agreements", label: "Acordos" },
     { name: "contract-history", label: "Histórico" },
   ];

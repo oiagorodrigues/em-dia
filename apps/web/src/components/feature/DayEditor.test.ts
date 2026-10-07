@@ -1,8 +1,10 @@
-import type { Contract, PublicUser, WorkEntry } from "@emdia/shared";
+import type { Contract, Payment, PublicUser, WorkEntry } from "@emdia/shared";
+import { PiniaColada } from "@pinia/colada";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { entriesApi, paymentsApi } from "@/api";
+import { queryCacheOptions } from "@/api/query.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import DayEditor from "./DayEditor.vue";
 
@@ -24,19 +26,35 @@ const contract = {
 const savedEntry = { date: "2026-09-30", status: "worked" } as WorkEntry;
 
 function setup(role: "employer" | "worker" = "employer", entry: WorkEntry | null = null) {
-  setActivePinia(createPinia());
+  const pinia = createPinia();
+  setActivePinia(pinia);
   useAuthStore().user = { id: "u1", role } as PublicUser;
   return mount(DayEditor, {
     props: { open: true, date: "2026-09-30", entry, contract, today: "2026-10-07" },
     attachTo: document.body,
+    global: { plugins: [pinia, [PiniaColada, queryCacheOptions({ retry: false })]] },
   });
+}
+
+function advance(id: string, paidOn: string, amountCents: number, remainingCents: number) {
+  return {
+    id,
+    contractId: "c1",
+    kind: "advance",
+    paidOn,
+    amountCents,
+    settledCents: amountCents - remainingCents,
+    remainingCents,
+  } as Payment;
 }
 
 let upsert: ReturnType<typeof vi.spyOn>;
 let create: ReturnType<typeof vi.spyOn>;
+let advances: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   upsert = vi.spyOn(entriesApi, "upsert").mockResolvedValue({ entry: savedEntry });
   create = vi.spyOn(paymentsApi, "create").mockResolvedValue({ payment: { id: "p1" } } as never);
+  advances = vi.spyOn(paymentsApi, "advances").mockResolvedValue({ advances: [] });
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -130,6 +148,84 @@ describe("DayEditor payment section", () => {
     const wrapper = setup("worker");
     await flushPromises();
     expect(payToggle()).toBeNull();
+    expect(advances).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+});
+
+describe("DayEditor abate from an adiantamento", () => {
+  const switches = () => [...document.querySelectorAll<HTMLInputElement>('input[role="switch"]')];
+  const abateToggle = () => switches()[1];
+
+  it("is offered only while an adiantamento is open", async () => {
+    advances.mockResolvedValue({ advances: [advance("a0", "2026-09-01", 10000, 0)] });
+    const wrapper = setup();
+    await flushPromises();
+    expect(switches()).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("abates the day from the oldest open adiantamento, capped at what remains", async () => {
+    advances.mockResolvedValue({
+      advances: [
+        advance("new", "2026-09-20", 50000, 50000),
+        advance("old", "2026-09-10", 36000, 10000),
+      ],
+    });
+    const wrapper = setup();
+    await flushPromises();
+    expect(document.body.textContent).toContain("Abater do adiantamento");
+    abateToggle()!.click();
+    await flushPromises();
+    expect(document.body.textContent?.replaceAll(String.fromCharCode(160), " ")).toContain(
+      "Restam R$ 100,00 de R$ 360,00",
+    );
+    expect(moneyInput()!.value).toBe("100,00");
+    expect(document.querySelector('button[form="day-editor"]')!.textContent).toContain(
+      "Anotar e abater",
+    );
+    submit().dispatchEvent(new Event("submit"));
+    await flushPromises();
+
+    expect(upsert).toHaveBeenCalledOnce();
+    const [, form] = create.mock.calls[0] as [string, FormData];
+    expect(form.get("kind")).toBe("pay");
+    expect(form.get("method")).toBe("compensation");
+    expect(form.get("advanceId")).toBe("old");
+    expect(form.get("amountCents")).toBe("10000");
+    expect(form.get("referenceMonth")).toBe("2026-09");
+    expect(form.get("paidOn")).toBe("2026-09-30");
+    wrapper.unmount();
+  });
+
+  it("does not save the day when the amount passes what remains", async () => {
+    advances.mockResolvedValue({ advances: [advance("a1", "2026-09-10", 36000, 10000)] });
+    const wrapper = setup();
+    await flushPromises();
+    abateToggle()!.click();
+    await flushPromises();
+    const money = moneyInput()!;
+    money.value = "150,00";
+    money.dispatchEvent(new Event("input"));
+    await flushPromises();
+    submit().dispatchEvent(new Event("submit"));
+    await flushPromises();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("só tem");
+    wrapper.unmount();
+  });
+
+  it("turns paying off when abating is on", async () => {
+    advances.mockResolvedValue({ advances: [advance("a1", "2026-09-10", 36000, 36000)] });
+    const wrapper = setup();
+    await flushPromises();
+    payToggle()!.click();
+    await flushPromises();
+    abateToggle()!.click();
+    await flushPromises();
+    expect(switches()[0]!.checked).toBe(false);
+    expect(moneyInput()!.value).toBe("180,00");
     wrapper.unmount();
   });
 });

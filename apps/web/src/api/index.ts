@@ -1,9 +1,7 @@
 import type {
   ActivityItem,
-  Adjustment,
   Agreement,
   Contract,
-  CreateAdjustmentInput,
   CreateAgreementInput,
   CreateContractInput,
   DashboardItem,
@@ -121,20 +119,6 @@ export const entriesApi = {
     }),
 };
 
-export const adjustmentsApi = {
-  list: (contractId: string, month: YearMonth) =>
-    request<{ adjustments: Adjustment[] }>(`/contracts/${enc(contractId)}/adjustments`, {
-      query: { month },
-    }),
-  create: (contractId: string, body: CreateAdjustmentInput) =>
-    request<{ adjustment: Adjustment }>(`/contracts/${enc(contractId)}/adjustments`, {
-      method: "POST",
-      body,
-    }),
-  remove: (contractId: string, id: string) =>
-    request<void>(`/contracts/${enc(contractId)}/adjustments/${enc(id)}`, { method: "DELETE" }),
-};
-
 export const agreementsApi = {
   list: (contractId: string, opts: { archived?: boolean } = {}) =>
     request<{ agreements: Agreement[] }>(`/contracts/${enc(contractId)}/agreements`, {
@@ -167,6 +151,9 @@ export const agreementsApi = {
 export const paymentsApi = {
   list: (contractId: string, year: number) =>
     request<{ payments: Payment[] }>(`/contracts/${enc(contractId)}/payments`, { query: { year } }),
+  /** Every adiantamento of the contract, whatever its year, with what is left to abate. */
+  advances: (contractId: string) =>
+    request<{ advances: Payment[] }>(`/contracts/${enc(contractId)}/advances`),
   create: (contractId: string, form: FormData) =>
     request<{ payment: Payment }>(`/contracts/${enc(contractId)}/payments`, {
       method: "POST",

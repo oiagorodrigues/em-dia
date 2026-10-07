@@ -94,7 +94,7 @@ const ledgerLines = computed<LedgerLine[]>(() => {
         ]
       : []),
     {
-      label: "Extras e descontos",
+      label: "Gratificações, vale e descontos",
       value: formatCents(summary.adjustmentsCents),
       tone: summary.adjustmentsCents < 0 ? "red" : "neutral",
     },

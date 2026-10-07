@@ -12,8 +12,7 @@ export const queryKeys = {
   agreements: (id: string) => ["contract", id, "agreements"] as const,
   summary: (p: { id: string; month: YearMonth }) => ["contract", p.id, "summary", p.month] as const,
   entries: (p: { id: string; month: YearMonth }) => ["contract", p.id, "entries", p.month] as const,
-  adjustments: (p: { id: string; month: YearMonth }) =>
-    ["contract", p.id, "adjustments", p.month] as const,
+  advances: (id: string) => ["contract", id, "advances"] as const,
   payments: (p: { id: string; year: number }) => ["contract", p.id, "payments", p.year] as const,
   team: (month: YearMonth) => ["team", month] as const,
   teamWithArchived: (month: YearMonth) => ["team", month, "archived"] as const,
@@ -32,7 +31,7 @@ function startsWith(key: EntryKey, prefix: EntryKey): boolean {
 
 type Entry = Pick<UseQueryEntry, "key">;
 
-/** Entries, adjustments, payments or agreements of one contract changed; the contract itself did not. */
+/** Entries, payments or agreements of one contract changed; the contract itself did not. */
 export function staleAfterRecords(contractId: string): (entry: Entry) => boolean {
   return ({ key }) =>
     (key.length > 2 && startsWith(key, queryKeys.contract(contractId))) ||

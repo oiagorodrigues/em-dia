@@ -47,7 +47,7 @@ const { state, clear } = useTableState({
 const GROUPS = [
   { value: "", label: "Tudo" },
   { value: "registros", label: "Registros" },
-  { value: "pagamentos", label: "Pagamentos e extras" },
+  { value: "pagamentos", label: "Pagamentos e acordos" },
   { value: "vinculo", label: "Vínculo" },
 ] as const;
 
