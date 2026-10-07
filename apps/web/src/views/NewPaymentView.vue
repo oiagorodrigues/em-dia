@@ -92,7 +92,7 @@ const contractOptions = computed(() =>
 const allAgreements = useResource(
   () => (values.method === "compensation" ? contractId.value : ""),
   (id) => (id ? queryKeys.agreements(id) : null),
-  (id) => agreementsApi.list(id).then((r) => r.agreements),
+  (id) => agreementsApi.list(id, { archived: true }).then((r) => r.agreements),
 );
 const agreements = {
   ...allAgreements,

@@ -129,11 +129,13 @@ Layout and columns: [DESIGN](../DESIGN.md#screens).
 An agreement records something the worker pays back in work (a dining table, an advance). Each installment is a payment with method "compensação" linked to the agreement. Endpoints: [api-contract](api-contract.md#agreements-compensation-account-deletion-projections-v3).
 
 - E creates an agreement on the profissional's "Acordos" tab with a description, total, installment (optional) and start month. It shows "aguardando a profissional concordar" until W accepts.
-- W sees the agreement and taps "concordar" once. W cannot create or cancel agreements.
-- The tab lists descrição, total, abatido, falta, parcela and status (aguardando, em andamento, quitado, cancelado).
+- W sees the agreement and taps "concordar" once. W cannot create, remove or restore agreements.
+- The tab lists descrição, total, abatido, falta, parcela and status (aguardando, em andamento, quitado, cancelado). Removed agreements are hidden unless the "Situação" filter is set to "Removidos".
+- With no agreements the tab shows a handshake icon and one short line for each role.
 - When E registers a payment, "abater de um acordo" offers the open agreements with the installment prefilled. The amount cannot exceed what remains; the form shows the error on the amount.
 - A compensation payment counts toward the month's paid total like any payment and W acknowledges it with "recebi". Without an agreement it is allowed only with a note.
-- E can cancel an agreement; payments already linked stay. Archived contracts reject agreement changes.
+- E can remove an agreement from its row menu ("Remover acordo", with a confirmation and a "desfazer" toast). Removal is logical: the agreement leaves the list, and its compensation payments leave the payment lists and the month's paid total for both roles. Restoring it ("Restaurar" in the "Removidos" filter) brings the agreement and its payments back unchanged. A removed agreement cannot be accepted or paid down.
+- The UI no longer offers "cancelar"; agreements cancelled before stay as "cancelado" and keep their payments. Archived contracts reject agreement changes.
 
 ## Delete account
 

@@ -98,6 +98,70 @@ describe("agreements", () => {
   });
 });
 
+describe("removing an agreement", () => {
+  test("DELETE archives it and hides its installments; restore brings both back", async () => {
+    const id = (await createAgreement()).body.agreement.id as string;
+    const installment = await pay({ amountCents: 20000, agreementId: id });
+    await pay({ amountCents: 30000, method: "pix", paidOn: "2026-10-04" });
+
+    const url = `${base}/agreements/${id}`;
+    expect((await t.http().delete(url).auth(worker.token, as)).status).toBe(403);
+    expect((await t.http().delete(url).auth(employer.token, as)).status).toBe(204);
+    expect((await t.http().delete(url).auth(employer.token, as)).status).toBe(204);
+
+    const list = await t.http().get(`${base}/agreements`).auth(worker.token, as);
+    expect(list.body.agreements).toHaveLength(0);
+    const all = await t.http().get(`${base}/agreements?include=archived`).auth(worker.token, as);
+    expect(all.body.agreements[0]).toMatchObject({
+      id,
+      archivedAt: "2026-10-06T15:00:00.000Z",
+      settledCents: 20000,
+    });
+
+    const payments = await t.http().get(`${base}/payments`).auth(worker.token, as);
+    expect(payments.body.payments.map((p: { method: string }) => p.method)).toEqual(["pix"]);
+    const summary = await t.http().get(`${base}/summary?month=2026-09`).auth(worker.token, as);
+    expect(summary.body.summary.paidCents).toBe(30000);
+    expect(
+      (
+        await t
+          .http()
+          .post(`${base}/payments/${installment.body.payment.id}/acknowledge`)
+          .auth(worker.token, as)
+      ).status,
+    ).toBe(404);
+    expect((await t.http().post(`${url}/accept`).auth(worker.token, as)).status).toBe(404);
+    const blocked = await pay({ amountCents: 100, agreementId: id });
+    expect(blocked.body.error.details.fieldErrors.agreementId).toBeDefined();
+
+    expect((await t.http().post(`${url}/restore`).auth(worker.token, as)).status).toBe(403);
+    const restored = await t.http().post(`${url}/restore`).auth(employer.token, as);
+    expect(restored.status).toBe(200);
+    expect(restored.body.agreement).toMatchObject({ archivedAt: null, settledCents: 20000 });
+    const back = await t.http().get(`${base}/summary?month=2026-09`).auth(worker.token, as);
+    expect(back.body.summary.paidCents).toBe(50000);
+
+    const activity = await t.http().get(`${base}/activity`).auth(employer.token, as);
+    const actions = activity.body.activity.map((a: { action: string }) => a.action);
+    expect(actions).toEqual(expect.arrayContaining(["agreement.archive", "agreement.restore"]));
+  });
+
+  test("unknown or foreign agreements answer 404; archived contracts reject it", async () => {
+    expect((await t.http().delete(`${base}/agreements/nope`).auth(employer.token, as)).status).toBe(
+      404,
+    );
+    const id = (await createAgreement()).body.agreement.id as string;
+    const stranger = await t.register("employer");
+    expect(
+      (await t.http().delete(`${base}/agreements/${id}`).auth(stranger.token, as)).status,
+    ).toBe(404);
+    await t.http().delete(base).auth(employer.token, as);
+    expect(
+      (await t.http().delete(`${base}/agreements/${id}`).auth(employer.token, as)).status,
+    ).toBe(409);
+  });
+});
+
 describe("compensation payments", () => {
   test("installments settle the agreement, count as paid and are acknowledged like any payment", async () => {
     const id = (await createAgreement()).body.agreement.id as string;
