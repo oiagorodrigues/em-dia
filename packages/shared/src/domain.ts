@@ -227,6 +227,8 @@ export interface Agreement {
   /** When the worker confirmed they agree. */
   acceptedAt: string | null;
   cancelledAt: string | null;
+  /** Removed by the employer; its compensation payments are hidden until it is restored. */
+  archivedAt: string | null;
   createdBy: string;
   createdAt: string;
 }

@@ -19,6 +19,7 @@ function agreement(patch: Partial<Agreement> = {}): Agreement {
     remainingCents: 100000,
     acceptedAt: "2026-09-02T12:00:00Z",
     cancelledAt: null,
+    archivedAt: null,
     createdBy: "u1",
     createdAt: "2026-09-01T12:00:00Z",
     ...patch,
@@ -26,7 +27,7 @@ function agreement(patch: Partial<Agreement> = {}): Agreement {
 }
 
 describe("agreementStatus", () => {
-  it("covers the four states", () => {
+  it("covers the five states", () => {
     expect(agreementStatus(agreement({ acceptedAt: null })).state).toBe("pending");
     expect(agreementStatus(agreement()).state).toBe("running");
     expect(agreementStatus(agreement({ remainingCents: 0, acceptedAt: null })).state).toBe(
@@ -36,6 +37,11 @@ describe("agreementStatus", () => {
       state: "cancelled",
       tone: "neutral",
     });
+    expect(
+      agreementStatus(
+        agreement({ archivedAt: "2026-10-02T00:00:00Z", cancelledAt: "2026-10-01T00:00:00Z" }),
+      ),
+    ).toMatchObject({ state: "removed", label: "Removido" });
   });
 });
 
@@ -51,5 +57,6 @@ describe("agreement amounts", () => {
     expect(isOpenAgreement(agreement())).toBe(true);
     expect(isOpenAgreement(agreement({ remainingCents: 0 }))).toBe(false);
     expect(isOpenAgreement(agreement({ cancelledAt: "x" }))).toBe(false);
+    expect(isOpenAgreement(agreement({ archivedAt: "x" }))).toBe(false);
   });
 });

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { contractsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import Button from "@/components/ui/Button.vue";
 import DataTable from "@/components/ui/DataTable.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
@@ -23,6 +24,7 @@ const { contract } = useContract();
 
 const feed = useResource(
   () => contract.value.id,
+  queryKeys.activity,
   (id) => contractsApi.activity(id, 200).then((r) => r.activity),
 );
 

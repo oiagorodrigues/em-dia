@@ -3,6 +3,7 @@ import { OCCUPATION_LABEL } from "@emdia/shared";
 import { computed, watch } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { contractsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import PageHeader from "@/components/layout/PageHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
@@ -19,7 +20,8 @@ const router = useRouter();
 const routeName = computed(() => (tab === "card" ? "contract-card" : "contract-payments"));
 
 const { data, error, loading, reload } = useResource(
-  () => 0,
+  () => null,
+  queryKeys.contracts,
   () => contractsApi.list().then((r) => r.contracts),
 );
 
@@ -48,10 +50,15 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
   <div class="pk">
     <PageHeader :title="title" :subtitle="auth.isEmployer ? 'De quem?' : 'De qual casa?'" />
 
-    <div v-if="loading || (data && data.length === 1)" aria-busy="true">
-      <Skeleton h="72px" />
-      <Skeleton h="72px" gap="8px" />
-    </div>
+    <ul v-if="loading || (data && data.length === 1)" class="pk__list" aria-busy="true">
+      <li v-for="i in 3" :key="i" class="pk__item">
+        <span class="pk__who pk__skel">
+          <Skeleton :w="['45%', '38%', '52%'][i - 1]" h="16px" />
+          <Skeleton w="30%" h="12px" />
+        </span>
+        <Skeleton w="18px" h="18px" />
+      </li>
+    </ul>
     <EmptyState v-else-if="error" tone="error" title="Não deu para carregar.">
       {{ error.message }}
       <template #actions><Button icon="refresh" @click="reload">Tentar de novo</Button></template>
@@ -135,6 +142,10 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
   flex: 1;
   display: grid;
   min-width: 0;
+}
+
+.pk__skel {
+  gap: 6px;
 }
 
 .pk__name {

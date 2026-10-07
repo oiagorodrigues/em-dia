@@ -13,6 +13,7 @@ import {
 } from "@emdia/shared";
 import { computed, ref } from "vue";
 import { adjustmentsApi, errorMessage } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import Button from "@/components/ui/Button.vue";
 import DataTable from "@/components/ui/DataTable.vue";
@@ -25,7 +26,7 @@ import StatusChip from "@/components/ui/StatusChip.vue";
 import TableActions from "@/components/ui/TableActions.vue";
 import { useContract } from "@/composables/contractContext.ts";
 import { useForm } from "@/composables/form.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import { formatRelative } from "@/lib/format.ts";
 import type { Column } from "@/lib/table.ts";
@@ -44,9 +45,11 @@ const maxMonth = computed(() =>
 );
 
 const list = useResource(
-  () => `${contract.value.id}|${month.value}`,
-  () => adjustmentsApi.list(contract.value.id, month.value).then((r) => r.adjustments),
+  () => ({ id: contract.value.id, month: month.value }),
+  queryKeys.adjustments,
+  (s) => adjustmentsApi.list(s.id, s.month).then((r) => r.adjustments),
 );
+const invalidate = useInvalidate();
 
 const net = computed(
   () => list.data.value?.reduce((s, a) => s + ADJUSTMENT_SIGN[a.kind] * a.amountCents, 0) ?? 0,
@@ -136,6 +139,7 @@ function onAdd(): void {
   void submit(async (data) => {
     const { adjustment } = await adjustmentsApi.create(contract.value.id, data);
     list.mutate((l = []) => [...l, adjustment]);
+    void invalidate.records(contract.value.id, list);
     values.amountCents = null;
     values.description = "";
     toast.success(`${ADJUSTMENT_KIND_LABEL[adjustment.kind]} lançado.`);
@@ -148,6 +152,7 @@ async function remove(a: Adjustment): Promise<void> {
   try {
     await adjustmentsApi.remove(contract.value.id, a.id);
     list.mutate((l = []) => l.filter((x) => x.id !== a.id));
+    void invalidate.records(contract.value.id, list);
     toast.success("Lançamento removido.");
   } catch (e) {
     toast.error(errorMessage(e));

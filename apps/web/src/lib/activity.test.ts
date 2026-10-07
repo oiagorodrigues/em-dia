@@ -70,6 +70,10 @@ describe("agreements and leaving", () => {
       "ok",
     );
     expect(describeActivity(item("agreement.cancel"), "u1").text).toBe("cancelou o acordo");
+    expect(describeActivity(item("agreement.archive", { description: "Mesa" }), "u1").text).toBe(
+      "removeu o acordo “Mesa”",
+    );
+    expect(describeActivity(item("agreement.restore"), "u1").tone).toBe("ok");
     expect(describeActivity(item("contract.worker_left"), "u1").text).toBe(
       "excluiu a conta e saiu do vínculo",
     );

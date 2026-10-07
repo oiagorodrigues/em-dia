@@ -56,9 +56,12 @@ const display = computed(() =>
       <span>{{ label }}</span>
       <span v-if="projected" class="kpi__tag">Previsto</span>
     </p>
-    <Skeleton v-if="loading" w="60%" h="34px" />
+    <p v-if="loading" class="kpi__value" aria-busy="true"><Skeleton w="60%" h="1.15em" /></p>
     <p v-else class="kpi__value mono">{{ display }}</p>
-    <p v-if="caption || trend || $slots.default" class="kpi__caption">
+    <p v-if="loading && (caption || trend || $slots.default)" class="kpi__caption">
+      <Skeleton w="40%" h="12px" />
+    </p>
+    <p v-else-if="caption || trend || $slots.default" class="kpi__caption">
       <span v-if="trend" class="kpi__trend" :class="`is-${trend.direction}`">
         {{ trend.direction === "up" ? "↑" : trend.direction === "down" ? "↓" : "→" }}
         {{ trend.text }}
@@ -146,6 +149,7 @@ const display = computed(() =>
 .kpi__caption {
   display: flex;
   flex-wrap: wrap;
+  min-height: calc(var(--t-12) * 1.5);
   gap: var(--s-1) var(--s-2);
   font-size: var(--t-12);
   color: var(--ink-2);

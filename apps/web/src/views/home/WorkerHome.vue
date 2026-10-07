@@ -16,6 +16,7 @@ import {
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import { dashboardApi, entriesApi, errorMessage, paymentsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ClockButton from "@/components/feature/ClockButton.vue";
 import InstallHint from "@/components/feature/InstallHint.vue";
 import Ledger, { type LedgerLine } from "@/components/feature/Ledger.vue";
@@ -28,7 +29,10 @@ import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import ChoiceField from "@/components/ui/ChoiceField.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
-import { useResource } from "@/composables/resource.ts";
+import SkeletonKpi from "@/components/ui/SkeletonKpi.vue";
+import SkeletonLedger from "@/components/ui/SkeletonLedger.vue";
+import SkeletonMonth from "@/components/ui/SkeletonMonth.vue";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { clockStateOf } from "@/lib/entry.ts";
 import { attendanceLabel, attendanceText } from "@/lib/schedule.ts";
 import { firstName } from "@/lib/format.ts";
@@ -42,10 +46,13 @@ const auth = useAuthStore();
 const toast = useToastStore();
 const route = useRoute();
 
-const { data, error, loading, reload, mutate } = useResource(
-  () => 0,
+const dashboard = useResource(
+  () => undefined,
+  queryKeys.dashboard,
   () => dashboardApi.get(),
 );
+const { data, error, loading, reload, mutate } = dashboard;
+const invalidate = useInvalidate();
 
 const selectedId = ref<string>("");
 watch(
@@ -106,8 +113,11 @@ const today = nowInZone(DEFAULT_TIMEZONE).date;
 const currentMonth = toYearMonth(today);
 const viewMonth = ref<YearMonth>(currentMonth);
 const future = computed(() => isFutureMonth(viewMonth.value, today));
-const other = useResource(viewMonth, (m) =>
-  m === currentMonth ? Promise.resolve(null) : dashboardApi.get(m),
+/** The current month shares the cache entry (and the request) of the dashboard above. */
+const other = useResource(
+  () => (viewMonth.value === currentMonth ? undefined : viewMonth.value),
+  queryKeys.dashboard,
+  (m) => dashboardApi.get(m),
 );
 const viewItem = computed<DashboardItem | null>(() => {
   if (viewMonth.value === currentMonth) return item.value;
@@ -143,7 +153,7 @@ async function onClock(action: "in" | "out"): Promise<void> {
         ? `Entrada às ${entry.checkIn} registrada.`
         : `Saída às ${entry.checkOut} registrada.`,
     );
-    void reload();
+    void invalidate.records(current.contract.id);
   } catch (e) {
     toast.error(errorMessage(e));
     void reload();
@@ -163,6 +173,7 @@ async function acknowledge(payment: Payment): Promise<void> {
         i.lastPayment?.id === updated.id ? { ...i, lastPayment: updated } : i,
       ),
     }));
+    void invalidate.records(payment.contractId, dashboard);
     toast.success("Recebimento confirmado.");
   } catch (e) {
     toast.error(errorMessage(e));
@@ -199,10 +210,31 @@ const stopShortcut = watch(
       <h1 class="visually-hidden">Início</h1>
     </header>
 
-    <div v-if="loading && !data" class="wh__clock" aria-busy="true">
-      <Skeleton w="200px" h="200px" class="round" />
-      <Skeleton h="56px" gap="24px" />
-      <Skeleton h="120px" gap="24px" />
+    <div v-if="loading && !data" class="grid grid-cols-12 gap-6 lg:gap-8" aria-busy="true">
+      <div class="col-span-12 grid content-start gap-6 lg:col-span-5">
+        <div class="wh__clock sheet">
+          <Skeleton w="200px" h="200px" round />
+          <Skeleton w="60%" h="14px" />
+          <Skeleton w="40%" h="12px" />
+        </div>
+        <div class="wh__today sheet">
+          <Skeleton w="45%" h="14px" />
+          <div class="wh__todaycols">
+            <Skeleton v-for="i in 3" :key="i" w="64px" h="40px" />
+          </div>
+        </div>
+      </div>
+      <div class="col-span-12 grid content-start gap-6 lg:col-span-7">
+        <SkeletonMonth />
+        <div class="kpi-grid"><SkeletonKpi v-for="i in 3" :key="i" /></div>
+        <div class="wh__month sheet">
+          <div class="wh__monthhead">
+            <Skeleton w="40%" h="20px" />
+            <Skeleton w="112px" h="44px" />
+          </div>
+          <SkeletonLedger :total="false" />
+        </div>
+      </div>
     </div>
 
     <EmptyState v-else-if="error && !data" tone="error" title="Não deu para carregar o início.">
@@ -246,7 +278,16 @@ const stopShortcut = watch(
       <div class="col-span-12 grid content-start gap-6 lg:col-span-7">
         <MonthSwitcher v-model="viewMonth" :min="minMonth" :max="shiftMonth(currentMonth, 12)" />
 
-        <p v-if="other.loading.value && !viewItem" class="wh__pending">Carregando…</p>
+        <template v-if="other.loading.value && !viewItem">
+          <div class="kpi-grid" aria-busy="true"><SkeletonKpi v-for="i in 3" :key="i" /></div>
+          <div class="wh__month sheet" aria-busy="true">
+            <div class="wh__monthhead">
+              <Skeleton w="40%" h="20px" />
+              <Skeleton w="112px" h="44px" />
+            </div>
+            <SkeletonLedger :total="false" />
+          </div>
+        </template>
 
         <section
           v-else-if="viewItem && future"
@@ -361,8 +402,16 @@ const stopShortcut = watch(
   padding: var(--s-6) var(--s-4);
 }
 
-.wh__clock :deep(.round) {
-  border-radius: 50%;
+.wh__today {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-5);
+}
+
+.wh__todaycols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-3);
 }
 
 .wh__sched {

@@ -16,6 +16,7 @@ import {
 } from "@emdia/shared";
 import { computed, onBeforeUnmount, ref, useTemplateRef } from "vue";
 import { contractsApi, entriesApi, errorMessage } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ClockButton from "@/components/feature/ClockButton.vue";
 import BulkFillSheet from "@/components/feature/BulkFillSheet.vue";
 import DayEditor from "@/components/feature/DayEditor.vue";
@@ -24,9 +25,10 @@ import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import TimeCard from "@/components/feature/TimeCard.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
-import Skeleton from "@/components/ui/Skeleton.vue";
+import SkeletonLedger from "@/components/ui/SkeletonLedger.vue";
+import SkeletonTimeCard from "@/components/ui/SkeletonTimeCard.vue";
 import { useContract } from "@/composables/contractContext.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useSwipe } from "@/composables/swipe.ts";
 import { clockStateOf } from "@/lib/entry.ts";
 import { attendanceLabel, attendanceText } from "@/lib/schedule.ts";
@@ -44,13 +46,14 @@ const maxMonth = computed(() =>
   contract.value.endedOn ? toYearMonth(contract.value.endedOn) : shiftMonth(currentMonth, 12),
 );
 
-const key = computed(() => `${contract.value.id}|${month.value}`);
-const entries = useResource(key, () =>
-  entriesApi.list(contract.value.id, month.value).then((r) => r.entries),
+const scope = computed(() => ({ id: contract.value.id, month: month.value }));
+const entries = useResource(scope, queryKeys.entries, (s) =>
+  entriesApi.list(s.id, s.month).then((r) => r.entries),
 );
-const summary = useResource(key, () =>
-  contractsApi.summary(contract.value.id, month.value).then((r) => r.summary),
+const summary = useResource(scope, queryKeys.summary, (s) =>
+  contractsApi.summary(s.id, s.month).then((r) => r.summary),
 );
+const invalidate = useInvalidate();
 
 const monthModel = computed({ get: () => month.value, set: setMonth });
 
@@ -95,7 +98,8 @@ function removeLocal(date: IsoDate): void {
 let summaryTimer: ReturnType<typeof setTimeout> | undefined;
 function reloadSummarySoon(): void {
   clearTimeout(summaryTimer);
-  summaryTimer = setTimeout(() => void summary.reload(), 400);
+  const id = contract.value.id;
+  summaryTimer = setTimeout(() => void invalidate.records(id, entries), 400);
 }
 onBeforeUnmount(() => clearTimeout(summaryTimer));
 
@@ -310,11 +314,10 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
       <div ref="cardWrap" class="ct__card">
         <div
           v-if="entries.loading.value && !entries.data.value"
-          class="ct__skel"
           aria-busy="true"
           aria-label="Carregando cartão"
         >
-          <Skeleton v-for="i in 10" :key="i" h="38px" :gap="i === 1 ? '0' : '8px'" />
+          <SkeletonTimeCard :month="month" />
         </div>
         <EmptyState
           v-else-if="entries.error.value"
@@ -393,7 +396,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
           </p>
         </template>
         <div v-else-if="summary.loading.value && !summary.data.value" aria-busy="true">
-          <Skeleton v-for="i in 5" :key="i" h="18px" :gap="i === 1 ? '0' : '12px'" />
+          <SkeletonLedger />
         </div>
         <p v-else-if="summary.error.value" class="form-error">{{ summary.error.value.message }}</p>
         <Ledger v-else-if="ledger" :lines="ledger.lines" :total="ledger.total" />
@@ -408,7 +411,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
             "
             :to="{ path: '/pagamentos/novo', query: { vinculo: contract.id, mes: month } }"
             variant="primary"
-            icon="plus"
+            icon="wallet-plus"
             >Registrar pagamento</Button
           >
           <Button icon="download" :loading="downloading" @click="downloadCsv"
@@ -523,13 +526,6 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 
 .ct__note p {
   flex: 1 1 14rem;
-}
-
-.ct__skel {
-  padding: var(--s-4);
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-2);
 }
 
 .ct__legend {

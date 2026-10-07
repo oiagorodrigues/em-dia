@@ -50,8 +50,8 @@ async function sendInvite(): Promise<void> {
 }
 
 const inviteLabel = computed(() => {
-  if (invite.value) return "gerar outro código";
-  return contract.value.contactEmail ? "reenviar convite" : "gerar código de convite";
+  if (invite.value) return "Gerar outro código";
+  return contract.value.contactEmail ? "Reenviar convite" : "Gerar código de convite";
 });
 
 const endOpen = ref(false);
@@ -71,6 +71,7 @@ function onEnd(): void {
     <section
       v-if="!contract.workerId && writable"
       class="st__block sheet st__invite"
+      :class="{ 'has-code': invite }"
       aria-labelledby="st-invite"
     >
       <div class="st__head">
@@ -101,6 +102,7 @@ function onEnd(): void {
         :email="contract.contactEmail"
       />
       <Button
+        class="st__invitebtn"
         :variant="invite ? 'secondary' : 'primary'"
         :icon="contract.contactEmail && !invite ? 'mail' : 'key'"
         :loading="inviting"
@@ -169,7 +171,7 @@ function onEnd(): void {
 
       <section class="st__block sheet st__card" aria-labelledby="st-remove">
         <h2 id="st-remove" class="st__title">
-          {{ contract.archivedAt ? "restaurar" : "remover da equipe" }}
+          {{ contract.archivedAt ? "Restaurar" : "Remover da equipe" }}
         </h2>
         <template v-if="contract.archivedAt">
           <p class="muted">
@@ -262,8 +264,16 @@ function onEnd(): void {
   border-top: 1px dashed var(--rule);
 }
 
+/* Side by side, the two cards share a height; the action sits at the bottom of each so the
+   buttons line up even when the texts differ in length. */
 .st__card {
-  align-content: start;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.st__card > .btn {
+  margin-top: auto;
 }
 
 @media (min-width: 640px) {
@@ -274,13 +284,22 @@ function onEnd(): void {
 
 @media (min-width: 960px) {
   .st__invite {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-    align-items: start;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
     column-gap: var(--s-6);
   }
-  .st__invite > :deep(.inv) {
+  .st__invite.has-code {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    grid-template-rows: auto 1fr;
+    align-items: start;
+  }
+  .st__invite.has-code > :deep(.inv) {
     grid-column: 2;
     grid-row: 1 / span 2;
+  }
+  .st__invite.has-code > .st__invitebtn {
+    grid-column: 1;
+    grid-row: 2;
   }
 }
 </style>

@@ -6,7 +6,7 @@ Visual rules are in [DESIGN](DESIGN.md). This file covers conventions and behavi
 
 - Vue 3.6 single-file components with `<script setup lang="ts">`.
 - Types and schemas come from `@emdia/shared`. Reuse the zod schemas for client-side form validation.
-- Server state lives in Pinia stores; components hold only view state. Do not call `fetch` outside `src/api`.
+- Server data lives in the TanStack Query cache (see [Data fetching](#data-fetching)); session state lives in Pinia stores; components hold only view state. Do not call `fetch` outside `src/api`.
 - Styling: components keep scoped CSS for their own internals, using tokens from `src/styles/tokens.css`. Pages compose layout with Tailwind utilities (see below). No raw hex values anywhere.
 - Copy is pt-BR, informal, "você". Titles and headings in sentence case ("Cartão de outubro"); `.page-title`, `.section-title`, `PageHeader`, `Sheet` and `AuthHeader` capitalize the first letter of data-built titles for you. All user-visible strings in components or a single `copy` module, never built from API error codes alone; show the API's pt-BR `message`.
 - Format with `formatCents`, `formatDuration`, `formatYearMonth`. Numbers render in the mono face.
@@ -30,6 +30,7 @@ Helper classes in `base.css`: `.kpi-grid` (KPI cards: a row when they fit, stack
 - Pages fade in and rise 8px (`route-*` transition in `App.vue`, keyed by the top-level route so tabs don't remount the page); tabs cross-fade with `<Transition name="tab-fade" mode="out-in">`.
 - Active nav and tab indicators slide: `useSlidingIndicator(container, ".is-active", "x" | "y", () => activeKey)` from `lib/motion.ts` returns a style for one absolutely positioned indicator element.
 - `DataTable` rows fade in with a 20ms stagger (capped at 8) and fade out on removal. KPI values count up when you pass `amount` + `format` to `KpiCard` (`useCountUp`).
+- Loading states mirror the loaded layout. Use the pieces in `components/ui`: `Skeleton` (bar or `round`), `SkeletonKpi`, `SkeletonTable` (real header on md+, cards below; `DataTable` uses it with its visible columns), `SkeletonTimeCard`, `SkeletonBoard` (board grid or week cards), `SkeletonLedger`, `SkeletonMonth`, `SkeletonForm`. `KpiCard`'s `loading` keeps the label and swaps value and caption. `ContractTabSkeleton` draws the active tab's layout while the contract loads. Show them only while there is no data yet.
 - Durations `--d-fast` 120ms, `--d-base` 180ms, `--d-sheet` 220ms; `--ease-out` to enter, `--ease-in` to leave. `prefers-reduced-motion` keeps only opacity.
 
 ## Controls
@@ -68,6 +69,18 @@ Never write `auth.user!` or `x.user!.`. The user is null before the session load
 - The access token lives in the auth store (memory). On load, call `/auth/refresh` to restore the session.
 - The api client attaches `Authorization`, retries once after a refresh on `TOKEN_EXPIRED`, and sends `X-Requested-With: emdia` on `/auth/*` cookie endpoints.
 - Route guards read the auth store and the user role; role-specific routes redirect rather than render an error.
+
+## Data fetching
+
+Reads go through `useResource(source, key, fetcher)` in `composables/resource.ts`, a thin layer over `useQuery` from `@tanstack/vue-query`. The client is created in `api/query.ts` and installed in `main.ts`.
+
+- `key(source)` builds the cache key with a factory from `api/keys.ts` (`queryKeys.entries({ id, month })`, `queryKeys.team(month)`, ...). Never write a key by hand: the factories keep everything about one contract under `["contract", id]` so one prefix reaches it. A `null` key means there is nothing to fetch yet.
+- `fetcher(source)` receives the value its key was built from, so a slow answer or a retry for the month you just left lands in that month's entry, never on screen.
+- `loading` is true only while there is nothing cached; a cached value renders at once and refreshes behind it (`fetching`). `error` is always an `ApiError`. `reload()` refetches; `mutate(next)` writes the cache with a server response.
+- Defaults: data is fresh for 30s, refetched on window focus and on reconnect, and a failed read retries twice unless it is a 4xx. Queries run even when the browser says it is offline, so a failed read shows its error.
+- After a write, call `useInvalidate()`: `records(contractId, ...fresh)` for entries, adjustments, payments and agreements, `contract(contractId, ...fresh)` when the contract itself changed, `all()` when the reach is unknown (actions inside feature components, profile edits, new or joined contracts). Matching reads on screen refetch now, the rest when they open. Pass the resources you already updated with `mutate` as `fresh` to skip their refetch.
+- Two screens that need a different shape of the same endpoint share one key and derive the shape with a `computed` (`NewPaymentView` filters the contract list), so the cache never holds two versions of one response.
+- Logout (`auth.clear()`) empties the cache, so the next account never sees the previous one's data.
 
 ## PWA behavior
 

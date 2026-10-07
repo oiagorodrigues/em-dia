@@ -14,7 +14,7 @@ import {
 import { staggerDelay } from "@/lib/motion.ts";
 import FilterDrawer from "./FilterDrawer.vue";
 import Icon from "./Icon.vue";
-import Skeleton from "./Skeleton.vue";
+import SkeletonTable from "./SkeletonTable.vue";
 
 const {
   rows,
@@ -175,9 +175,11 @@ function clearAll(): void {
       <div v-if="hasSlot('actions')" class="dt__actions"><slot name="actions" /></div>
     </div>
 
-    <div v-if="loading && rows.length === 0" class="dt__loading" aria-busy="true">
-      <Skeleton v-for="i in 5" :key="i" h="52px" :gap="i === 1 ? '0' : '6px'" />
-    </div>
+    <SkeletonTable
+      v-if="loading && rows.length === 0"
+      :columns="visibleColumns"
+      :actions="hasSlot('row-actions') ? 1 : 0"
+    />
 
     <template v-else-if="shown.length === 0">
       <div v-if="!narrowing && rows.length === 0 && hasSlot('empty')" class="dt__empty">
@@ -572,13 +574,6 @@ td.mono {
   padding: var(--s-3) var(--s-4);
   border-radius: var(--r-2);
   background: var(--surface-2);
-}
-
-.dt__loading {
-  padding: var(--s-3);
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-2);
 }
 
 .dt__none {

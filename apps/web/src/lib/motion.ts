@@ -69,33 +69,45 @@ export function useSlidingIndicator(
 ): Ref<Record<string, string>> {
   const style = ref<Record<string, string>>({ opacity: "0" });
 
-  function measure(): void {
+  function measure(snap = false): void {
     const box = container.value;
     const el = box?.querySelector<HTMLElement>(selector);
     if (!box || !el) {
       style.value = { opacity: "0" };
       return;
     }
-    style.value =
-      axis === "x"
-        ? {
-            opacity: "1",
-            transform: `translateX(${el.offsetLeft}px)`,
-            width: `${el.offsetWidth}px`,
-          }
-        : {
-            opacity: "1",
-            transform: `translateY(${el.offsetTop}px)`,
-            height: `${el.offsetHeight}px`,
-          };
+    // Only a change of the active item slides. The first placement and re-measures after a
+    // resize snap, or the pill grows from 0 or animates through a transient layout.
+    const still = snap || style.value.opacity !== "1";
+    style.value = {
+      opacity: "1",
+      ...(still ? { transition: "none" } : {}),
+      ...(axis === "x"
+        ? { transform: `translateX(${el.offsetLeft}px)`, width: `${el.offsetWidth}px` }
+        : { transform: `translateY(${el.offsetTop}px)`, height: `${el.offsetHeight}px` }),
+    };
   }
 
-  watch([container, trigger], () => requestAnimationFrame(measure), {
+  watch([container, trigger], () => requestAnimationFrame(() => measure()), {
     immediate: true,
     flush: "post",
   });
-  const onResize = () => measure();
+  const onResize = () => measure(true);
   if (typeof window !== "undefined") window.addEventListener("resize", onResize);
-  onScopeDispose(() => window.removeEventListener("resize", onResize));
+  // Items change size after mount when styles or fonts arrive late; follow them.
+  const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(onResize);
+  watch(
+    container,
+    (box, _, onCleanup) => {
+      if (!box || !observer) return;
+      observer.observe(box);
+      onCleanup(() => observer.unobserve(box));
+    },
+    { immediate: true },
+  );
+  onScopeDispose(() => {
+    window.removeEventListener("resize", onResize);
+    observer?.disconnect();
+  });
   return style;
 }

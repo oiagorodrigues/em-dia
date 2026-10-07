@@ -135,8 +135,10 @@ export const adjustmentsApi = {
 };
 
 export const agreementsApi = {
-  list: (contractId: string) =>
-    request<{ agreements: Agreement[] }>(`/contracts/${enc(contractId)}/agreements`),
+  list: (contractId: string, opts: { archived?: boolean } = {}) =>
+    request<{ agreements: Agreement[] }>(`/contracts/${enc(contractId)}/agreements`, {
+      query: { include: opts.archived ? "archived" : undefined },
+    }),
   create: (contractId: string, body: CreateAgreementInput) =>
     request<{ agreement: Agreement }>(`/contracts/${enc(contractId)}/agreements`, {
       method: "POST",
@@ -150,6 +152,13 @@ export const agreementsApi = {
   cancel: (contractId: string, id: string) =>
     request<{ agreement: Agreement }>(
       `/contracts/${enc(contractId)}/agreements/${enc(id)}/cancel`,
+      { method: "POST" },
+    ),
+  remove: (contractId: string, id: string) =>
+    request<void>(`/contracts/${enc(contractId)}/agreements/${enc(id)}`, { method: "DELETE" }),
+  restore: (contractId: string, id: string) =>
+    request<{ agreement: Agreement }>(
+      `/contracts/${enc(contractId)}/agreements/${enc(id)}/restore`,
       { method: "POST" },
     ),
 };

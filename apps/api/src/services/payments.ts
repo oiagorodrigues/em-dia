@@ -76,7 +76,9 @@ export function paymentsService(deps: ServiceDeps) {
     amountCents: number,
   ): Promise<void> {
     const agreement = await r.agreements.find(contractId, agreementId);
-    if (!agreement) throw fieldError("agreementId", "Acordo não encontrado");
+    if (!agreement || agreement.archivedAt) {
+      throw fieldError("agreementId", "Acordo não encontrado");
+    }
     if (agreement.cancelledAt) throw fieldError("agreementId", "Este acordo foi cancelado");
     if (amountCents > agreement.remainingCents) {
       throw fieldError(
