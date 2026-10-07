@@ -24,7 +24,7 @@ The contract carries an agreed schedule (`weekly`, `month_days`, `per_month` or 
 Acceptance criteria:
 
 - E picks one kind when creating or editing a contract and sees a short pt-BR description of the result (for example "seg, qua e sex", "quinzenal: sex", "todo dia 5", "2x por mês", "quando precisar"). W sees the same text.
-- weekly: E picks weekdays and every how many weeks (1 or 2 and up to 4). Expected days are those weekdays in the month, in weeks that match, counting from the Monday-starting week of the start date. "Todos os dias" is all seven weekdays.
+- weekly: E picks weekdays and every how many weeks (1 or 2 and up to 4). Expected days are those weekdays in the month, in weeks that match, counting from the Monday-starting week that holds the first scheduled weekday on or after the start date (a quinzenal Friday that starts on a Saturday has its first visit the next Friday). "Todos os dias" is all seven weekdays.
 - month_days: E picks days 1 to 31. In a short month a day past its end falls on the last day. Days outside the contract period are not expected.
 - per_month: E gives a number of visits per month. No dates are expected; the month shows "N de M vezes" and nothing is flagged as unrecorded.
 - on_demand: nothing is expected, nothing is flagged, days are recorded as they happen.
