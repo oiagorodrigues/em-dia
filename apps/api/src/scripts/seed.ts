@@ -540,6 +540,9 @@ async function seed(): Promise<void> {
           : null,
         receiptFile: p.receipt ? receiptFile : null,
         acknowledgedAt: p.acknowledgedAt ?? null,
+        acknowledgedBy: p.acknowledgedAt ? linkedWorkerId : null,
+        acknowledgedByRole: p.acknowledgedAt && linkedWorkerId ? "worker" : null,
+        isExtra: false,
         createdBy: anaId,
         createdAt,
       });

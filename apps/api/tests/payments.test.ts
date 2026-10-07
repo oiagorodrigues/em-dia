@@ -158,7 +158,32 @@ describe("acknowledge and listing", () => {
     ).toBe(403);
     const ack = await t.http().post(`${base}/payments/${id}/acknowledge`).auth(worker.token, as);
     expect(ack.status).toBe(200);
-    expect(ack.body.payment.acknowledgedAt).toBe("2026-10-06T15:00:00.000Z");
+    expect(ack.body.payment).toMatchObject({
+      acknowledgedAt: "2026-10-06T15:00:00.000Z",
+      acknowledgedBy: worker.user.id,
+      acknowledgedByRole: "worker",
+    });
+  });
+
+  test("the employer confirms without waiting; the worker cannot use that route; audited", async () => {
+    const id = (await createPayment()).body.payment.id as string;
+    expect(
+      (await t.http().post(`${base}/payments/${id}/confirm`).auth(worker.token, as)).status,
+    ).toBe(403);
+    const res = await t.http().post(`${base}/payments/${id}/confirm`).auth(employer.token, as);
+    expect(res.status).toBe(200);
+    expect(res.body.payment).toMatchObject({
+      acknowledgedAt: "2026-10-06T15:00:00.000Z",
+      acknowledgedBy: employer.user.id,
+      acknowledgedByRole: "employer",
+    });
+    // A later "recebi" keeps the first confirmation.
+    const ack = await t.http().post(`${base}/payments/${id}/acknowledge`).auth(worker.token, as);
+    expect(ack.body.payment.acknowledgedByRole).toBe("employer");
+    const activity = await t.http().get(`${base}/activity`).auth(employer.token, as);
+    expect(activity.body.activity.map((a: { action: string }) => a.action)).toContain(
+      "payment.confirm",
+    );
   });
 
   test("lists newest first and filters by year", async () => {
@@ -177,5 +202,135 @@ describe("acknowledge and listing", () => {
     ]);
     const y2025 = await t.http().get(`${base}/payments?year=2025`).auth(worker.token, as);
     expect(y2025.body.payments).toHaveLength(1);
+  });
+});
+
+describe("edit", () => {
+  test("the employer edits fields; changing the amount asks for the confirmation again", async () => {
+    const id = (await createPayment()).body.payment.id as string;
+    await t.http().post(`${base}/payments/${id}/acknowledge`).auth(worker.token, as);
+
+    const noteOnly = await t
+      .http()
+      .patch(`${base}/payments/${id}`)
+      .auth(employer.token, as)
+      .send({ note: "salário de setembro" });
+    expect(noteOnly.status).toBe(200);
+    expect(noteOnly.body.payment).toMatchObject({
+      note: "salário de setembro",
+      acknowledgedByRole: "worker",
+    });
+
+    const amount = await t
+      .http()
+      .patch(`${base}/payments/${id}`)
+      .auth(employer.token, as)
+      .send({ amountCents: 50000, method: "cash" });
+    expect(amount.status).toBe(200);
+    expect(amount.body.payment).toMatchObject({
+      amountCents: 50000,
+      method: "cash",
+      note: "salário de setembro",
+      acknowledgedAt: null,
+      acknowledgedBy: null,
+    });
+
+    const listed = await t.http().get(`${base}/payments`).auth(worker.token, as);
+    expect(listed.body.payments[0]).toMatchObject({ id, amountCents: 50000 });
+    const activity = await t.http().get(`${base}/activity`).auth(employer.token, as);
+    expect(activity.body.activity[0]).toMatchObject({
+      action: "payment.update",
+      meta: { changed: ["amountCents", "method"], reopened: true },
+    });
+  });
+
+  test("validates the merged payment and the role", async () => {
+    const id = (await createPayment()).body.payment.id as string;
+    const edit = (body: object, who = employer) =>
+      t.http().patch(`${base}/payments/${id}`).auth(who.token, as).send(body);
+
+    expect((await edit({ amountCents: 0 })).status).toBe(400);
+    expect((await edit({})).status).toBe(400);
+    const comp = await edit({ method: "compensation", note: null });
+    expect(comp.status).toBe(400);
+    expect(comp.body.error.details.fieldErrors.note).toBeDefined();
+    expect((await edit({ note: "x" }, worker)).status).toBe(403);
+    const missing = await t
+      .http()
+      .patch(`${base}/payments/nao-existe`)
+      .auth(employer.token, as)
+      .send({ note: "x" });
+    expect(missing.status).toBe(404);
+  });
+
+  test("an installment can grow only up to what the agreement still owes", async () => {
+    const agreement = await t.http().post(`${base}/agreements`).auth(employer.token, as).send({
+      description: "mesa",
+      totalCents: 30000,
+      installmentCents: 10000,
+      startMonth: "2026-10",
+    });
+    const agreementId = agreement.body.agreement.id as string;
+    const paid = await t.http().post(`${base}/payments`).auth(employer.token, as).send({
+      referenceMonth: "2026-10",
+      paidOn: "2026-10-05",
+      amountCents: 10000,
+      method: "compensation",
+      agreementId,
+    });
+    const id = paid.body.payment.id as string;
+    const edit = (amountCents: number) =>
+      t.http().patch(`${base}/payments/${id}`).auth(employer.token, as).send({ amountCents });
+
+    expect((await edit(30000)).status).toBe(200);
+    const over = await edit(30001);
+    expect(over.status).toBe(400);
+    expect(over.body.error.details.fieldErrors.amountCents).toBeDefined();
+  });
+});
+
+describe("extra payments", () => {
+  test("are flagged on create and edit and leave the month's balance alone", async () => {
+    const summary = async () =>
+      (await t.http().get(`${base}/summary?month=2026-09`).auth(worker.token, as)).body.summary;
+    const before = await summary();
+
+    const extra = await t
+      .http()
+      .post(`${base}/payments`)
+      .auth(employer.token, as)
+      .field("referenceMonth", "2026-09")
+      .field("paidOn", "2026-09-20")
+      .field("amountCents", "10000")
+      .field("method", "pix")
+      .field("isExtra", "true");
+    expect(extra.status).toBe(201);
+    expect(extra.body.payment.isExtra).toBe(true);
+
+    const after = await summary();
+    expect(after.paidCents - before.paidCents).toBe(10000);
+    expect(after.adjustmentsCents - before.adjustmentsCents).toBe(10000);
+    expect(after.balanceCents).toBe(before.balanceCents);
+
+    const off = await t
+      .http()
+      .patch(`${base}/payments/${extra.body.payment.id}`)
+      .auth(employer.token, as)
+      .send({ isExtra: false });
+    expect(off.body.payment.isExtra).toBe(false);
+    expect((await summary()).balanceCents).toBe(before.balanceCents - 10000);
+  });
+
+  test("a compensation cannot be an extra", async () => {
+    const res = await t.http().post(`${base}/payments`).auth(employer.token, as).send({
+      referenceMonth: "2026-09",
+      paidOn: "2026-09-20",
+      amountCents: 1000,
+      method: "compensation",
+      note: "celular",
+      isExtra: true,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.details.fieldErrors.isExtra).toBeDefined();
   });
 });

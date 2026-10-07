@@ -1,4 +1,4 @@
-import type { Payment, Receipt, YearMonth } from "@emdia/shared";
+import type { Payment, Receipt, Role, YearMonth } from "@emdia/shared";
 import { and, desc, asc, eq, inArray, isNotNull, isNull, like, type SQL } from "drizzle-orm";
 import type { Executor } from "../db/index.ts";
 import { payments } from "../db/schema.ts";
@@ -29,6 +29,9 @@ function toRecord(r: typeof payments.$inferSelect): PaymentRecord {
     note: r.note,
     receipt,
     acknowledgedAt: isoOrNull(r.acknowledgedAt),
+    acknowledgedBy: r.acknowledgedBy,
+    acknowledgedByRole: r.acknowledgedByRole,
+    isExtra: r.isExtra,
     agreementId: r.agreementId,
     createdBy: r.createdBy,
     createdAt: iso(r.createdAt),
@@ -96,6 +99,9 @@ export function paymentsRepo(db: Executor) {
         receiptName: p.receipt?.originalName ?? null,
         receiptUploadedAt: dateOrNull(p.receipt?.uploadedAt ?? null),
         acknowledgedAt: dateOrNull(p.acknowledgedAt),
+        acknowledgedBy: p.acknowledgedBy,
+        acknowledgedByRole: p.acknowledgedByRole,
+        isExtra: p.isExtra,
         agreementId: p.agreementId,
         createdBy: p.createdBy,
         createdAt: date(p.createdAt),
@@ -115,11 +121,30 @@ export function paymentsRepo(db: Executor) {
         .where(eq(payments.id, id));
     },
 
-    async acknowledge(id: string, at: string): Promise<void> {
+    async acknowledge(id: string, at: string, by: string, role: Role): Promise<void> {
       await db
         .update(payments)
-        .set({ acknowledgedAt: date(at) })
+        .set({ acknowledgedAt: date(at), acknowledgedBy: by, acknowledgedByRole: role })
         .where(and(eq(payments.id, id), isNull(payments.acknowledgedAt)));
+    },
+
+    /** Writes the editable fields; `acknowledged*` are written as given so an edit can reopen it. */
+    async update(p: PaymentRecord): Promise<void> {
+      await db
+        .update(payments)
+        .set({
+          referenceMonth: p.referenceMonth,
+          paidOn: p.paidOn,
+          amountCents: p.amountCents,
+          method: p.method,
+          note: p.note,
+          agreementId: p.agreementId,
+          isExtra: p.isExtra,
+          acknowledgedAt: dateOrNull(p.acknowledgedAt),
+          acknowledgedBy: p.acknowledgedBy,
+          acknowledgedByRole: p.acknowledgedByRole,
+        })
+        .where(eq(payments.id, p.id));
     },
 
     async delete(id: string): Promise<void> {
