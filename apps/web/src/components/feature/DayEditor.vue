@@ -174,7 +174,7 @@ async function onRemove(): Promise<void> {
   <Sheet
     v-model:open="open"
     :title="title"
-    :subtitle="authorText ?? (isFuture ? 'dia futuro' : 'sem registro')"
+    :subtitle="authorText ?? (isFuture ? 'Dia futuro' : 'Sem registro')"
   >
     <form id="day-editor" class="de" novalidate @submit.prevent="onSave">
       <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
@@ -188,9 +188,9 @@ async function onRemove(): Promise<void> {
 
       <div v-if="entry && contract.workerId" class="de__state">
         <span class="de__dot" :class="entry.confirmedAt ? 'is-ok' : 'is-open'" aria-hidden="true" />
-        <span v-if="entry.confirmedAt">confirmado {{ formatRelative(entry.confirmedAt) }}</span>
-        <span v-else-if="mine">aguardando a outra parte confirmar</span>
-        <span v-else>aguardando sua confirmação</span>
+        <span v-if="entry.confirmedAt">Confirmado {{ formatRelative(entry.confirmedAt) }}</span>
+        <span v-else-if="mine">Aguardando a outra parte confirmar</span>
+        <span v-else>Aguardando sua confirmação</span>
       </div>
 
       <fieldset class="de__set" :disabled="ended">
@@ -234,7 +234,7 @@ async function onRemove(): Promise<void> {
           <Stepper :id="id" v-model="values.breakMinutes" label="Pausa" />
         </Field>
         <p v-if="preview" class="de__preview">
-          total do dia <strong class="mono">{{ preview }}</strong>
+          Total do dia <strong class="mono">{{ preview }}</strong>
           <span v-if="overnight" class="de__night">· passou da meia-noite</span>
         </p>
       </template>

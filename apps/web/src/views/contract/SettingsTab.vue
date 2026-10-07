@@ -130,7 +130,7 @@ function onEnd(): void {
           contactEmail: contract.contactEmail,
           contactPhone: contract.contactPhone,
         }"
-        submit-label="salvar alterações"
+        submit-label="Salvar alterações"
         lock-start
         contact
         summary
@@ -184,7 +184,7 @@ function onEnd(): void {
             Some da equipe e do início. O histórico fica guardado e você pode restaurar em Equipe →
             removidos.
           </p>
-          <Button variant="danger" icon="archive" @click="askRemove">Remover…</Button>
+          <Button variant="danger" icon="trash" @click="askRemove">Remover…</Button>
         </template>
       </section>
     </div>

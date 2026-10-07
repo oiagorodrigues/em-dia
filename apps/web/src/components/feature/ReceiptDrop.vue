@@ -68,8 +68,8 @@ function clear(): void {
       @drop.prevent="onDrop"
     >
       <Icon name="upload" :size="24" />
-      <span class="rd__cta">anexar comprovante</span>
-      <span class="rd__hint">foto ou PDF, até 5 MB</span>
+      <span class="rd__cta">Anexar comprovante</span>
+      <span class="rd__hint">Foto ou PDF, até 5 MB</span>
       <input
         :id="id"
         class="visually-hidden"

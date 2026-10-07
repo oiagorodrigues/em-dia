@@ -76,8 +76,14 @@ const people = computed(() =>
       <MonthSwitcher v-model="month" :max="shiftMonth(currentMonth, 12)" class="lg:min-w-80" />
       <!-- Hidden while empty: the empty state carries the one "Adicionar profissional" button. -->
       <div v-if="current.length > 0" class="flex flex-wrap gap-2">
-        <Button to="/equipe/novo" variant="primary" icon="plus">Adicionar profissional</Button>
-        <Button to="/pagamentos/novo" icon="wallet-plus">Registrar pagamento</Button>
+        <Button
+          to="/equipe/novo"
+          variant="primary"
+          icon="user-plus"
+          icon-only
+          label="Adicionar profissional"
+        />
+        <Button to="/pagamentos/novo" icon="wallet-plus" icon-only label="Registrar pagamento" />
       </div>
     </header>
 
@@ -89,7 +95,7 @@ const people = computed(() =>
     >
       {{ team.error.value.message }}
       <template #actions
-        ><Button icon="history" @click="team.reload">Tentar de novo</Button></template
+        ><Button icon="refresh" @click="team.reload">Tentar de novo</Button></template
       >
     </EmptyState>
 
@@ -101,7 +107,7 @@ const people = computed(() =>
       Cadastre a diarista, babá ou cuidadora. Você recebe um código para a pessoa entrar e bater o
       ponto pelo celular.
       <template #actions>
-        <Button to="/equipe/novo" variant="primary" icon="plus">Adicionar profissional</Button>
+        <Button to="/equipe/novo" variant="primary" icon="user-plus">Adicionar profissional</Button>
       </template>
     </EmptyState>
 

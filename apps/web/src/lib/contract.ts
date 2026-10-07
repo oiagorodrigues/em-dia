@@ -24,10 +24,10 @@ export interface ContractStatusView {
 export function contractStatus(
   contract: Pick<Contract, "status" | "archivedAt" | "workerId">,
 ): ContractStatusView {
-  if (contract.archivedAt) return { state: "archived", label: "removido", tone: "coral" };
-  if (contract.status === "ended") return { state: "ended", label: "encerrado", tone: "neutral" };
-  if (!contract.workerId) return { state: "pending", label: "convite pendente", tone: "amber" };
-  return { state: "active", label: "ativo", tone: "brand" };
+  if (contract.archivedAt) return { state: "archived", label: "Removido", tone: "coral" };
+  if (contract.status === "ended") return { state: "ended", label: "Encerrado", tone: "neutral" };
+  if (!contract.workerId) return { state: "pending", label: "Convite pendente", tone: "amber" };
+  return { state: "active", label: "Ativo", tone: "brand" };
 }
 
 export interface ContactChannels {

@@ -117,7 +117,13 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
       "
     >
       <template #actions>
-        <Button to="/equipe/novo" variant="primary" icon="plus">Adicionar profissional</Button>
+        <Button
+          to="/equipe/novo"
+          variant="primary"
+          icon="user-plus"
+          icon-only
+          label="Adicionar profissional"
+        />
       </template>
     </PageHeader>
 
@@ -147,7 +153,9 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
       class="col-span-12"
     >
       {{ team.error.value.message }}
-      <template #actions><Button @click="team.reload">Tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="team.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <div v-else class="col-span-12">
@@ -187,7 +195,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
             Cadastre a diarista, babá ou cuidadora. Você recebe um código para a pessoa entrar e
             bater o ponto pelo celular.
             <template #actions>
-              <Button to="/equipe/novo" variant="primary" icon="plus"
+              <Button to="/equipe/novo" variant="primary" icon="user-plus"
                 >Adicionar profissional</Button
               >
             </template>

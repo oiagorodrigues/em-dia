@@ -58,7 +58,7 @@ async function join(): Promise<void> {
         {{ OCCUPATION_LABEL[joined.occupation] }} em {{ joined.householdName }}. A partir de agora
         você bate o ponto pelo celular e acompanha seus pagamentos.
       </p>
-      <Button variant="primary" icon="clock" @click="router.replace('/')">ir bater o ponto</Button>
+      <Button variant="primary" icon="clock" @click="router.replace('/')">Ir bater o ponto</Button>
     </template>
     <template v-else>
       <h1 class="page-title">Entrar no vínculo</h1>
@@ -77,7 +77,7 @@ async function join(): Promise<void> {
         />
         <p v-if="error" id="join-err" class="join__err" role="alert">{{ error }}</p>
         <Button type="submit" variant="primary" :disabled="!complete" :loading="submitting"
-          >entrar</Button
+          >Entrar</Button
         >
       </form>
     </template>

@@ -165,7 +165,7 @@ function clearAll(): void {
         v-if="hasSlot('filters')"
         class="dt__filters"
         :count="filterCount ?? (filtersActive ? 1 : 0)"
-        :result-label="`ver ${countLabel(shown.length)}`"
+        :result-label="`Ver ${countLabel(shown.length)}`"
         @clear="clearAll"
         ><slot name="filters"
       /></FilterDrawer>
@@ -192,7 +192,7 @@ function clearAll(): void {
           }}
         </p>
         <button v-if="narrowing" type="button" class="dt__clear" @click="clearAll">
-          limpar busca e filtros
+          Limpar busca e filtros
         </button>
       </div>
     </template>

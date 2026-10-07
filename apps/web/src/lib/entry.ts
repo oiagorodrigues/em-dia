@@ -9,13 +9,13 @@ export function clockStateOf(today: WorkEntry | null, active: boolean): ClockSta
   return "done";
 }
 
-/** "entrou 08:02", "saiu 17:00", "folga", "sem registro" */
+/** "Entrou às 08:02", "Saiu às 17:00", "Folga", "Sem registro hoje" */
 export function todayStatusText(today: WorkEntry | null): string {
-  if (!today) return "sem registro hoje";
-  if (today.status !== "worked") return ENTRY_STATUS_LABEL[today.status].toLowerCase();
-  if (today.checkOut) return `saiu às ${today.checkOut}`;
-  if (today.checkIn) return `entrou às ${today.checkIn}`;
-  return "sem registro hoje";
+  if (!today) return "Sem registro hoje";
+  if (today.status !== "worked") return ENTRY_STATUS_LABEL[today.status];
+  if (today.checkOut) return `Saiu às ${today.checkOut}`;
+  if (today.checkIn) return `Entrou às ${today.checkIn}`;
+  return "Sem registro hoje";
 }
 
 /** Same colors as the month board: worked mint, falta coral, the excused kinds butter. */

@@ -58,8 +58,8 @@ async function share(): Promise<void> {
           <span>{{ invite.code.slice(0, 4) }}</span
           ><span>{{ invite.code.slice(4) }}</span>
         </p>
-        <p class="isx__exp">vale até {{ expires }} · uso único</p>
-        <Button icon="copy" @click="copy(invite.code, 'Código')">copiar código</Button>
+        <p class="isx__exp">Vale até {{ expires }} · uso único</p>
+        <Button icon="copy" @click="copy(invite.code, 'Código')">Copiar código</Button>
       </div>
 
       <div class="isx__link">
@@ -73,7 +73,7 @@ async function share(): Promise<void> {
             @click="copy(invite.signupUrl, 'Link')"
           >
             <Icon name="copy" :size="16" />
-            copiar
+            Copiar
           </button>
         </div>
       </div>
@@ -81,7 +81,7 @@ async function share(): Promise<void> {
       <p v-if="invite.emailSent && contract.contactEmail" class="isx__sent" role="status">
         <Icon name="mail" :size="18" />
         <span
-          >e-mail enviado para <strong>{{ contract.contactEmail }}</strong></span
+          >E-mail enviado para <strong>{{ contract.contactEmail }}</strong></span
         >
       </p>
 
@@ -91,21 +91,21 @@ async function share(): Promise<void> {
           :href="invite.whatsappUrl"
           variant="primary"
           icon="message"
-          >mandar no WhatsApp</Button
+          >Mandar no WhatsApp</Button
         >
         <Button
           v-if="canShare"
           :variant="invite.whatsappUrl ? 'secondary' : 'primary'"
           icon="share"
           @click="share"
-          >compartilhar</Button
+          >Compartilhar</Button
         >
         <Button
           v-else
           :variant="invite.whatsappUrl ? 'secondary' : 'primary'"
           icon="link"
           @click="copy(`${message} ${invite.signupUrl}`, 'Convite')"
-          >copiar convite</Button
+          >Copiar convite</Button
         >
       </div>
     </section>

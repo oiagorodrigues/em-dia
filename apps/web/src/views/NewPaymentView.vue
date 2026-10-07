@@ -180,14 +180,16 @@ const { to: back } = useBack(
 
     <EmptyState v-else-if="contracts.error.value" tone="error" title="Não deu para carregar.">
       {{ contracts.error.value.message }}
-      <template #actions><Button @click="contracts.reload">tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="contracts.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <EmptyState v-else-if="contracts.data.value?.length === 0" title="Nenhum vínculo ativo.">
       Cadastre quem trabalha na sua casa para registrar pagamentos.
       <template #actions
-        ><Button to="/equipe/novo" variant="primary" icon="plus"
-          >adicionar profissional</Button
+        ><Button to="/equipe/novo" variant="primary" icon="user-plus"
+          >Adicionar profissional</Button
         ></template
       >
     </EmptyState>
@@ -323,7 +325,7 @@ const { to: back } = useBack(
         </Field>
 
         <Button type="submit" variant="primary" :loading="submitting" :disabled="!contract"
-          >registrar pagamento</Button
+          >Registrar pagamento</Button
         >
       </form>
       <PaymentsSidePanel

@@ -165,7 +165,7 @@ async function remove(p: Payment): Promise<void> {
     }, 6000);
     toast.show(`Excluir o pagamento de ${formatCents(p.amountCents)}?`, {
       timeout: 6000,
-      action: { label: "excluir", run: () => void remove(p) },
+      action: { label: "Excluir", run: () => void remove(p) },
     });
     return;
   }
@@ -271,7 +271,9 @@ function onClear(): void {
       title="Não deu para carregar os pagamentos."
     >
       {{ payments.error.value.message }}
-      <template #actions><Button @click="payments.reload">Tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="payments.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <DataTable
@@ -330,12 +332,12 @@ function onClear(): void {
 
       <template #cell-forma="{ row }">
         <span class="pt__method">{{ PAYMENT_METHOD_LABEL[row.method] }}</span>
-        <span v-if="agreementName(row)" class="pt__agr">acordo: {{ agreementName(row) }}</span>
+        <span v-if="agreementName(row)" class="pt__agr">Acordo: {{ agreementName(row) }}</span>
       </template>
 
       <template #cell-comprovante="{ row }">
         <span v-if="row.receipt" class="pt__clip"
-          ><Icon name="paperclip" :size="14" /> anexado</span
+          ><Icon name="paperclip" :size="14" /> Anexado</span
         >
         <span v-else class="pt__none">—</span>
       </template>

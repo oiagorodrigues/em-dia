@@ -25,7 +25,7 @@ const { items, limit = 6 } = defineProps<{ items: readonly Pendency[]; limit?: n
         </RouterLink>
       </li>
     </ul>
-    <p v-if="items.length > limit" class="hp__more">e mais {{ items.length - limit }}</p>
+    <p v-if="items.length > limit" class="hp__more">E mais {{ items.length - limit }}</p>
   </section>
 </template>
 

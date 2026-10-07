@@ -192,7 +192,7 @@ async function login(page: Page, email: string, password: string): Promise<void>
   await page.goto(`${BASE}/entrar`);
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Senha", { exact: true }).fill(password);
-  await action(page, /^entrar$/).click();
+  await action(page, /^Entrar$/).click();
 }
 
 function todayRow(page: Page): Locator {
@@ -213,7 +213,7 @@ interface ContractSpec {
   /** 0 = Sunday. Weekly only. */
   weekdays?: number[];
   weekdayPreset?: string;
-  everyWeeks?: "toda semana" | "a cada 2" | "a cada 3";
+  everyWeeks?: "Toda semana" | "A cada 2" | "A cada 3";
   visitsPerMonth?: number;
   deductAbsences?: boolean;
   startedOn: string;
@@ -279,7 +279,7 @@ async function addContract(page: Page, spec: ContractSpec): Promise<string> {
 async function employerSignup(state: State): Promise<void> {
   const { page } = (state.employer = await openSession(state, "employer"));
   await register(page, "Eu contrato", EMPLOYER_NAME, state.employerEmail);
-  await action(page, /^criar conta$/).click();
+  await action(page, /^Criar conta$/).click();
   await page.waitForURL("**/equipe/novo");
 
   await page.goto(BASE);
@@ -312,7 +312,7 @@ async function workerClocksIn(state: State): Promise<void> {
   const code = need(state.inviteCode, 1);
   const { page } = (state.worker = await openSession(state, "worker"));
   await register(page, "Eu trabalho", WORKER_NAME, state.workerEmail, `?convite=${code}`);
-  await action(page, /^criar conta$/).click();
+  await action(page, /^Criar conta$/).click();
   await page.waitForURL(`${BASE}/`);
   await see("the employer's house on the worker home", page.getByText(EMPLOYER_NAME).first());
 
@@ -356,7 +356,7 @@ async function confirmDay(state: State): Promise<void> {
   );
 
   await todayRow(page).click();
-  await see("'confirmado' in the day editor", dialog.getByText(/^confirmado/));
+  await see("'Confirmado' in the day editor", dialog.getByText(/^Confirmado/));
   await action(dialog, "Fechar").click();
 
   await worker.goto(`${BASE}/equipe/${id}`);
@@ -435,7 +435,7 @@ async function createPayment(state: State): Promise<void> {
   await choose(page, "Como pagou", "Dinheiro");
 
   await page.locator('input[type="file"]').setInputFiles(fake);
-  await action(page, /^registrar pagamento$/).click();
+  await action(page, /^Registrar pagamento$/).click();
   const error = page.locator('p[role="alert"]').filter({ hasText: /\w/ });
   await see("a pt-BR error for the fake .png", error);
   const message = await textOf(error);
@@ -447,7 +447,7 @@ async function createPayment(state: State): Promise<void> {
   await page.getByRole("button", { name: "Remover comprovante" }).click();
   await page.locator('input[type="file"]').setInputFiles(png);
   await see("the receipt preview", page.getByAltText("Prévia do comprovante"));
-  await action(page, /^registrar pagamento$/).click();
+  await action(page, /^Registrar pagamento$/).click();
   await page.waitForURL(/\/equipe\/[^/]+\/pagamentos/);
 
   await see("the payment stub", page.getByRole("article", { name: /Pagamento de R\$\s*50,00/ }));
@@ -585,7 +585,7 @@ async function biweekly(state: State): Promise<void> {
     payType: "Por diária",
     rate: "10000",
     weekdays: [5],
-    everyWeeks: "a cada 2",
+    everyWeeks: "A cada 2",
     startedOn: prevMonthStart,
   });
 
@@ -641,7 +641,7 @@ async function submitPayment(page: Page): Promise<void> {
         r.request().method() === "POST" &&
         /\/contracts\/[^/]+\/payments$/.test(new URL(r.url()).pathname),
     ),
-    action(page, /^registrar pagamento$/).click(),
+    action(page, /^Registrar pagamento$/).click(),
   ]);
   if (!response.ok()) throw new Error(`creating the payment returned ${response.status()}`);
   await page.waitForURL((url) => !url.pathname.endsWith("/pagamentos/novo"));
@@ -679,9 +679,9 @@ async function contactInvite(state: State): Promise<void> {
   await action(page, /^Salvar profissional$/).click();
   await see(
     "the e-mail sent notice",
-    page.getByText(/e-mail enviado para/).filter({ hasText: email }),
+    page.getByText(/E-mail enviado para/).filter({ hasText: email }),
   );
-  const wa = page.getByRole("link", { name: /mandar no WhatsApp/ });
+  const wa = page.getByRole("link", { name: /Mandar no WhatsApp/ });
   await see("the WhatsApp link", wa);
   const href = await wa.getAttribute("href");
   if (!href?.startsWith("https://wa.me/55")) throw new Error(`WhatsApp link is "${href}"`);
@@ -718,7 +718,7 @@ async function removeAndRestore(state: State): Promise<void> {
   await page.getByRole("menuitem", { name: "remover" }).click();
   const dialog = page.getByRole("dialog");
   await see("the removal confirmation", dialog.getByText(`remover ${name}?`));
-  await action(dialog, /^remover$/).click();
+  await action(dialog, /^Remover$/).click();
   await poll(`${name} to leave Início`, async () => (await personRow(home, name).count()) === 0);
 
   await page.goto(`${BASE}/equipe`);
@@ -945,7 +945,7 @@ async function futureMonth(state: State): Promise<void> {
 
   const forecast = page.getByRole("region", { name: /^Previsão de/ });
   await see("the forecast section", forecast.first());
-  const tags = await page.getByText("previsto", { exact: true }).count();
+  const tags = await page.getByText("Previsto", { exact: true }).count();
   if (tags < 3) throw new Error(`expected 3 'previsto' KPI tags, found ${tags}`);
   await absent("the actual-month summary", page.getByRole("region", { name: /^Resumo de/ }));
   await absent(
@@ -968,7 +968,7 @@ async function deleteAccount(state: State): Promise<void> {
 
   const { page } = await openSession(state, "leaver");
   await register(page, "Eu trabalho", "Saindo E2E", email, `?convite=${code}`);
-  await action(page, /^criar conta$/i).click();
+  await action(page, /^Criar conta$/i).click();
   await page.waitForURL(`${BASE}/`);
   await action(page, /bater entrada/i).click();
   await see("the check-in time", page.locator('section[aria-label="Hoje"] dd').first());
@@ -1064,7 +1064,7 @@ async function securityChecks(state: State): Promise<void> {
   await anon.page.goto(`${BASE}/entrar`);
   await anon.page.getByLabel("E-mail").fill(state.employerEmail);
   await anon.page.getByLabel("Senha", { exact: true }).fill("senha-errada-123");
-  await action(anon.page, /^entrar$/).click();
+  await action(anon.page, /^Entrar$/).click();
   const alert = anon.page.locator('p[role="alert"]').filter({ hasText: /\w/ });
   await see("an error for the wrong password", alert);
   if (!anon.page.url().includes("/entrar")) throw new Error("left /entrar after a wrong password");
@@ -1090,7 +1090,7 @@ async function forgotPassword(state: State): Promise<void> {
   const { page } = await openSession(state, "reset");
   await page.goto(`${BASE}/esqueci-senha`);
   await page.getByLabel("E-mail").fill(state.employerEmail);
-  await action(page, /^enviar link$/).click();
+  await action(page, /^Enviar link$/).click();
   await see("the confirmation notice", page.getByText("confira seu e-mail"));
 
   const { messages } = (await (await fetch(`${API}/dev/outbox`)).json()) as {
@@ -1102,7 +1102,7 @@ async function forgotPassword(state: State): Promise<void> {
 
   await page.goto(`${BASE}${link}`);
   await page.getByLabel("Senha nova", { exact: true }).fill(NEW_PASSWORD);
-  await action(page, /^salvar senha$/).click();
+  await action(page, /^Salvar senha$/).click();
   await see("the saved-password notice", page.getByText("senha nova salva"));
 
   await login(page, state.employerEmail, NEW_PASSWORD);

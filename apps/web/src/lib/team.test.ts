@@ -100,7 +100,7 @@ describe("today", () => {
       ),
     ).toMatchObject({
       state: "in",
-      text: "entrou 08:02",
+      text: "Entrou 08:02",
     });
     expect(todayInfo(item("A", { today: { status: "absent" } }), TODAY).state).toBe("absent");
     expect(todayInfo(item("A"), TODAY)).toMatchObject({ expected: true, state: "waiting" });

@@ -151,12 +151,12 @@ function onSubmit(): void {
       />
     </Field>
 
-    <Button type="submit" variant="primary" block :loading="submitting">criar conta</Button>
+    <Button type="submit" variant="primary" block :loading="submitting">Criar conta</Button>
     <p class="alt">
       Já tem conta?
       <RouterLink
         :to="{ path: '/entrar', query: route.query.next ? { next: route.query.next } : {} }"
-        >entrar</RouterLink
+        >Entrar</RouterLink
       >
     </p>
   </form>

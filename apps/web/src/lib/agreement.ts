@@ -13,15 +13,15 @@ export interface AgreementStatus {
 export function agreementStatus(
   a: Pick<Agreement, "cancelledAt" | "acceptedAt" | "remainingCents">,
 ): AgreementStatus {
-  if (a.cancelledAt) return { state: "cancelled", label: "cancelado", tone: "neutral" };
-  if (a.remainingCents <= 0) return { state: "settled", label: "quitado", tone: "brand" };
+  if (a.cancelledAt) return { state: "cancelled", label: "Cancelado", tone: "neutral" };
+  if (a.remainingCents <= 0) return { state: "settled", label: "Quitado", tone: "brand" };
   if (!a.acceptedAt)
     return {
       state: "pending",
-      label: "aguardando a profissional concordar",
+      label: "Aguardando a profissional concordar",
       tone: "amber",
     };
-  return { state: "running", label: "em andamento", tone: "brand" };
+  return { state: "running", label: "Em andamento", tone: "brand" };
 }
 
 /** Share already paid back, 0–100. */

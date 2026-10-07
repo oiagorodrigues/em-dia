@@ -269,14 +269,14 @@ function inlineActions(row: PaymentRow): InlineAction[] {
 function menuItems(row: PaymentRow): MenuItem[] {
   const items: MenuItem[] = [];
   if (row.payment.receipt)
-    items.push({ label: "ver comprovante", icon: "paperclip", onSelect: () => view(row.payment) });
+    items.push({ label: "Ver comprovante", icon: "paperclip", onSelect: () => view(row.payment) });
   if (auth.isEmployer && isWritable(row.contract)) {
     items.push({
       label: row.payment.receipt ? "trocar comprovante" : "anexar comprovante",
       icon: "paperclip",
       onSelect: () => pickReceipt(row),
     });
-    items.push({ label: "remover", icon: "trash", danger: true, onSelect: () => askRemove(row) });
+    items.push({ label: "Remover", icon: "trash", danger: true, onSelect: () => askRemove(row) });
   }
   return items;
 }
@@ -297,9 +297,13 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
       "
     >
       <template v-if="canRegister" #actions>
-        <Button to="/pagamentos/novo" variant="primary" icon="wallet-plus"
-          >registrar pagamento</Button
-        >
+        <Button
+          to="/pagamentos/novo"
+          variant="primary"
+          icon="wallet-plus"
+          icon-only
+          label="Registrar pagamento"
+        />
       </template>
     </PageHeader>
 
@@ -338,7 +342,9 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
       title="Não deu para carregar os pagamentos."
     >
       {{ payments.error.value.message }}
-      <template #actions><Button @click="payments.reload">tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="payments.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <DataTable
@@ -473,7 +479,7 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
           >
           <template v-if="canRegister" #actions>
             <Button to="/pagamentos/novo" variant="primary" icon="wallet-plus"
-              >registrar pagamento</Button
+              >Registrar pagamento</Button
             >
           </template>
         </EmptyState>
@@ -498,7 +504,7 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
           ? `O pagamento de ${formatCents(removing.payment.amountCents)} para ${removing.contract.workerName} e o comprovante saem do histórico.`
           : undefined
       "
-      confirm-label="remover"
+      confirm-label="Remover"
       :loading="!!removing && busyId === removing.payment.id"
       @confirm="confirmRemove"
     />

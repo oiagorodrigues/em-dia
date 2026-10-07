@@ -61,13 +61,13 @@ function onSubmit(): void {
       />
     </Field>
     <div class="login__forgot">
-      <RouterLink to="/esqueci-senha" class="link-btn">esqueci minha senha</RouterLink>
+      <RouterLink to="/esqueci-senha" class="link-btn">Esqueci minha senha</RouterLink>
     </div>
-    <Button type="submit" variant="primary" block :loading="submitting">entrar</Button>
+    <Button type="submit" variant="primary" block :loading="submitting">Entrar</Button>
     <p class="login__alt">
       Ainda não tem conta?
       <RouterLink :to="{ path: '/criar-conta', query: next ? { next } : {} }"
-        >criar conta</RouterLink
+        >Criar conta</RouterLink
       >
     </p>
   </form>

@@ -41,9 +41,9 @@ function contract(patch: Partial<Contract> = {}): Contract {
 
 describe("contractStatus", () => {
   it("prefers removed over ended over pending", () => {
-    expect(contractStatus(contract()).label).toBe("ativo");
-    expect(contractStatus(contract({ workerId: null })).label).toBe("convite pendente");
-    expect(contractStatus(contract({ workerId: null, status: "ended" })).label).toBe("encerrado");
+    expect(contractStatus(contract()).label).toBe("Ativo");
+    expect(contractStatus(contract({ workerId: null })).label).toBe("Convite pendente");
+    expect(contractStatus(contract({ workerId: null, status: "ended" })).label).toBe("Encerrado");
     expect(
       contractStatus(contract({ status: "ended", archivedAt: "2026-09-20T13:00:00Z" })).state,
     ).toBe("archived");
