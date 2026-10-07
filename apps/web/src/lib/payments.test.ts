@@ -109,13 +109,13 @@ describe("matchesPaymentFilters", () => {
 describe("receivedStatus", () => {
   it("tells the worker's recebi from the employer closing the payment", () => {
     expect(receivedStatus({ acknowledgedAt: null, acknowledgedByRole: null }).label).toBe(
-      "aguardando",
+      "Aguardando",
     );
     expect(receivedStatus({ acknowledgedAt: "x", acknowledgedByRole: "worker" }).label).toBe(
-      "recebido",
+      "Recebido",
     );
     expect(receivedStatus({ acknowledgedAt: "x", acknowledgedByRole: "employer" })).toEqual({
-      label: "concluído",
+      label: "Concluído",
       tone: "brand",
       done: true,
     });

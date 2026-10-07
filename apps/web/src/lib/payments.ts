@@ -22,9 +22,9 @@ export function receivedStatus(p: Pick<Payment, "acknowledgedAt" | "acknowledged
   tone: Tone;
   done: boolean;
 } {
-  if (!p.acknowledgedAt) return { label: "aguardando", tone: "amber", done: false };
-  if (p.acknowledgedByRole === "employer") return { label: "concluído", tone: "brand", done: true };
-  return { label: "recebido", tone: "brand", done: true };
+  if (!p.acknowledgedAt) return { label: "Aguardando", tone: "amber", done: false };
+  if (p.acknowledgedByRole === "employer") return { label: "Concluído", tone: "brand", done: true };
+  return { label: "Recebido", tone: "brand", done: true };
 }
 
 /** Filters of the Pagamentos page; "" means "todos". */

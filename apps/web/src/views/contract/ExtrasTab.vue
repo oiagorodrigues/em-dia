@@ -223,7 +223,9 @@ const extraPaymentLink = computed(() => ({
       title="Não deu para carregar os extras."
     >
       {{ list.error.value.message }}
-      <template #actions><Button @click="list.reload">Tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="list.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <DataTable
@@ -268,7 +270,7 @@ const extraPaymentLink = computed(() => ({
           >{{ extraSigned(row) < 0 ? "−" : "+" }}
           {{ formatCents(Math.abs(extraSigned(row))) }}</span
         >
-        <span v-if="row.source === 'payment'" class="ex__paid">já pago</span>
+        <span v-if="row.source === 'payment'" class="ex__paid">Já pago</span>
       </template>
 
       <template #card="{ row }">
@@ -291,7 +293,7 @@ const extraPaymentLink = computed(() => ({
     </DataTable>
 
     <p v-if="rows.length > 0" class="ex__net">
-      <span>saldo dos lançamentos</span>
+      <span>Saldo dos lançamentos</span>
       <span class="mono" :class="{ 'is-minus': net < 0 }"
         >{{ net < 0 ? "−" : "+" }} {{ formatCents(Math.abs(net)) }}</span
       >

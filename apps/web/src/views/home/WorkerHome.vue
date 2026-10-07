@@ -239,7 +239,7 @@ const stopShortcut = watch(
 
     <EmptyState v-else-if="error && !data" tone="error" title="Não deu para carregar o início.">
       {{ error.message }}
-      <template #actions><Button @click="reload">tentar de novo</Button></template>
+      <template #actions><Button icon="refresh" @click="reload">Tentar de novo</Button></template>
     </EmptyState>
 
     <EmptyState
@@ -248,7 +248,7 @@ const stopShortcut = watch(
     >
       Peça o código de 8 letras para quem te contratou e coloque aqui. Aí é só bater o ponto.
       <template #actions>
-        <Button to="/entrar-no-vinculo" variant="primary" icon="key">tenho um código</Button>
+        <Button to="/entrar-no-vinculo" variant="primary" icon="key">Tenho um código</Button>
       </template>
     </EmptyState>
 

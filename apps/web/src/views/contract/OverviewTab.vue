@@ -64,7 +64,7 @@ const kind = computed(() => contract.value.schedule.kind);
 
 const projectedKpis = computed(() => {
   const e = estimate.value;
-  const unit = kind.value === "per_month" ? "visitas" : "dias";
+  const unit = kind.value === "per_month" ? "Visitas" : "Dias";
   return [
     {
       tone: "brand" as const,
@@ -118,14 +118,14 @@ const kpis = computed(() => {
     {
       tone: "brand" as const,
       icon: "clock" as const,
-      label: "horas",
+      label: "Horas",
       value: sum ? formatDuration(sum.totalMinutes) : "",
       caption: `em ${monthLabel.value}`,
     },
     {
       tone: "amber" as const,
       icon: "calendar" as const,
-      label: kind.value === "per_month" ? "visitas" : "dias",
+      label: kind.value === "per_month" ? "Visitas" : "Dias",
       value: sum ? attendanceText(sum, kind.value) : "",
       caption: sum
         ? sum.absences
@@ -140,14 +140,14 @@ const kpis = computed(() => {
     {
       tone: "amber" as const,
       icon: "coins" as const,
-      label: auth.isEmployer ? "a pagar" : "a receber",
+      label: auth.isEmployer ? "A pagar" : "A receber",
       value: formatCents(owed),
       caption: sum ? `de ${formatCents(sum.dueCents)}` : undefined,
     },
     {
       tone: "brand" as const,
       icon: "wallet" as const,
-      label: "pago",
+      label: "Pago",
       value: sum ? formatCents(sum.paidCents) : "",
       caption: payments.data.value
         ? paidThisMonth.length === 1
@@ -268,7 +268,7 @@ function tabLink(name: string) {
         <section v-if="future" class="sheet ov__box is-projected" aria-labelledby="ov-cost">
           <div class="ov__boxhead">
             <h2 id="ov-cost" class="ov__title">Custo previsto de {{ monthLabel }}</h2>
-            <span class="ov__tag">previsto</span>
+            <span class="ov__tag">Previsto</span>
           </div>
           <p class="ov__proj mono">
             {{ estimate.cents === null ? "—" : formatCents(estimate.cents) }}
@@ -283,7 +283,7 @@ function tabLink(name: string) {
         <section v-else class="sheet ov__box" aria-labelledby="ov-cost">
           <div class="ov__boxhead">
             <h2 id="ov-cost" class="ov__title">Custo de {{ monthLabel }}</h2>
-            <span v-if="partial" class="ov__hint">realizado até hoje</span>
+            <span v-if="partial" class="ov__hint">Realizado até hoje</span>
           </div>
           <div v-if="!cost" aria-busy="true">
             <Skeleton h="20px" />
@@ -292,7 +292,7 @@ function tabLink(name: string) {
           <dl v-else class="ov__bars">
             <div class="ov__bar">
               <dt>
-                estimado
+                Estimado
                 <span class="ov__why">{{ estimateText ?? estimateGap(contract) }}</span>
               </dt>
               <dd class="mono">{{ cost.est === null ? "—" : formatCents(cost.est) }}</dd>
@@ -302,8 +302,8 @@ function tabLink(name: string) {
             </div>
             <div class="ov__bar">
               <dt>
-                realizado
-                <span class="ov__why">horas, dias, faltas e extras do mês</span>
+                Realizado
+                <span class="ov__why">Horas, dias, faltas e extras do mês</span>
               </dt>
               <dd class="mono">{{ formatCents(cost.due) }}</dd>
               <span class="ov__track" aria-hidden="true"

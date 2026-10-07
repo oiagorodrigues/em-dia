@@ -18,16 +18,16 @@ export const DEFAULT_SCHEDULE: Schedule = {
 };
 
 export const WEEKDAY_PRESETS = [
-  { label: "seg a sex", weekdays: [1, 2, 3, 4, 5] },
-  { label: "seg a sáb", weekdays: [1, 2, 3, 4, 5, 6] },
-  { label: "todos os dias", weekdays: [0, 1, 2, 3, 4, 5, 6] },
+  { label: "Seg a sex", weekdays: [1, 2, 3, 4, 5] },
+  { label: "Seg a sáb", weekdays: [1, 2, 3, 4, 5, 6] },
+  { label: "Todos os dias", weekdays: [0, 1, 2, 3, 4, 5, 6] },
 ] as const;
 
 export const EVERY_WEEKS_OPTIONS = [
-  { value: "1", label: "toda semana" },
-  { value: "2", label: "a cada 2" },
-  { value: "3", label: "a cada 3" },
-  { value: "custom", label: "personalizado" },
+  { value: "1", label: "Toda semana" },
+  { value: "2", label: "A cada 2" },
+  { value: "3", label: "A cada 3" },
+  { value: "custom", label: "Personalizado" },
 ] as const;
 
 export type RepeatChoice = (typeof EVERY_WEEKS_OPTIONS)[number]["value"];

@@ -186,7 +186,7 @@ function onEnd(): void {
             Some da equipe e do início. O histórico fica guardado e você pode restaurar em Equipe →
             removidos.
           </p>
-          <Button variant="danger" icon="archive" @click="askRemove">Remover…</Button>
+          <Button variant="danger" icon="trash" @click="askRemove">Remover…</Button>
         </template>
       </section>
     </div>

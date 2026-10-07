@@ -24,7 +24,7 @@ function setup(initial: Schedule = DEFAULT_SCHEDULE) {
 describe("ScheduleField", () => {
   it("applies a weekday preset and updates the live summary", async () => {
     const { wrapper, state } = setup();
-    const preset = wrapper.findAll(".sf__preset").find((b) => b.text() === "seg a sex")!;
+    const preset = wrapper.findAll(".sf__preset").find((b) => b.text() === "Seg a sex")!;
     await preset.trigger("click");
     expect(state.value.weekdays).toEqual([1, 2, 3, 4, 5]);
     expect(wrapper.get(".sf__summary").text()).toBe("seg a sex · 22 dias previstos em outubro");

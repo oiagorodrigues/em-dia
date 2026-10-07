@@ -309,7 +309,9 @@ const totals = computed(() => {
       title="Não deu para carregar os acordos."
     >
       {{ list.error.value.message }}
-      <template #actions><Button @click="list.reload">Tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="list.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <DataTable

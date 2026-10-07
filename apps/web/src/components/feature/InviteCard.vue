@@ -57,11 +57,11 @@ async function share(): Promise<void> {
       <span>{{ code.slice(0, 4) }}</span
       ><span>{{ code.slice(4) }}</span>
     </p>
-    <p class="inv__exp">vale até {{ expires }} · uso único</p>
+    <p class="inv__exp">Vale até {{ expires }} · uso único</p>
     <p v-if="delivery?.emailSent" class="inv__sent" role="status">
       <Icon name="mail" :size="16" />
       <span
-        >e-mail enviado para <strong>{{ email ?? "o contato" }}</strong></span
+        >E-mail enviado para <strong>{{ email ?? "o contato" }}</strong></span
       >
     </p>
     <div class="inv__actions">
@@ -89,7 +89,7 @@ async function share(): Promise<void> {
       >
     </div>
     <p class="inv__link">
-      ou mande o link:
+      Ou mande o link:
       <a :href="link" class="mono" rel="noopener">{{ link.replace(/^https?:\/\//, "") }}</a>
     </p>
   </section>

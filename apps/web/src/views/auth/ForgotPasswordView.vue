@@ -31,7 +31,7 @@ function onSubmit(): void {
         >, mandamos um link para criar uma senha nova. Ele vale por 30 minutos.
       </p>
       <p class="muted">Não chegou? Olhe a caixa de spam ou tente de novo em alguns minutos.</p>
-      <Button to="/entrar" block>voltar para entrar</Button>
+      <Button to="/entrar" block>Voltar para entrar</Button>
     </div>
   </template>
   <template v-else>
@@ -56,8 +56,8 @@ function onSubmit(): void {
           @input="clearError('email')"
         />
       </Field>
-      <Button type="submit" variant="primary" block :loading="submitting">enviar link</Button>
-      <p class="alt"><RouterLink to="/entrar">voltar para entrar</RouterLink></p>
+      <Button type="submit" variant="primary" block :loading="submitting">Enviar link</Button>
+      <p class="alt"><RouterLink to="/entrar">Voltar para entrar</RouterLink></p>
     </form>
   </template>
 </template>

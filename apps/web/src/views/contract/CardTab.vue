@@ -293,7 +293,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
         <p class="ct__sched">
           <span>{{ describeSchedule(contract.schedule) }}</span>
           <span v-if="kind === 'per_month' && summary.data.value" class="ct__visits mono">
-            visitas: {{ summary.data.value.daysWorked }} de {{ summary.data.value.expectedDays }}
+            Visitas: {{ summary.data.value.daysWorked }} de {{ summary.data.value.expectedDays }}
           </span>
         </p>
       </div>
@@ -325,7 +325,9 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
           title="Não deu para carregar o cartão."
         >
           {{ entries.error.value.message }}
-          <template #actions><Button @click="entries.reload">Tentar de novo</Button></template>
+          <template #actions
+            ><Button icon="refresh" @click="entries.reload">Tentar de novo</Button></template
+          >
         </EmptyState>
         <TimeCard
           v-else-if="entries.data.value"
@@ -341,9 +343,9 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
       </div>
 
       <ul v-if="legend.ok || legend.open || legend.today" class="ct__legend" aria-label="Legenda">
-        <li v-if="legend.ok"><span class="lg lg--ok" /> confirmado</li>
-        <li v-if="legend.open"><span class="lg lg--open" /> aguardando confirmação</li>
-        <li v-if="legend.today"><span class="lg lg--today" /> hoje</li>
+        <li v-if="legend.ok"><span class="lg lg--ok" /> Confirmado</li>
+        <li v-if="legend.open"><span class="lg lg--open" /> Aguardando confirmação</li>
+        <li v-if="legend.today"><span class="lg lg--today" /> Hoje</li>
       </ul>
     </div>
 
@@ -409,7 +411,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
             "
             :to="{ path: '/pagamentos/novo', query: { vinculo: contract.id, mes: month } }"
             variant="primary"
-            icon="plus"
+            icon="wallet-plus"
             >Registrar pagamento</Button
           >
           <Button icon="download" :loading="downloading" @click="downloadCsv"

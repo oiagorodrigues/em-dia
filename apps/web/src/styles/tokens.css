@@ -69,8 +69,13 @@
   --nav-h: 64px;
   --topbar-h: 56px;
   --sidebar-w: 264px;
+  --sidebar-w-collapsed: 76px;
 
   color-scheme: light;
+}
+
+:root[data-sidebar="collapsed"] {
+  --sidebar-w: var(--sidebar-w-collapsed);
 }
 
 @media (prefers-color-scheme: dark) {

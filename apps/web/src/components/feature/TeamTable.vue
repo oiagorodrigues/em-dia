@@ -375,7 +375,7 @@ function menuFor(item: DashboardItem): MenuItem[] {
             v-if="variant === 'home' && teamStatus(row.contract) === 'pending'"
             tone="amber"
             class="tt__chip"
-            >convite pendente</StatusChip
+            >Convite pendente</StatusChip
           >
         </span>
       </span>
@@ -461,7 +461,7 @@ function menuFor(item: DashboardItem): MenuItem[] {
             class="tt__today"
             :class="`is-${todayInfo(row, today).state}`"
           >
-            <span class="tt__today-dot" aria-hidden="true" />hoje: {{ todayInfo(row, today).text }}
+            <span class="tt__today-dot" aria-hidden="true" />Hoje: {{ todayInfo(row, today).text }}
           </span>
         </span>
       </div>
@@ -480,7 +480,7 @@ function menuFor(item: DashboardItem): MenuItem[] {
     v-model:open="confirmOpen"
     :title="`Remover ${removing?.contract.workerName ?? ''}?`"
     message="O histórico fica guardado e você pode restaurar em Equipe → removidos."
-    confirm-label="remover"
+    confirm-label="Remover"
     :loading="removeBusy"
     @confirm="confirmRemove"
   />

@@ -8,7 +8,7 @@ import Sheet from "./Sheet.vue";
 const { count = 0, resultLabel } = defineProps<{
   /** Filters currently narrowing the list; shown on the mobile button. */
   count?: number;
-  /** e.g. "ver 12 pessoas"; defaults to "ver resultados". */
+  /** e.g. "Ver 12 pessoas"; defaults to "Ver resultados". */
   resultLabel?: string;
 }>();
 const emit = defineEmits<{ clear: [] }>();
@@ -28,9 +28,9 @@ const open = ref(false);
     <Sheet v-model:open="open" title="Filtros">
       <div class="fd-body"><slot /></div>
       <template #footer>
-        <Button :disabled="count === 0" @click="emit('clear')">limpar</Button>
+        <Button :disabled="count === 0" @click="emit('clear')">Limpar</Button>
         <Button variant="primary" @click="open = false">{{
-          resultLabel ?? "ver resultados"
+          resultLabel ?? "Ver resultados"
         }}</Button>
       </template>
     </Sheet>

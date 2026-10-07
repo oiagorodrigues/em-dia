@@ -118,7 +118,7 @@ const count = computed(() =>
   <div v-else class="bv">
     <PageHeader title="Cartão" subtitle="O mês de todo mundo, dia a dia.">
       <template #actions>
-        <Button to="/pagamentos/novo" icon="coins">registrar pagamento</Button>
+        <Button to="/pagamentos/novo" icon="wallet-plus" icon-only label="Registrar pagamento" />
       </template>
     </PageHeader>
 
@@ -165,13 +165,15 @@ const count = computed(() =>
 
     <EmptyState v-else-if="board.error.value" tone="error" title="Não deu para carregar o quadro.">
       {{ board.error.value.message }}
-      <template #actions><Button @click="board.reload">tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="board.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <EmptyState v-else-if="allRows.length === 0" title="Ninguém cadastrado ainda.">
       Cadastre quem trabalha na sua casa e o mês de cada um aparece aqui.
       <template #actions>
-        <Button to="/equipe/novo" variant="primary" icon="plus">adicionar profissional</Button>
+        <Button to="/equipe/novo" variant="primary" icon="user-plus">Adicionar profissional</Button>
       </template>
     </EmptyState>
 
@@ -182,13 +184,13 @@ const count = computed(() =>
         {{ state.filters.status === "encerrados" ? "encerrado" : "" }} neste mês.
       </p>
       <button v-if="active" type="button" class="link-btn" @click="clear">
-        limpar busca e filtros
+        Limpar busca e filtros
       </button>
     </div>
 
     <template v-else-if="board.data.value">
       <p v-if="projected" class="bv__projection" role="note">
-        <span class="bv__tag">previsto</span>
+        <span class="bv__tag">Previsto</span>
         Este mês ainda não começou. O quadro mostra os dias combinados, e as horas e os valores são
         uma estimativa.
       </p>

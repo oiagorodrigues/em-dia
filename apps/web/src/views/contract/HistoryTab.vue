@@ -45,10 +45,10 @@ const { state, clear } = useTableState({
 });
 
 const GROUPS = [
-  { value: "", label: "tudo" },
-  { value: "registros", label: "registros" },
-  { value: "pagamentos", label: "pagamentos e extras" },
-  { value: "vinculo", label: "vínculo" },
+  { value: "", label: "Tudo" },
+  { value: "registros", label: "Registros" },
+  { value: "pagamentos", label: "Pagamentos e extras" },
+  { value: "vinculo", label: "Vínculo" },
 ] as const;
 
 const counts = computed(() => {
@@ -98,7 +98,9 @@ function filter(l: Line): boolean {
       title="Não deu para carregar o histórico."
     >
       {{ feed.error.value.message }}
-      <template #actions><Button @click="feed.reload">Tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="feed.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <DataTable

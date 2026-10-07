@@ -5,7 +5,10 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import { errorMessage } from "@/api";
 import Avatar from "@/components/ui/Avatar.vue";
 import Icon from "@/components/ui/Icon.vue";
+import Mark from "@/components/ui/Mark.vue";
+import Tooltip from "@/components/ui/Tooltip.vue";
 import Wordmark from "@/components/ui/Wordmark.vue";
+import { useSidebarCollapse } from "@/composables/sidebar.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { useSlidingIndicator } from "@/lib/motion.ts";
@@ -15,6 +18,9 @@ const auth = useAuthStore();
 const toast = useToastStore();
 const route = useRoute();
 const router = useRouter();
+
+const { collapsed, toggle } = useSidebarCollapse();
+const toggleLabel = computed(() => (collapsed.value ? "Expandir menu" : "Recolher menu"));
 
 const items = computed(() => navItems(auth.role));
 const active = computed(() => items.value.find((i) => i.match(route))?.to ?? null);
@@ -36,38 +42,64 @@ async function logout(): Promise<void> {
 </script>
 
 <template>
-  <aside class="side" aria-label="Menu lateral">
+  <aside
+    id="menu-lateral"
+    class="side"
+    :class="{ 'is-collapsed': collapsed }"
+    aria-label="Menu lateral"
+  >
     <RouterLink to="/" class="side__brand" aria-label="em dia, início">
-      <Wordmark :size="30" />
+      <Mark v-if="collapsed" :size="26" />
+      <Wordmark v-else :size="30" />
     </RouterLink>
     <nav aria-label="Principal">
       <ul ref="list" class="side__list">
         <li class="side__indicator" aria-hidden="true" :style="indicator" />
         <li v-for="item in items" :key="item.to">
-          <RouterLink
-            :to="item.to"
-            class="side__item"
-            :class="{ 'is-active': active === item.to }"
-            :aria-current="active === item.to ? 'page' : undefined"
-          >
-            <Icon :name="item.icon" :size="22" />
-            <span>{{ item.label }}</span>
-          </RouterLink>
+          <Tooltip :text="item.label" side="right" :disabled="!collapsed">
+            <RouterLink
+              :to="item.to"
+              class="side__item"
+              :class="{ 'is-active': active === item.to }"
+              :aria-current="active === item.to ? 'page' : undefined"
+            >
+              <Icon :name="item.icon" :size="22" />
+              <span class="side__label">{{ item.label }}</span>
+            </RouterLink>
+          </Tooltip>
         </li>
       </ul>
     </nav>
-    <div v-if="auth.user" class="side__user">
-      <RouterLink to="/perfil" class="side__who">
-        <Avatar :name="auth.user.name" :size="40" />
-        <span class="side__who-text">
-          <span class="side__name">{{ auth.user.name }}</span>
-          <span class="side__role">{{ ROLE_LABEL[auth.user.role] }}</span>
-        </span>
-      </RouterLink>
-      <button type="button" class="side__logout" :disabled="leaving" @click="logout">
-        <Icon name="logout" :size="18" />
-        <span>Sair</span>
-      </button>
+    <div class="side__foot">
+      <Tooltip :text="toggleLabel" side="right" :disabled="!collapsed">
+        <button
+          type="button"
+          class="side__item side__toggle"
+          :aria-expanded="!collapsed"
+          aria-controls="menu-lateral"
+          @click="toggle"
+        >
+          <Icon :name="collapsed ? 'sidebar-expand' : 'sidebar-collapse'" :size="22" />
+          <span class="side__label">{{ toggleLabel }}</span>
+        </button>
+      </Tooltip>
+      <div v-if="auth.user" class="side__user">
+        <Tooltip :text="auth.user.name" side="right" :disabled="!collapsed">
+          <RouterLink to="/perfil" class="side__who">
+            <Avatar :name="auth.user.name" :size="collapsed ? 36 : 40" />
+            <span class="side__who-text side__label">
+              <span class="side__name">{{ auth.user.name }}</span>
+              <span class="side__role">{{ ROLE_LABEL[auth.user.role] }}</span>
+            </span>
+          </RouterLink>
+        </Tooltip>
+        <Tooltip text="Sair" side="right" :disabled="!collapsed">
+          <button type="button" class="side__logout" :disabled="leaving" @click="logout">
+            <Icon name="logout" :size="18" />
+            <span class="side__label">Sair</span>
+          </button>
+        </Tooltip>
+      </div>
     </div>
   </aside>
 </template>
@@ -82,8 +114,13 @@ async function logout(): Promise<void> {
   flex-direction: column;
   gap: var(--s-7);
   padding: var(--s-7) var(--s-4) var(--s-5);
+  overflow-x: hidden;
   background: var(--sidebar);
   color: var(--sidebar-ink);
+}
+
+html[data-sidebar-moving] .side {
+  transition: width var(--d-sheet) var(--ease-out);
 }
 
 @media (min-width: 960px) {
@@ -93,13 +130,21 @@ async function logout(): Promise<void> {
 }
 
 .side__brand {
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  min-height: 32px;
   padding: 0 var(--s-3);
   text-decoration: none;
+  color: var(--sidebar-ink);
 }
 
-.side__brand :deep(.wordmark) {
+.side__brand :deep(.wordmark),
+.side__brand :deep(.mark) {
   color: var(--sidebar-ink);
+}
+
+.side :deep(.tip-anchor) {
+  display: flex;
 }
 
 .side__list {
@@ -112,6 +157,7 @@ async function logout(): Promise<void> {
 
 .side__item {
   position: relative;
+  flex: 1;
   display: flex;
   align-items: center;
   gap: var(--s-3);
@@ -122,6 +168,7 @@ async function logout(): Promise<void> {
   text-decoration: none;
   font-size: var(--t-16);
   font-weight: 500;
+  white-space: nowrap;
   transition: background-color var(--d-fast) var(--ease);
 }
 
@@ -137,8 +184,32 @@ async function logout(): Promise<void> {
   background: transparent;
 }
 
-.side__user {
+.side__foot {
   margin-top: auto;
+  display: grid;
+  gap: var(--s-3);
+}
+
+.side__toggle {
+  width: 100%;
+  color: var(--sidebar-ink);
+  font-size: var(--t-14);
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.side__toggle:hover {
+  opacity: 1;
+}
+
+.side__item:focus-visible,
+.side__who:focus-visible,
+.side__logout:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.side__user {
   display: grid;
   gap: var(--s-2);
   padding: var(--s-3);
@@ -173,6 +244,7 @@ async function logout(): Promise<void> {
 }
 
 .side__logout {
+  flex: 1;
   display: flex;
   align-items: center;
   gap: var(--s-2);
@@ -219,7 +291,40 @@ async function logout(): Promise<void> {
   z-index: 1;
 }
 
+/* Icons only: labels stay in the DOM, visually hidden, so links keep their accessible names. */
+.is-collapsed .side__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.is-collapsed .side__brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.is-collapsed .side__item,
+.is-collapsed .side__logout {
+  justify-content: center;
+  padding: 0;
+}
+
+.is-collapsed .side__user {
+  justify-items: center;
+  padding: var(--s-2) 0;
+}
+
+.is-collapsed .side__who {
+  justify-content: center;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  html[data-sidebar-moving] .side {
+    transition: none;
+  }
   .side__indicator {
     transition: opacity var(--d-fast) linear;
   }

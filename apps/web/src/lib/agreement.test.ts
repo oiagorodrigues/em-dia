@@ -41,7 +41,7 @@ describe("agreementStatus", () => {
       agreementStatus(
         agreement({ archivedAt: "2026-10-02T00:00:00Z", cancelledAt: "2026-10-01T00:00:00Z" }),
       ),
-    ).toMatchObject({ state: "removed", label: "removido" });
+    ).toMatchObject({ state: "removed", label: "Removido" });
   });
 });
 

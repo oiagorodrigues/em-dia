@@ -187,9 +187,9 @@ function onSlotKey(e: KeyboardEvent, i: number): void {
         </div>
       </div>
       <template #footer>
-        <Button @click="open = false">cancelar</Button>
+        <Button @click="open = false">Cancelar</Button>
         <Button variant="primary" @click="pick(`${wheelHour}:${wheelMinute}`)"
-          >usar {{ wheelHour }}:{{ wheelMinute }}</Button
+          >Usar {{ wheelHour }}:{{ wheelMinute }}</Button
         >
       </template>
     </Sheet>

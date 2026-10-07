@@ -64,7 +64,7 @@ function link(row: BoardRow) {
             <span class="bw__sub">
               {{ OCCUPATION_LABEL[row.item.contract.occupation] }}
               <StatusChip v-if="row.item.contract.status === 'ended'" tone="neutral" :dot="false"
-                >encerrado</StatusChip
+                >Encerrado</StatusChip
               >
             </span>
           </span>

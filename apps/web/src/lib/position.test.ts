@@ -44,4 +44,15 @@ describe("placeFloating", () => {
     expect(placeFloating(a, tip, viewport, "bottom", 4, 8, "start").left).toBe(300);
     expect(placeFloating(a, tip, viewport, "bottom", 4, 8, "end").left).toBe(400);
   });
+
+  it("places beside the anchor on the right, and above when the right has no room", () => {
+    const a = { top: 100, left: 20, width: 40, height: 40 };
+    expect(placeFloating(a, tip, viewport, "right")).toEqual({
+      top: 100 + 20 - tip.height / 2,
+      left: 68,
+      side: "right",
+    });
+    const edge = { top: 400, left: viewport.width - 30, width: 20, height: 20 };
+    expect(placeFloating(edge, tip, viewport, "right").side).toBe("top");
+  });
 });

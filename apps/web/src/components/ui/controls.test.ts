@@ -2,6 +2,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { defineComponent, h, nextTick, ref, type Component } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
+import Button from "./Button.vue";
 import ChoiceField from "./ChoiceField.vue";
 import DateField from "./DateField.vue";
 import Select from "./Select.vue";
@@ -9,6 +10,7 @@ import Sheet from "./Sheet.vue";
 import TableActions from "./TableActions.vue";
 import TimeField from "./TimeField.vue";
 import Tooltip from "./Tooltip.vue";
+import { TOOLTIP_DELAY, tooltipWarm } from "./tooltip.ts";
 
 // vue-tsc sees the generic SFCs and tsgolint the .vue shim; erase both to the runtime contract.
 const C = (c: unknown) => c as Component;
@@ -191,7 +193,7 @@ describe("Tooltip", () => {
       attachTo: document.body,
     });
     await wrapper.get(".tip-anchor").trigger("mouseenter");
-    vi.advanceTimersByTime(400);
+    vi.advanceTimersByTime(TOOLTIP_DELAY);
     await flushPromises();
     const tip = document.body.querySelector('[role="tooltip"]');
     expect(tip?.textContent?.trim()).toBe("Ver cartão");
@@ -199,6 +201,119 @@ describe("Tooltip", () => {
     await wrapper.get(".tip-anchor").trigger("mouseleave");
     expect(document.body.querySelector('[role="tooltip"]')).toBeNull();
     vi.useRealTimers();
+  });
+
+  function mountTip(props: Record<string, unknown> = {}) {
+    return mount(Tooltip, {
+      props: { text: "Adicionar profissional", ...props },
+      slots: { default: () => h("button", "x") },
+      attachTo: document.body,
+    });
+  }
+  const bubble = () => document.body.querySelector('[role="tooltip"]');
+
+  it("waits for the hover delay before showing", async () => {
+    vi.useFakeTimers();
+    tooltipWarm.reset();
+    const wrapper = mountTip();
+    await wrapper.get(".tip-anchor").trigger("mouseenter");
+    vi.advanceTimersByTime(TOOLTIP_DELAY - 1);
+    await flushPromises();
+    expect(bubble()).toBeNull();
+    vi.advanceTimersByTime(1);
+    await flushPromises();
+    expect(bubble()?.textContent?.trim()).toBe("Adicionar profissional");
+    vi.useRealTimers();
+  });
+
+  it("never shows when the pointer leaves before the delay", async () => {
+    vi.useFakeTimers();
+    tooltipWarm.reset();
+    const wrapper = mountTip();
+    await wrapper.get(".tip-anchor").trigger("mouseenter");
+    vi.advanceTimersByTime(TOOLTIP_DELAY / 2);
+    await wrapper.get(".tip-anchor").trigger("mouseleave");
+    vi.advanceTimersByTime(TOOLTIP_DELAY);
+    await flushPromises();
+    expect(bubble()).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("shows at once on keyboard focus and closes on Escape", async () => {
+    vi.useFakeTimers();
+    tooltipWarm.reset();
+    const wrapper = mountTip();
+    const button = wrapper.get("button").element;
+    button.matches = ((selector: string): boolean =>
+      selector === ":focus-visible") as Element["matches"];
+    button.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    vi.advanceTimersByTime(0);
+    await flushPromises();
+    expect(bubble()).not.toBeNull();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    await flushPromises();
+    expect(bubble()).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("skips the delay right after another tooltip closed", async () => {
+    vi.useFakeTimers();
+    tooltipWarm.reset();
+    const first = mountTip({ text: "Primeiro" });
+    const second = mountTip({ text: "Segundo" });
+    await first.get(".tip-anchor").trigger("mouseenter");
+    vi.advanceTimersByTime(TOOLTIP_DELAY);
+    await first.get(".tip-anchor").trigger("mouseleave");
+    await second.get(".tip-anchor").trigger("mouseenter");
+    vi.advanceTimersByTime(0);
+    await flushPromises();
+    expect(bubble()?.textContent?.trim()).toBe("Segundo");
+    vi.useRealTimers();
+  });
+
+  it("stays hidden while disabled", async () => {
+    vi.useFakeTimers();
+    tooltipWarm.reset();
+    const wrapper = mountTip({ disabled: true });
+    await wrapper.get(".tip-anchor").trigger("mouseenter");
+    vi.advanceTimersByTime(TOOLTIP_DELAY * 2);
+    await flushPromises();
+    expect(bubble()).toBeNull();
+    vi.useRealTimers();
+  });
+});
+
+describe("Button iconOnly", () => {
+  it("keeps the label as the accessible name and as a tooltip", async () => {
+    vi.useFakeTimers();
+    tooltipWarm.reset();
+    const wrapper = mount(C(Button), {
+      props: { icon: "user-plus", iconOnly: true, label: "Adicionar profissional" },
+      attachTo: document.body,
+    });
+    const button = wrapper.get("button");
+    expect(button.attributes("aria-label")).toBe("Adicionar profissional");
+    expect(button.classes()).toContain("btn--icon-only");
+    expect(button.text()).toBe("Adicionar profissional");
+    await wrapper.get(".tip-anchor").trigger("mouseenter");
+    vi.advanceTimersByTime(TOOLTIP_DELAY);
+    await flushPromises();
+    expect(document.body.querySelector('[role="tooltip"]')?.textContent?.trim()).toBe(
+      "Adicionar profissional",
+    );
+    wrapper.unmount();
+    vi.useRealTimers();
+  });
+
+  it("forwards listeners to the button, not the tooltip wrapper", async () => {
+    const onClick = vi.fn();
+    const wrapper = mount(C(Button), {
+      props: { icon: "refresh", iconOnly: true, label: "Tentar de novo", onClick },
+      attachTo: document.body,
+    });
+    await wrapper.get("button").trigger("click");
+    expect(onClick).toHaveBeenCalledOnce();
+    wrapper.unmount();
   });
 });
 

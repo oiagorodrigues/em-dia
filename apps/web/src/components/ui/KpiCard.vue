@@ -54,7 +54,7 @@ const display = computed(() =>
         ><Icon :name="icon" :size="16"
       /></span>
       <span>{{ label }}</span>
-      <span v-if="projected" class="kpi__tag">previsto</span>
+      <span v-if="projected" class="kpi__tag">Previsto</span>
     </p>
     <p v-if="loading" class="kpi__value" aria-busy="true"><Skeleton w="60%" h="1.15em" /></p>
     <p v-else class="kpi__value mono">{{ display }}</p>

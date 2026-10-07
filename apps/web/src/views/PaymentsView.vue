@@ -354,9 +354,13 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
       "
     >
       <template v-if="canRegister" #actions>
-        <Button to="/pagamentos/novo" variant="primary" icon="wallet-plus"
-          >registrar pagamento</Button
-        >
+        <Button
+          to="/pagamentos/novo"
+          variant="primary"
+          icon="wallet-plus"
+          icon-only
+          label="Registrar pagamento"
+        />
       </template>
     </PageHeader>
 
@@ -395,7 +399,9 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
       title="Não deu para carregar os pagamentos."
     >
       {{ payments.error.value.message }}
-      <template #actions><Button @click="payments.reload">tentar de novo</Button></template>
+      <template #actions
+        ><Button icon="refresh" @click="payments.reload">Tentar de novo</Button></template
+      >
     </EmptyState>
 
     <DataTable
@@ -527,7 +533,7 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
           >
           <template v-if="canRegister" #actions>
             <Button to="/pagamentos/novo" variant="primary" icon="wallet-plus"
-              >registrar pagamento</Button
+              >Registrar pagamento</Button
             >
           </template>
         </EmptyState>
@@ -567,7 +573,7 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
           ? `O pagamento de ${formatCents(removing.payment.amountCents)} para ${removing.contract.workerName} e o comprovante saem do histórico.`
           : undefined
       "
-      confirm-label="remover"
+      confirm-label="Remover"
       :loading="!!removing && busyId === removing.payment.id"
       @confirm="confirmRemove"
     />

@@ -38,9 +38,9 @@ const monthLabel = computed(() => {
 
 const lines = computed<LedgerLine[]>(() => {
   if (!summary) return [];
-  const out: LedgerLine[] = [{ label: "a receber no mês", value: formatCents(summary.dueCents) }];
+  const out: LedgerLine[] = [{ label: "A receber no mês", value: formatCents(summary.dueCents) }];
   out.push({
-    label: "já pago",
+    label: "Já pago",
     value: formatCents(summary.paidCents),
     tone: summary.paidCents > 0 ? "green" : "neutral",
   });

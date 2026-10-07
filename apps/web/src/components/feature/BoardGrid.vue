@@ -224,7 +224,7 @@ function onClick(e: MouseEvent, row: BoardRow, currentMonth: YearMonth): void {
                     v-if="row.item.contract.status === 'ended'"
                     tone="neutral"
                     :dot="false"
-                    >encerrado</StatusChip
+                    >Encerrado</StatusChip
                   >
                 </span>
               </span>

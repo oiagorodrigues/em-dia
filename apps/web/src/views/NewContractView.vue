@@ -49,7 +49,7 @@ async function generateInvite(): Promise<void> {
     <template v-if="created">
       <PageHeader
         back="/equipe"
-        back-label="equipe"
+        back-label="Equipe"
         :title="`Cadastro de ${firstName(created.workerName)} concluído`"
       />
       <InviteSuccess v-if="invite" :contract="created" :invite="invite">
@@ -61,8 +61,8 @@ async function generateInvite(): Promise<void> {
       <template v-else>
         <div v-if="inviteError" class="form-error" role="alert">
           {{ inviteError }}
-          <Button variant="ghost" :loading="inviting" @click="generateInvite"
-            >tentar de novo</Button
+          <Button variant="ghost" icon="refresh" :loading="inviting" @click="generateInvite"
+            >Tentar de novo</Button
           >
         </div>
         <Skeleton v-else h="320px" />

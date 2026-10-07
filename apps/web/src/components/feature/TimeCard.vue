@@ -200,7 +200,7 @@ function describe(
           </span>
 
           <span v-else-if="row.kind === 'missing'" class="row__missing">— registrar</span>
-          <span v-else-if="row.scheduled && row.future" class="row__expected">previsto</span>
+          <span v-else-if="row.scheduled && row.future" class="row__expected">Previsto</span>
           <span v-else class="row__blank" />
 
           <span class="col-wide row__status">

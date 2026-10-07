@@ -89,7 +89,7 @@ const menuItems = computed<MenuItem[]>(() => {
   if (!data.value) return [];
   if (data.value.archivedAt)
     return [{ label: "Restaurar", icon: "undo", onSelect: () => void restore() }];
-  return [{ label: "Remover da equipe", icon: "archive", danger: true, onSelect: askRemove }];
+  return [{ label: "Remover da equipe", icon: "trash", danger: true, onSelect: askRemove }];
 });
 
 const backNav = useBack(auth.isEmployer ? "/equipe" : "/");
@@ -177,7 +177,7 @@ onBeforeUnmount(() => resize.disconnect());
       }}
       <template #actions>
         <Button to="/" icon="arrow-left">Voltar ao início</Button>
-        <Button v-if="error.code !== 'NOT_FOUND'" variant="ghost" @click="reload"
+        <Button v-if="error.code !== 'NOT_FOUND'" variant="ghost" icon="refresh" @click="reload"
           >Tentar de novo</Button
         >
       </template>
@@ -186,7 +186,7 @@ onBeforeUnmount(() => resize.disconnect());
     <template v-else-if="data">
       <header class="pf">
         <RouterLink :to="backNav.to.value" class="cv__back" @click.prevent="backNav.go"
-          ><Icon name="arrow-left" :size="18" /> voltar</RouterLink
+          ><Icon name="arrow-left" :size="18" /> Voltar</RouterLink
         >
         <div class="pf__row">
           <Avatar :name="title" :size="wide ? 64 : 48" />
@@ -211,16 +211,18 @@ onBeforeUnmount(() => resize.disconnect());
               v-if="writable"
               :to="{ path: '/pagamentos/novo', query: { vinculo: data.id, mes: month } }"
               variant="primary"
-              icon="plus"
-              >Registrar pagamento</Button
-            >
+              icon="wallet-plus"
+              icon-only
+              label="Registrar pagamento"
+            />
             <Button
               v-if="writable"
               :to="{ name: 'contract-settings', params: { id }, query: route.query }"
               icon="pencil"
+              icon-only
+              label="Editar"
               class="pf__edit"
-              >Editar</Button
-            >
+            />
             <Menu :items="menuItems" label="Mais ações" />
           </div>
         </div>
@@ -366,7 +368,7 @@ onBeforeUnmount(() => resize.disconnect());
     flex-basis: 100%;
   }
   /* The Ajustes tab is one tap away; the row keeps contact, payment and the menu. */
-  .pf__edit {
+  .pf__actions :deep(.pf__edit) {
     display: none;
   }
 }

@@ -68,9 +68,9 @@ const fileName = computed(() =>
       <p class="stub__meta">
         <span>{{ PAYMENT_METHOD_LABEL[payment.method] }}</span>
         <span aria-hidden="true">·</span>
-        <span class="mono">pago em {{ formatDateShort(payment.paidOn) }}</span>
+        <span class="mono">Pago em {{ formatDateShort(payment.paidOn) }}</span>
       </p>
-      <p v-if="agreement" class="stub__note">acordo: {{ agreement }}</p>
+      <p v-if="agreement" class="stub__note">Acordo: {{ agreement }}</p>
       <p v-if="payment.note" class="stub__note">{{ payment.note }}</p>
     </div>
 
@@ -84,13 +84,13 @@ const fileName = computed(() =>
           :receipt="payment.receipt"
         />
         <span class="stub__rlabel">
-          <span>ver comprovante</span>
+          <span>Ver comprovante</span>
           <span class="stub__fname">{{ fileName }}</span>
         </span>
       </button>
       <label v-else-if="canManage" class="stub__attach">
         <Icon name="upload" :size="18" />
-        <span>anexar comprovante</span>
+        <span>Anexar comprovante</span>
         <input
           class="visually-hidden"
           type="file"
@@ -99,7 +99,7 @@ const fileName = computed(() =>
           @change="onPick"
         />
       </label>
-      <p v-else class="stub__noreceipt">sem comprovante</p>
+      <p v-else class="stub__noreceipt">Sem comprovante</p>
 
       <div class="stub__ack">
         <Stamp
@@ -125,7 +125,7 @@ const fileName = computed(() =>
         <Button v-else-if="canManage" icon="check" :loading="busy" @click="emit('confirm')"
           >Concluir</Button
         >
-        <span v-else class="stub__wait">aguardando “recebi”</span>
+        <span v-else class="stub__wait">Aguardando “recebi”</span>
         <button
           v-if="canManage"
           type="button"

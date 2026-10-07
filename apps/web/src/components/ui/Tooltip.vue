@@ -2,18 +2,22 @@
 import { nextTick, onBeforeUnmount, ref, useId, useTemplateRef } from "vue";
 import { layerFor } from "@/lib/layer.ts";
 import { placeFloating, type Side } from "@/lib/position.ts";
+import { TOOLTIP_DELAY, tooltipWarm } from "./tooltip.ts";
 
 const {
   text,
   side = "top",
-  delay = 350,
+  delay = TOOLTIP_DELAY,
   describes = false,
+  disabled = false,
 } = defineProps<{
   text: string;
   side?: Side;
+  /** Hover delay in ms; keyboard focus always shows it right away. */
   delay?: number;
   /** Link the tooltip to the trigger with aria-describedby (off when it repeats the aria-label). */
   describes?: boolean;
+  disabled?: boolean;
 }>();
 
 const id = useId();
@@ -34,6 +38,7 @@ async function place(): Promise<void> {
 
 function show(immediate = false): void {
   clearTimeout(timer);
+  if (disabled) return;
   timer = setTimeout(
     () => {
       layer.value = layerFor(anchor.value);
@@ -42,12 +47,13 @@ function show(immediate = false): void {
       window.addEventListener("scroll", hide, { capture: true, passive: true });
       window.addEventListener("keydown", onKey);
     },
-    immediate ? 0 : delay,
+    immediate || tooltipWarm.isWarm() ? 0 : delay,
   );
 }
 
 function hide(): void {
   clearTimeout(timer);
+  if (open.value) tooltipWarm.cool();
   open.value = false;
   window.removeEventListener("scroll", hide, { capture: true });
   window.removeEventListener("keydown", onKey);
@@ -139,6 +145,10 @@ onBeforeUnmount(hide);
   transform: translateY(-4px);
 }
 
+.tip-enter-from.is-right {
+  transform: translateX(-4px);
+}
+
 @media (hover: none) {
   .tip {
     display: none;
@@ -147,7 +157,8 @@ onBeforeUnmount(hide);
 
 @media (prefers-reduced-motion: reduce) {
   .tip-enter-from.is-top,
-  .tip-enter-from.is-bottom {
+  .tip-enter-from.is-bottom,
+  .tip-enter-from.is-right {
     transform: none;
   }
 }

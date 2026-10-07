@@ -31,9 +31,18 @@ import TopBar from "./TopBar.vue";
   .shell__body {
     padding-left: var(--sidebar-w);
   }
+  html[data-sidebar-moving] .shell__body {
+    transition: padding-left var(--d-sheet) var(--ease-out);
+  }
   .shell__main {
     padding-top: var(--s-8);
     padding-bottom: var(--s-10);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-sidebar-moving] .shell__body {
+    transition: none;
   }
 }
 

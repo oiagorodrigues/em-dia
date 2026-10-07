@@ -61,7 +61,7 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
     </ul>
     <EmptyState v-else-if="error" tone="error" title="Não deu para carregar.">
       {{ error.message }}
-      <template #actions><Button @click="reload">tentar de novo</Button></template>
+      <template #actions><Button icon="refresh" @click="reload">Tentar de novo</Button></template>
     </EmptyState>
     <EmptyState
       v-else-if="sorted.length === 0"
@@ -70,10 +70,10 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
       "
     >
       <template #actions>
-        <Button v-if="auth.isEmployer" to="/equipe/novo" variant="primary" icon="plus"
-          >adicionar profissional</Button
+        <Button v-if="auth.isEmployer" to="/equipe/novo" variant="primary" icon="user-plus"
+          >Adicionar profissional</Button
         >
-        <Button v-else to="/entrar-no-vinculo" variant="primary" icon="key">tenho um código</Button>
+        <Button v-else to="/entrar-no-vinculo" variant="primary" icon="key">Tenho um código</Button>
       </template>
     </EmptyState>
     <ul v-else class="pk__list">
@@ -89,7 +89,7 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
               >{{ OCCUPATION_LABEL[c.occupation] }} · {{ c.householdName }}</span
             >
           </span>
-          <Stamp v-if="c.status === 'ended'" text="encerrado" tone="ink" size="sm" />
+          <Stamp v-if="c.status === 'ended'" text="Encerrado" tone="ink" size="sm" />
           <Icon name="chevron-right" />
         </RouterLink>
       </li>

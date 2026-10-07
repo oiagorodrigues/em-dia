@@ -111,7 +111,7 @@ describe("EmployerHome KPIs", () => {
     const forecast = wrapper.findAll(".kpi").find((k) => /custo do mês/i.test(k.text()));
     expect(forecast).toBeDefined();
     expect(forecast!.classes()).toContain("is-projected");
-    expect(forecast!.get(".kpi__label").text()).toContain("previsto");
+    expect(forecast!.get(".kpi__label").text()).toContain("Previsto");
     expect(forecast!.get(".kpi__value").text()).toBe(formatCents(204000));
     expect(forecast!.get(".kpi__caption").text()).toBe("2 pessoas · 12 dias combinados");
 

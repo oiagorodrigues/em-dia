@@ -10,7 +10,7 @@ Visual rules are in [DESIGN](DESIGN.md). This file covers conventions and behavi
 - Styling: components keep scoped CSS for their own internals, using tokens from `src/styles/tokens.css`. Pages compose layout with Tailwind utilities (see below). No raw hex values anywhere.
 - Copy is pt-BR, informal, "você". Titles and headings in sentence case ("Cartão de outubro"); `.page-title`, `.section-title`, `PageHeader`, `Sheet` and `AuthHeader` capitalize the first letter of data-built titles for you. All user-visible strings in components or a single `copy` module, never built from API error codes alone; show the API's pt-BR `message`.
 - Format with `formatCents`, `formatDuration`, `formatYearMonth`. Numbers render in the mono face.
-- No `v-html`. No tokens in `localStorage` or `sessionStorage`. `localStorage` is allowed for per-viewer conveniences only: the theme and the install-hint flag.
+- No `v-html`. No tokens in `localStorage` or `sessionStorage`. `localStorage` is allowed for per-viewer conveniences only: the theme, the install-hint flag and the collapsed sidebar (`composables/sidebar.ts`). Wrap every access in try/catch; private mode must still work.
 
 ## Tailwind (layout layer)
 
@@ -37,12 +37,13 @@ Helper classes in `base.css`: `.kpi-grid` (KPI cards: a row when they fit, stack
 
 - `Select` (custom listbox on fine pointers, the native picker on touch; a real `<select>` always stays in the DOM). `ChoiceField` = segmented on `md`+, Select below. `TimeField` (masked `HH:MM`, 15-min slots on desktop, hour/minute sheet on touch). `DateField` (masked `DD/MM/AAAA`, ISO in the model, calendar popover / sheet; a pasted ISO date is accepted). Never `<input type="time|date|month">`.
 - Floating things (`Tooltip`, `Menu`, `Select`, `Popover`) teleport to the layer returned by `layerFor(anchor)` in `lib/layer.ts`: the open modal `<dialog>` that contains the anchor, otherwise `<body>`. A modal dialog makes the rest of the page inert, so a layer mounted on `<body>` would be unreachable from inside it. They are placed with `lib/position.ts` and never clip or widen a table. New floating UI must use `layerFor`, not a bare `<Teleport to="body">`.
+- Icons come from `ACTION_ICON` in `components/ui/icons.ts` (one icon per action, see [DESIGN](DESIGN.md#icons)). Long page-header actions use `<Button icon icon-only label>`; the hover delay and warm-up live in `Tooltip` (`components/ui/tooltip.ts`), so any trigger gets the same behavior. `Tooltip` also takes `side="right"` and `disabled`.
 - Row actions go through `TableActions` (`actions` inline, at most 2, colored by meaning; the rest in the `⋯` menu; a single action renders as one inline button).
 - Filters: put them in `DataTable`'s `filters` slot; below `md` they move into a bottom drawer behind "Filtros (n)" (`filterCount` prop).
 
 ## Navigation
 
-"voltar" uses `useBack(fallback)` (`composables/back.ts`): it returns to the previous screen when it was inside the app (`history.state.back`), otherwise to `fallback`. `PageHeader`'s `back` prop is that fallback. After saving a form, return to the origin: `if (previousInApp()) router.back(); else router.replace(fallback)`.
+"Voltar" uses `useBack(fallback)` (`composables/back.ts`): it returns to the previous screen when it was inside the app (`history.state.back`), otherwise to `fallback`. `PageHeader`'s `back` prop is that fallback. After saving a form, return to the origin: `if (previousInApp()) router.back(); else router.replace(fallback)`.
 
 ## Tables
 
