@@ -6,6 +6,7 @@ import {
   PAY_TYPES,
   PAYMENT_METHODS,
   ROLES,
+  type PaymentMethod,
 } from "./domain.ts";
 import { SCHEDULE_KINDS } from "./schedule.ts";
 import { CLOCK_RE, isValidIsoDate, YEAR_MONTH_RE } from "./time.ts";
@@ -173,29 +174,62 @@ export const createAdjustmentSchema = z.object({
 });
 export type CreateAdjustmentInput = z.infer<typeof createAdjustmentSchema>;
 
-/** Multipart form fields arrive as strings; amountCents is coerced. */
-export const createPaymentSchema = z
-  .object({
-    referenceMonth: yearMonth,
-    paidOn: isoDate,
-    amountCents: z.coerce.number().int().min(1).max(100_000_000),
-    method: z.enum(PAYMENT_METHODS),
-    note: shortText.nullable().optional(),
-    agreementId: z.string().min(1).nullable().optional(),
-  })
-  .superRefine((v, ctx) => {
-    if (v.agreementId && v.method !== "compensation") {
-      ctx.addIssue({
-        code: "custom",
-        path: ["method"],
-        message: "Acordos são abatidos como compensação",
-      });
-    }
-    if (v.method === "compensation" && !v.agreementId && !v.note) {
-      ctx.addIssue({ code: "custom", path: ["note"], message: "Diga com o que foi compensado" });
-    }
-  });
+/** Multipart sends "true"/"false"; z.coerce.boolean would read "false" as true. */
+const formBoolean = z.union([
+  z.boolean(),
+  z.enum(["true", "false"]).transform((v) => v === "true"),
+]);
+
+/** Multipart form fields arrive as strings; amountCents and isExtra are coerced. */
+const paymentFields = z.object({
+  referenceMonth: yearMonth,
+  paidOn: isoDate,
+  amountCents: z.coerce.number().int().min(1).max(100_000_000),
+  method: z.enum(PAYMENT_METHODS),
+  note: shortText.nullable().optional(),
+  agreementId: z.string().min(1).nullable().optional(),
+  isExtra: formBoolean.optional(),
+});
+
+export interface PaymentRuleIssue {
+  path: "method" | "note" | "isExtra";
+  message: string;
+}
+
+/** Cross-field rules, shared by create and by the API after merging an edit onto the stored payment. */
+export function paymentRuleIssues(v: {
+  method: PaymentMethod;
+  note?: string | null;
+  agreementId?: string | null;
+  isExtra?: boolean;
+}): PaymentRuleIssue[] {
+  const issues: PaymentRuleIssue[] = [];
+  if (v.agreementId && v.method !== "compensation") {
+    issues.push({ path: "method", message: "Acordos são abatidos como compensação" });
+  }
+  if (v.method === "compensation" && !v.agreementId && !v.note) {
+    issues.push({ path: "note", message: "Diga com o que foi compensado" });
+  }
+  if (v.isExtra && v.method === "compensation") {
+    issues.push({ path: "isExtra", message: "Compensação não entra como extra" });
+  }
+  return issues;
+}
+
+export const createPaymentSchema = paymentFields.superRefine((v, ctx) => {
+  for (const issue of paymentRuleIssues(v)) {
+    ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message });
+  }
+});
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
+
+/** JSON edit of a payment; the receipt has its own endpoint. Rules run on the merged result. */
+export const updatePaymentSchema = paymentFields
+  .partial()
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: "Nada para alterar",
+  });
+export type UpdatePaymentInput = z.infer<typeof updatePaymentSchema>;
 
 export const createAgreementSchema = z
   .object({

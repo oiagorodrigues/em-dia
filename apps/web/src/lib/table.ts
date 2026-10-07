@@ -23,8 +23,40 @@ export interface Column<T> {
   width?: string;
   /** Hide the column below this breakpoint in table mode. */
   hideBelow?: "lg" | "xl" | "2xl";
+  /**
+   * Free text that may be long (notes, descriptions): one line cut with an ellipsis at
+   * `width` (default 16rem), the full text in a tooltip. Ignored when a `cell-<key>` slot is given.
+   */
+  truncate?: boolean;
+  /**
+   * Columns with a priority (or a `hideBelow`, which counts as 0) may drop out when the table
+   * is wider than its box, lowest first, so the row actions never end up behind a horizontal
+   * scroll. Columns without either always stay.
+   */
+  priority?: number;
   /** Visually hidden header (e.g. an avatar column); the label stays for screen readers. */
   srOnlyLabel?: boolean;
+}
+
+/**
+ * Keys that may drop out to fit the table, in the order they go: lowest priority first, then
+ * right to left. A `hideBelow` column is already marked optional, so it counts as priority 0.
+ */
+export function dropOrder<T>(columns: readonly Column<T>[]): string[] {
+  return columns
+    .map((c, index) => ({ c, index, p: c.priority ?? (c.hideBelow ? 0 : undefined) }))
+    .filter((x): x is typeof x & { p: number } => x.p !== undefined)
+    .sort((a, b) => a.p - b.p || b.index - a.index)
+    .map(({ c }) => c.key);
+}
+
+/**
+ * Colspans for a totals row with one cell under `key`: the cells before it, and the cells
+ * after it plus the row-actions column. Takes the columns actually shown, since some drop out.
+ */
+export function spansAround<T>(shown: readonly Column<T>[], key: string): [number, number] {
+  const at = shown.findIndex((c) => c.key === key);
+  return [at, shown.length - at];
 }
 
 export interface SortState {

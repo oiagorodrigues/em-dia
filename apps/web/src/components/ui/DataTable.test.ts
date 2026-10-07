@@ -49,6 +49,8 @@ async function setup(
     filter?: (p: Person) => boolean;
     link?: boolean;
     state?: TableState;
+    columns?: Column<Person>[];
+    actions?: boolean;
   } = {},
 ) {
   stubMatchMedia(opts.wide ?? true);
@@ -66,16 +68,22 @@ async function setup(
     );
     return () =>
       // vue-tsc sees the generic SFC and tsgolint the .vue shim; erase both to the runtime contract.
-      h(DataTable as unknown as Component, {
-        label: "Equipe",
-        rows: PEOPLE,
-        columns: COLUMNS,
-        rowKey: (p: Person) => p.id,
-        state,
-        filter: opts.filter,
-        filtersActive: !!opts.filter,
-        rowLink: opts.link ? (p: Person) => `/equipe/${p.id}` : undefined,
-      });
+      h(
+        DataTable as unknown as Component,
+        {
+          label: "Equipe",
+          rows: PEOPLE,
+          columns: opts.columns ?? COLUMNS,
+          rowKey: (p: Person) => p.id,
+          state,
+          filter: opts.filter,
+          filtersActive: !!opts.filter,
+          rowLink: opts.link ? (p: Person) => `/equipe/${p.id}` : undefined,
+        },
+        opts.actions
+          ? { "row-actions": () => h("button", { type: "button", class: "act" }, "Editar") }
+          : undefined,
+      );
   });
   const wrapper = mount(Host, {
     global: { plugins: [router], stubs: { transition: false, "transition-group": false } },
@@ -161,6 +169,40 @@ describe("DataTable", () => {
     await wrapper.findAll("tbody tr")[3]!.trigger("keydown", { key: "Enter" });
     await flushPromises();
     expect(router.currentRoute.value.path).toBe("/equipe/1");
+  });
+
+  it("drops low-priority columns until the row actions fit without horizontal scroll", async () => {
+    // happy-dom has no layout: each rendered header cell counts as 100px in a 350px box.
+    const scroll = vi
+      .spyOn(HTMLElement.prototype, "scrollWidth", "get")
+      .mockImplementation(function (this: Element) {
+        return this.querySelectorAll("th").length * 100;
+      });
+    const client = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(350);
+    try {
+      const { wrapper } = await setup({
+        actions: true,
+        columns: [COLUMNS[0]!, { ...COLUMNS[1]!, priority: 2 }, { ...COLUMNS[2]!, priority: 1 }],
+      });
+      await flushPromises();
+      const headers = wrapper.findAll("th").map((th) => th.text());
+      expect(headers).toEqual(["Nome", "Função", "Ações"]);
+      expect(wrapper.find("table").classes()).toContain("is-tight");
+      expect(wrapper.findAll("tbody tr")[0]!.find(".act").exists()).toBe(true);
+    } finally {
+      scroll.mockRestore();
+      client.mockRestore();
+    }
+  });
+
+  it("cuts long free text with an ellipsis and keeps the full text for the tooltip", async () => {
+    const { wrapper } = await setup({
+      columns: [COLUMNS[0]!, { ...COLUMNS[1]!, truncate: true, width: "10ch" }],
+    });
+    const cell = wrapper.findAll("tbody tr")[0]!.findAll("td")[1]!;
+    expect(cell.find(".dt__trunc").attributes("style")).toContain("max-width: 10ch");
+    expect(cell.find(".dt__trunc-text").text()).toBe("Diarista");
+    expect(cell.find(".tip-anchor").exists()).toBe(true);
   });
 
   it("renders a card list on small screens from the same columns", async () => {

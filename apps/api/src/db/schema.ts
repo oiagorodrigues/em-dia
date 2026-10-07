@@ -224,6 +224,9 @@ export const payments = pgTable(
     receiptName: text("receipt_name"),
     receiptUploadedAt: timestamptz("receipt_uploaded_at"),
     acknowledgedAt: timestamptz("acknowledged_at"),
+    acknowledgedBy: text("acknowledged_by").references(() => users.id),
+    acknowledgedByRole: text("acknowledged_by_role", { enum: ROLES }),
+    isExtra: boolean("is_extra").notNull().default(false),
     agreementId: text("agreement_id").references(() => agreements.id, { onDelete: "set null" }),
     createdBy: text("created_by")
       .notNull()
@@ -235,6 +238,7 @@ export const payments = pgTable(
     index("payments_agreement_idx").on(t.agreementId),
     check("payments_method_check", oneOf(t.method, PAYMENT_METHODS)),
     check("payments_receipt_mime_check", oneOf(t.receiptMime, RECEIPT_MIME_TYPES)),
+    check("payments_acknowledged_by_role_check", oneOf(t.acknowledgedByRole, ROLES)),
     check("payments_amount_check", sql`${t.amountCents} > 0`),
     check(
       "payments_reference_month_check",

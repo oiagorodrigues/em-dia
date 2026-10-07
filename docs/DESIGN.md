@@ -57,34 +57,36 @@ Tailwind CSS v4 (`@tailwindcss/vite`) is the layout layer: a 12-column grid (`gr
 ## Table actions
 
 - One action: a single inline icon button.
-- More than one: up to two of the most frequent actions inline as colored icon buttons, the rest in a `⋯` context menu. Payments rows: "ver" inline; comprovante (ver/anexar/trocar), editar and remover in the menu.
+- More than one: up to two of the most frequent actions inline as colored icon buttons, the rest in a `⋯` context menu. Payments rows: the receipt icon inline (brand when there is a receipt and it opens the viewer, where it can be swapped; neutral when there is none and it opens the upload); editar, marcar como concluído and remover in the menu.
 - Inline action colors follow meaning: bater entrada brand green, bater saída amber, registrar pagamento brand, ver neutral. In menus, items are neutral except **remover** in coral.
 - Icons follow the action map below. Never a chevron/arrow for "open".
+- The actions column is never sticky and never hidden behind a horizontal scroll. When the table is wider than its box, `DataTable` first tightens cell padding, then drops optional columns (a `priority`, lowest first, or a `hideBelow`) until it fits. Long free text (`truncate`) is one line with an ellipsis and the full text in a tooltip.
 
 ## Icons
 
 One action, one icon, everywhere. The map lives in `ACTION_ICON` (`components/ui/icons.ts`); pick from it instead of choosing an icon per screen. All icons share one style: 24px grid, 1.5 stroke, round caps and joins, `currentColor`.
 
-| action                                         | icon                                |
-| ---------------------------------------------- | ----------------------------------- |
-| adicionar (generic: acordo, extra, registro)   | `plus`                              |
-| adicionar profissional                         | `user-plus`                         |
-| registrar pagamento                            | `wallet-plus` (Pagamentos = wallet) |
-| ver                                            | `eye`                               |
-| editar                                         | `pencil`                            |
-| remover (contrato, pagamento, extra, registro) | `trash`                             |
-| restaurar                                      | `undo`                              |
-| confirmar / marcar como trabalhados            | `check`                             |
-| comprovante (ver, abrir)                       | `receipt`                           |
-| anexar arquivo                                 | `upload`                            |
-| baixar / abrir fora                            | `download` / `external`             |
-| copiar / compartilhar / link                   | `copy` / `share` / `link`           |
-| WhatsApp / e-mail                              | `message` / `mail`                  |
-| código de convite                              | `key`                               |
-| voltar / mês anterior / próximo                | `arrow-left` / `arrow-right`        |
-| tentar de novo                                 | `refresh`                           |
-| bater entrada / saída                          | `clock-in` / `clock-out`            |
-| fechar / sair                                  | `close` / `logout`                  |
+| action                                         | icon                                 |
+| ---------------------------------------------- | ------------------------------------ |
+| adicionar (generic: acordo, extra, registro)   | `plus`                               |
+| adicionar profissional                         | `user-plus`                          |
+| registrar pagamento                            | `wallet-plus` (Pagamentos = wallet)  |
+| ver                                            | `eye`                                |
+| editar                                         | `pencil`                             |
+| remover (contrato, pagamento, extra, registro) | `trash`                              |
+| restaurar                                      | `undo`                               |
+| confirmar / marcar como trabalhados            | `check`                              |
+| comprovante (ver, abrir, trocar)               | `receipt` (printed paper, torn edge) |
+| anexo inside a form                            | `paperclip`                          |
+| anexar arquivo                                 | `upload`                             |
+| baixar / abrir fora                            | `download` / `external`              |
+| copiar / compartilhar / link                   | `copy` / `share` / `link`            |
+| WhatsApp / e-mail                              | `message` / `mail`                   |
+| código de convite                              | `key`                                |
+| voltar / mês anterior / próximo                | `arrow-left` / `arrow-right`         |
+| tentar de novo                                 | `refresh`                            |
+| bater entrada / saída                          | `clock-in` / `clock-out`             |
+| fechar / sair                                  | `close` / `logout`                   |
 
 ## Icon-only buttons
 

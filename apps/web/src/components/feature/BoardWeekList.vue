@@ -4,7 +4,7 @@ import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import Avatar from "@/components/ui/Avatar.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
-import { rowTotals, stripDates, type BoardRow } from "@/lib/board.ts";
+import { dayOpens, rowTotals, stripDates, type BoardRow } from "@/lib/board.ts";
 import { formatDayMonth, WEEKDAY_LETTER, WEEKDAY_SHORT } from "@/lib/format.ts";
 import BoardCell from "./BoardCell.vue";
 
@@ -22,6 +22,8 @@ const {
   /** A future month: totals are the estimate. */
   projected?: boolean;
 }>();
+
+const emit = defineEmits<{ day: [row: BoardRow, date: IsoDate] }>();
 
 const week = computed(() => stripDates(month, today));
 
@@ -54,8 +56,8 @@ function link(row: BoardRow) {
 <template>
   <ul class="bw" aria-label="Quadro da semana">
     <li v-for="row in rows" :key="row.item.contract.id">
-      <RouterLink :to="link(row)" class="bw__card">
-        <span class="bw__head">
+      <div class="bw__card">
+        <RouterLink :to="link(row)" class="bw__head">
           <Avatar :name="row.item.contract.workerName" :size="40" />
           <span class="bw__who">
             <strong>{{ row.item.contract.workerName }}</strong>
@@ -66,18 +68,27 @@ function link(row: BoardRow) {
               >
             </span>
           </span>
-        </span>
+        </RouterLink>
         <span class="bw__strip">
-          <span
-            v-for="c in stripOf(row)"
-            :key="c.date"
-            class="bw__day"
-            :class="{ 'is-today': c.isToday }"
-          >
-            <span class="bw__wd" aria-hidden="true">{{ WEEKDAY_LETTER[c.weekday] }}</span>
-            <BoardCell :kind="c.kind" :label="c.label" :today="c.isToday" />
-            <span class="bw__dn mono" aria-hidden="true">{{ c.day }}</span>
-          </span>
+          <template v-for="c in stripOf(row)" :key="c.date">
+            <button
+              v-if="dayOpens(c)"
+              type="button"
+              class="bw__day"
+              :class="{ 'is-today': c.isToday }"
+              :aria-label="`${c.label}. Abrir o dia`"
+              @click="emit('day', row, c.date)"
+            >
+              <span class="bw__wd" aria-hidden="true">{{ WEEKDAY_LETTER[c.weekday] }}</span>
+              <BoardCell :kind="c.kind" label="" :today="c.isToday" aria-hidden="true" />
+              <span class="bw__dn mono" aria-hidden="true">{{ c.day }}</span>
+            </button>
+            <span v-else class="bw__day" :class="{ 'is-today': c.isToday }">
+              <span class="bw__wd" aria-hidden="true">{{ WEEKDAY_LETTER[c.weekday] }}</span>
+              <BoardCell :kind="c.kind" :label="c.label" :today="c.isToday" />
+              <span class="bw__dn mono" aria-hidden="true">{{ c.day }}</span>
+            </span>
+          </template>
         </span>
         <span class="bw__totals" :class="{ 'is-projected': projected }">
           <span
@@ -93,7 +104,7 @@ function link(row: BoardRow) {
             ><span class="mono bw__due">{{ rowTotals(row.item, projected).due }}</span></span
           >
         </span>
-      </RouterLink>
+      </div>
     </li>
   </ul>
 </template>
@@ -114,17 +125,6 @@ function link(row: BoardRow) {
   border: 1px solid var(--rule);
   border-radius: var(--r-2);
   box-shadow: var(--shadow-1);
-  color: inherit;
-  text-decoration: none;
-}
-
-.bw__card:active {
-  background: var(--surface-2);
-}
-
-.bw__card:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
 }
 
 .bw__head {
@@ -132,6 +132,19 @@ function link(row: BoardRow) {
   align-items: center;
   gap: var(--s-3);
   min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--r-1);
+}
+
+.bw__head:active {
+  background: var(--surface-2);
+}
+
+.bw__head:focus-visible,
+.bw__day:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .bw__who {
@@ -169,7 +182,19 @@ function link(row: BoardRow) {
   justify-items: center;
   gap: 4px;
   padding: 4px 0;
+  border: 0;
   border-radius: var(--r-1);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+button.bw__day {
+  cursor: pointer;
+}
+
+button.bw__day:active {
+  background: var(--surface-2);
 }
 
 .bw__day :deep(.bcell) {

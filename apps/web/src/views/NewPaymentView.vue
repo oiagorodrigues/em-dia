@@ -4,8 +4,6 @@ import {
   DEFAULT_TIMEZONE,
   formatCents,
   nowInZone,
-  PAYMENT_METHOD_LABEL,
-  PAYMENT_METHODS,
   toYearMonth,
   YEAR_MONTH_RE,
   type PaymentMethod,
@@ -14,26 +12,25 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { agreementsApi, contractsApi, paymentsApi } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
-import ReceiptDrop from "@/components/feature/ReceiptDrop.vue";
+import PaymentFields from "@/components/feature/PaymentFields.vue";
 import PaymentsSidePanel from "@/components/feature/PaymentsSidePanel.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import Field from "@/components/ui/Field.vue";
-import MoneyInput from "@/components/ui/MoneyInput.vue";
-import ChoiceField from "@/components/ui/ChoiceField.vue";
-import DateField from "@/components/ui/DateField.vue";
 import MonthField from "@/components/ui/MonthField.vue";
 import Select from "@/components/ui/Select.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import SkeletonForm from "@/components/ui/SkeletonForm.vue";
 import SkeletonLedger from "@/components/ui/SkeletonLedger.vue";
+import Toggle from "@/components/ui/Toggle.vue";
 import { previousInApp, useBack } from "@/composables/back.ts";
 import { useForm } from "@/composables/form.ts";
 import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { isOpenAgreement, nextInstallmentCents } from "@/lib/agreement.ts";
 import { isWritable } from "@/lib/contract.ts";
+import { paymentFormData } from "@/lib/payments.ts";
 
 const route = useRoute();
 const router = useRouter();
@@ -70,6 +67,7 @@ const { values, errors, formError, submitting, submit, clearError } = useForm(cr
   amountCents: null as number | null,
   method: (queryAgreement ? "compensation" : "pix") as PaymentMethod,
   note: "",
+  isExtra: route.query.extra === "1",
 });
 const agreementId = ref(queryAgreement ?? "");
 const receipt = ref<File | null>(null);
@@ -85,7 +83,6 @@ watch(summary.data, (s) => {
   if (s && !touchedAmount.value) values.amountCents = s.balanceCents > 0 ? s.balanceCents : null;
 });
 
-const methodOptions = PAYMENT_METHODS.map((m) => ({ value: m, label: PAYMENT_METHOD_LABEL[m] }));
 const contractOptions = computed(() =>
   (contracts.data.value ?? []).map((c) => ({ value: c.id, label: c.workerName })),
 );
@@ -141,19 +138,11 @@ function onSubmit(): void {
     note: values.note.trim() || null,
     agreementId:
       values.method === "compensation" && agreementId.value ? agreementId.value : undefined,
+    isExtra: values.method !== "compensation" && values.isExtra,
   };
   void submit(async (data) => {
     if (!contract.value) return;
-    const form = new FormData();
-    form.append("referenceMonth", data.referenceMonth);
-    form.append("paidOn", data.paidOn);
-    form.append("amountCents", String(data.amountCents));
-    form.append("method", data.method);
-    if (data.note) form.append("note", data.note);
-    // The API rejects an empty agreementId, so the field is left out entirely.
-    if (data.agreementId) form.append("agreementId", data.agreementId);
-    if (receipt.value) form.append("receipt", receipt.value);
-    await paymentsApi.create(contract.value.id, form);
+    await paymentsApi.create(contract.value.id, paymentFormData(data, receipt.value));
     void invalidate.records(contract.value.id);
     toast.success(`Pagamento de ${formatCents(data.amountCents)} registrado.`);
     // Back to where the form was opened from; a direct visit lands on the person's payments.
@@ -235,95 +224,57 @@ const { to: back } = useBack(
           <span class="label">para</span> <strong>{{ contract.workerName }}</strong>
         </p>
 
-        <div class="np__two">
-          <Field
-            v-slot="{ id, invalid, describedBy }"
-            label="Mês de referência"
-            :error="errors.referenceMonth"
-          >
-            <MonthField
-              :id="id"
-              v-model="values.referenceMonth"
+        <PaymentFields
+          v-model:paid-on="values.paidOn"
+          v-model:amount-cents="values.amountCents"
+          v-model:method="values.method"
+          v-model:receipt="receipt"
+          :errors="errors"
+          :today="today"
+          :amount-hint="amountHint"
+          @clear="clearError"
+          @amount-input="touchedAmount = true"
+        >
+          <template #beside-date>
+            <Field
+              v-slot="{ id, invalid, describedBy }"
               label="Mês de referência"
-              :invalid="invalid"
-              :described-by="describedBy"
-              @update:model-value="clearError('referenceMonth')"
-            />
-          </Field>
-          <Field v-slot="{ id, invalid, describedBy }" label="Pago em" :error="errors.paidOn">
-            <DateField
-              :id="id"
-              v-model="values.paidOn"
-              label="Pago em"
-              :max="today"
-              :invalid="invalid"
-              :described-by="describedBy"
-              @update:model-value="clearError('paidOn')"
-            />
-          </Field>
-        </div>
-
-        <Field
-          v-slot="{ id, invalid, describedBy }"
-          label="Valor"
-          :error="
-            errors.amountCents
-              ? values.amountCents
-                ? errors.amountCents
-                : 'Informe o valor'
-              : null
-          "
-          :hint="amountHint"
-        >
-          <MoneyInput
-            :id="id"
-            v-model="values.amountCents"
-            :invalid="invalid"
-            :described-by="describedBy"
-            @update:model-value="
-              touchedAmount = true;
-              clearError('amountCents');
-            "
-          />
-        </Field>
-
-        <Field v-slot="{ id }" label="Como pagou" :error="errors.method">
-          <ChoiceField
-            :id="id"
-            v-model="values.method"
-            :options="methodOptions"
-            label="Como pagou"
-            wrap
-            @update:model-value="clearError('method')"
-          />
-        </Field>
-
-        <Field
-          v-if="values.method === 'compensation'"
-          v-slot="{ id, describedBy }"
-          label="Abater de um acordo"
-          optional
-          :hint="
-            agreements.data.value?.length === 0
-              ? 'Nenhum acordo em aberto. Crie um na aba Acordos da pessoa, ou descreva a compensação abaixo.'
-              : 'A parcela do acordo vem preenchida no valor.'
-          "
-        >
-          <Select
-            :id="id"
-            :model-value="agreementId"
-            :options="agreementOptions"
-            label="Abater de um acordo"
-            :described-by="describedBy"
-            :disabled="agreements.loading.value"
-            @update:model-value="(v) => (agreementId = v ?? '')"
-          />
-        </Field>
-
-        <fieldset class="np__set">
-          <legend class="label">Comprovante <span class="np__opt">opcional</span></legend>
-          <ReceiptDrop v-model="receipt" />
-        </fieldset>
+              :error="errors.referenceMonth"
+            >
+              <MonthField
+                :id="id"
+                v-model="values.referenceMonth"
+                label="Mês de referência"
+                :invalid="invalid"
+                :described-by="describedBy"
+                @update:model-value="clearError('referenceMonth')"
+              />
+            </Field>
+          </template>
+          <template #after-method>
+            <Field
+              v-if="values.method === 'compensation'"
+              v-slot="{ id, describedBy }"
+              label="Abater de um acordo"
+              optional
+              :hint="
+                agreements.data.value?.length === 0
+                  ? 'Nenhum acordo em aberto. Crie um na aba Acordos da pessoa, ou descreva a compensação abaixo.'
+                  : 'A parcela do acordo vem preenchida no valor.'
+              "
+            >
+              <Select
+                :id="id"
+                :model-value="agreementId"
+                :options="agreementOptions"
+                label="Abater de um acordo"
+                :described-by="describedBy"
+                :disabled="agreements.loading.value"
+                @update:model-value="(v) => (agreementId = v ?? '')"
+              />
+            </Field>
+          </template>
+        </PaymentFields>
 
         <Field
           v-slot="{ id, invalid, describedBy }"
@@ -347,6 +298,13 @@ const { to: back } = useBack(
             @input="clearError('note')"
           />
         </Field>
+
+        <Toggle
+          v-if="values.method !== 'compensation'"
+          v-model="values.isExtra"
+          label="Pagamento extra"
+          hint="Fora do valor do mês, como uma festa ou um sábado. Aparece também em Extras e não mexe no saldo do mês."
+        />
 
         <Button type="submit" variant="primary" :loading="submitting" :disabled="!contract"
           >Registrar pagamento</Button
@@ -423,38 +381,6 @@ const { to: back } = useBack(
   gap: var(--s-2);
   align-items: baseline;
   font-size: var(--t-20);
-}
-
-.np__two {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-5);
-}
-
-@media (min-width: 520px) {
-  .np__two {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--s-3);
-  }
-}
-
-.np__set {
-  border: 0;
-  padding: 0;
-  min-width: 0;
-}
-
-.np__set legend {
-  padding: 0;
-  margin-bottom: var(--s-3);
-}
-
-.np__opt {
-  margin-left: var(--s-1);
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
-  color: var(--ink-3);
 }
 
 .np__form > :deep(.btn) {

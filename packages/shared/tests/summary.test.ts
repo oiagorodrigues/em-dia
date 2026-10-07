@@ -71,6 +71,18 @@ describe("computeMonthSummary", () => {
     expect(s.grossCents).toBe(250000);
   });
 
+  it("counts an extra payment as due and as paid, leaving the balance alone", () => {
+    const s = computeMonthSummary({
+      ...base,
+      contract: { ...base.contract, payType: "monthly", rateCents: 150000 },
+      payments: [{ amountCents: 150000 }, { amountCents: 10000, isExtra: true }],
+    });
+    expect(s.adjustmentsCents).toBe(10000);
+    expect(s.dueCents).toBe(160000);
+    expect(s.paidCents).toBe(160000);
+    expect(s.balanceCents).toBe(0);
+  });
+
   it("counts expected and unrecorded scheduled days up to today", () => {
     const s = computeMonthSummary({
       ...base,

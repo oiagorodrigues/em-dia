@@ -12,6 +12,7 @@ import Button from "@/components/ui/Button.vue";
 import Icon from "@/components/ui/Icon.vue";
 import Stamp from "@/components/ui/Stamp.vue";
 import { formatDateShort } from "@/lib/format.ts";
+import { receivedStatus } from "@/lib/payments.ts";
 import ReceiptThumb from "./ReceiptThumb.vue";
 
 const {
@@ -29,7 +30,15 @@ const {
   agreement?: string | null;
 }>();
 
-const emit = defineEmits<{ view: []; acknowledge: []; remove: []; attach: [file: File] }>();
+const emit = defineEmits<{
+  view: [];
+  acknowledge: [];
+  /** The employer closes the payment without waiting for the worker. */
+  confirm: [];
+  edit: [];
+  remove: [];
+  attach: [file: File];
+}>();
 
 function onPick(e: Event): void {
   const input = e.target as HTMLInputElement;
@@ -37,6 +46,8 @@ function onPick(e: Event): void {
   input.value = "";
   if (file) emit("attach", file);
 }
+
+const status = computed(() => receivedStatus(payment));
 
 const fileName = computed(() =>
   payment.receipt ? sanitizeFilename(payment.receipt.originalName) : null,
@@ -49,7 +60,10 @@ const fileName = computed(() =>
     :aria-label="`Pagamento de ${formatCents(payment.amountCents)} referente a ${formatYearMonth(payment.referenceMonth)}`"
   >
     <div class="stub__main">
-      <p class="label">ref. {{ formatYearMonth(payment.referenceMonth) }}</p>
+      <p class="label">
+        ref. {{ formatYearMonth(payment.referenceMonth) }}
+        <span v-if="payment.isExtra" class="stub__extra">· extra</span>
+      </p>
       <p class="stub__amount mono">{{ formatCents(payment.amountCents) }}</p>
       <p class="stub__meta">
         <span>{{ PAYMENT_METHOD_LABEL[payment.method] }}</span>
@@ -90,8 +104,12 @@ const fileName = computed(() =>
       <div class="stub__ack">
         <Stamp
           v-if="payment.acknowledgedAt"
-          text="Recebido ✓"
-          label="Recebimento confirmado"
+          :text="`${status.label} ✓`"
+          :label="
+            payment.acknowledgedByRole === 'employer'
+              ? 'Concluído por quem contratou'
+              : 'Recebimento confirmado'
+          "
           tone="green"
           size="sm"
           :tilt="-3"
@@ -104,7 +122,20 @@ const fileName = computed(() =>
           @click="emit('acknowledge')"
           >Recebi</Button
         >
+        <Button v-else-if="canManage" icon="check" :loading="busy" @click="emit('confirm')"
+          >Concluir</Button
+        >
         <span v-else class="stub__wait">Aguardando “recebi”</span>
+        <button
+          v-if="canManage"
+          type="button"
+          class="stub__remove"
+          :aria-label="`Editar pagamento de ${formatCents(payment.amountCents)}`"
+          :disabled="busy"
+          @click="emit('edit')"
+        >
+          <Icon name="pencil" :size="18" />
+        </button>
         <button
           v-if="canManage"
           type="button"
@@ -134,6 +165,10 @@ const fileName = computed(() =>
 .stub__main {
   padding: var(--s-4) var(--s-5) var(--s-4);
   min-width: 0;
+}
+
+.stub__extra {
+  color: var(--brand-ink);
 }
 
 .stub__amount {

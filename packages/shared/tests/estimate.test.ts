@@ -40,6 +40,13 @@ describe("estimateMonthCost", () => {
     expect(estimateMonthCost({ ...base, startedOn: "2026-10-20" }, "2026-10").days).toBe(4);
   });
 
+  it("quinzenal counts from the first scheduled day after the start", () => {
+    // Started Saturday 2026-09-26: Fridays 10-02, 10-16 and 10-30.
+    const quinzenal = { ...base, schedule: weekly([5], 2), startedOn: "2026-09-26" };
+    expect(estimateMonthCost(quinzenal, "2026-09").cents).toBe(0);
+    expect(estimateMonthCost(quinzenal, "2026-10")).toMatchObject({ days: 3, cents: 3 * 18000 });
+  });
+
   it("hourly: rate × hours per day × days, unknown without times", () => {
     const hourly = { ...base, payType: "hourly" as const, rateCents: 2500 };
     expect(estimateMonthCost(hourly, "2026-10").cents).toBe(9 * 8 * 2500);
