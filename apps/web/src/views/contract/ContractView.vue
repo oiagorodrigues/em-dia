@@ -207,7 +207,7 @@ onBeforeUnmount(() => resize.disconnect());
           <div v-if="auth.isEmployer" class="pf__actions">
             <ContactActions v-if="channels" :channels="channels" />
             <Button
-              v-if="writable"
+              v-if="writable && route.name !== 'contract-payments'"
               :to="{ path: '/pagamentos/novo', query: { vinculo: data.id, mes: month } }"
               variant="primary"
               icon="wallet-plus"
