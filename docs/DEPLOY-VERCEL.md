@@ -94,7 +94,7 @@ Qualquer provedor SMTP serve. Configure `SMTP_URL` e `MAIL_FROM`. Sobre portas e
 Clique em **Deploy**. No log do build, confira:
 
 1. `bun install` com o `bun.lock`;
-2. `bun run build:vercel`: `vp pack` da API, build do PWA e `db:migrate --if-configured`;
+2. `bun run build:vercel`: `vp pack` da API, build do PWA (sem `vue-tsc`, que roda no CI) e `db:migrate --if-configured`;
 3. a linha `"msg":"migrations applied"` com as migrações aplicadas. Em deploys seguintes aparece `database already up to date`.
 
 Depois abra `https://<seu-projeto>.vercel.app/api/health`. A resposta esperada é `{"status":"ok","db":"ok",...}`. Então crie a primeira conta pelo app.
