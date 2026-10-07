@@ -58,6 +58,8 @@ Acceptance criteria:
 - E registers a payment with reference month, date, amount (prefilled with the balance), method and an optional receipt (JPEG, PNG, WebP or PDF, up to 5 MB).
 - A file with a wrong real type or over the size limit is rejected with a message, whatever its name or declared type.
 - E can replace the receipt or delete the payment. Both parties can open the receipt.
+- The receipt field says it takes drag and drop ("Arraste e solte o arquivo aqui ou clique para escolher", with the accepted types and size) and shows a drag-over state; on touch it says what a tap does. Dropping a file on a chosen receipt replaces it.
+- The receipt viewer zooms images (buttons, ctrl/cmd + wheel or trackpad pinch, two-finger pinch, double click, + / - / 0 keys), pans while zoomed (drag or arrow keys) and fits back. PDFs use the browser reader's zoom.
 - W taps "recebi" once; the stub then shows "recebido" and the time.
 
 ## Monthly summary and CSV statement
@@ -73,7 +75,7 @@ Acceptance criteria:
 
 Layout and columns: [DESIGN](../DESIGN.md#screens).
 
-- E: four KPI cards for the month (horas no mês, a pagar, pago no mês, pendências) with a context caption each. Pendências adds days without record, entries waiting for confirmation and payments without "recebi".
+- E: four KPI cards for the month (a pagar, pago no mês, custo do mês, pendências) with a context caption each. Custo do mês is the forecast from `DashboardItem.estimate` (what the month costs if everyone comes on the agreed days), styled as a projection with the "previsto" tag and captioned with people and agreed days, or with who can't be priced. Hours worked are not a KPI for the employer; they stay in the team table and on the worker's home. Pendências adds days without record, entries waiting for confirmation and payments without "recebi".
 - E: below the KPIs, the team table (profissional, frequência, hoje, horas, dias, a pagar, status). Each row has quick actions: bater ponto, registrar pagamento, ver cartão and a menu (copiar convite, editar, remover). The row opens the person's page.
 - E: column "hoje" shows who is expected today with their status; "pendências" lists actionable items, each linking to the right screen.
 - E: with no team, an empty state invites to add a professional.
