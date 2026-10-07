@@ -52,13 +52,20 @@ Acceptance criteria:
 
 - E adds bonus, transport, advance or deduction with amount, month and note. W and E both see them. E can delete.
 - Advances and deductions reduce the amount to receive; bonus and transport increase it.
+- In the Extras tab, E opens "Novo lançamento" (toolbar button) to add one in a sheet; there is no inline form. The sheet links to registering a "pagamento extra" for extras already paid.
+- The Extras tab also lists the month's extra payments (read-only there, with a link to Pagamentos); they count in "saldo dos lançamentos".
 
 ## Payments, receipts and acknowledgement
 
 - E registers a payment with reference month, date, amount (prefilled with the balance), method and an optional receipt (JPEG, PNG, WebP or PDF, up to 5 MB).
 - A file with a wrong real type or over the size limit is rejected with a message, whatever its name or declared type.
 - E can replace the receipt or delete the payment. Both parties can open the receipt.
+- In payment tables the receipt is one icon (a printed receipt) at the end of the row: with a receipt it opens the viewer, where E can also "trocar comprovante"; without one, E's click opens the file picker. There is no "Comprovante" column and no "trocar comprovante" menu item.
 - W taps "recebi" once; the stub then shows "recebido" and the time.
+- E can "marcar como concluído" (row menu or "Concluir" on the stub) without waiting for W. The payment then shows "concluído", records who confirmed it (`acknowledgedBy`, `acknowledgedByRole: "employer"`) and is audited as `payment.confirm`. A later "recebi" keeps the first confirmation.
+- E edits a payment from the row menu ("Editar") in a sheet with the same fields as the form, except the receipt. Changing the reference month, date, amount, method or agreement sends the payment back to "aguardando" (the confirmation was about the old values); note and the extra flag do not. Compensation edits respect what the agreement still owes. Audited as `payment.update`.
+- E can mark a payment as "pagamento extra" (not for compensation). It counts as an extra in what is due and as paid, so the month's balance does not change. It shows an "extra" chip in Pagamentos and also appears in the Extras tab as "Pagamento extra · já pago".
+- The Observação column is narrow and cut with an ellipsis; hovering shows the full note in a tooltip.
 
 ## Monthly summary and CSV statement
 
@@ -102,7 +109,7 @@ Layout and columns: [DESIGN](../DESIGN.md#screens).
 
 ## Payments across the team (/pagamentos)
 
-- E sees all payments of all contracts in one table (pessoa, referência, pago em, valor, forma, comprovante, recebido) with filters (pessoa, ano/mês, forma, recebido) and totals.
+- E sees all payments of all contracts in one table (pessoa, referência, pago em, valor, forma, recebido) with filters (pessoa, ano/mês, forma, recebido) and totals. Row actions: the receipt icon inline; ver pagamentos da pessoa, editar, marcar como concluído and remover in the menu.
 - W sees their own payments. Receipts open from either view.
 
 ## Logical removal and restore

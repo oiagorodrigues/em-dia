@@ -57,9 +57,10 @@ Tailwind CSS v4 (`@tailwindcss/vite`) is the layout layer: a 12-column grid (`gr
 ## Table actions
 
 - One action: a single inline icon button.
-- More than one: up to two of the most frequent actions inline as colored icon buttons, the rest in a `⋯` context menu. Payments rows: "ver" inline; comprovante (ver/anexar/trocar), editar and remover in the menu.
+- More than one: up to two of the most frequent actions inline as colored icon buttons, the rest in a `⋯` context menu. Payments rows: the receipt icon inline (brand when there is a receipt and it opens the viewer, where it can be swapped; neutral when there is none and it opens the upload); editar, marcar como concluído and remover in the menu.
 - Inline action colors follow meaning: bater entrada brand green, bater saída amber, registrar pagamento brand, ver neutral. In menus, items are neutral except **remover** in coral.
-- Icons: ver = eye; comprovante = paperclip; editar = pencil; remover = trash; registrar pagamento = wallet-plus; bater entrada = arrow entering a door; bater saída = arrow leaving a door. Never a chevron/arrow for "open".
+- Icons: ver = eye; comprovante = receipt (printed paper with a torn edge); anexo in forms = paperclip; editar = pencil; remover = trash; registrar pagamento = wallet-plus; bater entrada = arrow entering a door; bater saída = arrow leaving a door. Never a chevron/arrow for "open".
+- The actions column is never sticky and never hidden behind a horizontal scroll. When the table is wider than its box, `DataTable` first tightens cell padding, then drops optional columns (a `priority`, lowest first, or a `hideBelow`) until it fits. Long free text (`truncate`) is one line with an ellipsis and the full text in a tooltip.
 
 ## Navigation
 
