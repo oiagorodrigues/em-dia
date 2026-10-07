@@ -1,6 +1,59 @@
 import type { Contract, Payment } from "@emdia/shared";
 import { describe, expect, it } from "vite-plus/test";
-import { matchesPaymentFilters, paymentTotals, paymentYears, type PaymentRow } from "./payments.ts";
+import {
+  dayPaymentDraft,
+  matchesPaymentFilters,
+  paymentFormData,
+  paymentTotals,
+  paymentYears,
+  type PaymentRow,
+} from "./payments.ts";
+
+describe("dayPaymentDraft", () => {
+  it("refers to the worked day's month and prefills one diária", () => {
+    expect(
+      dayPaymentDraft({ payType: "daily", rateCents: 18000 }, "2026-09-30", "2026-10-07"),
+    ).toEqual({
+      referenceMonth: "2026-09",
+      paidOn: "2026-10-07",
+      amountCents: 18000,
+      method: "pix",
+    });
+  });
+
+  it("leaves the amount empty for hourly and monthly pay", () => {
+    for (const payType of ["hourly", "monthly"] as const)
+      expect(
+        dayPaymentDraft({ payType, rateCents: 2500 }, "2026-10-06", "2026-10-07").amountCents,
+      ).toBeNull();
+  });
+});
+
+describe("paymentFormData", () => {
+  const base = {
+    referenceMonth: "2026-10",
+    paidOn: "2026-10-07",
+    amountCents: 18000,
+    method: "pix" as const,
+  };
+
+  it("leaves empty optional fields out", () => {
+    const form = paymentFormData({ ...base, note: null, agreementId: null }, null);
+    expect([...form.keys()].sort()).toEqual(["amountCents", "method", "paidOn", "referenceMonth"]);
+  });
+
+  it("sends note, agreement, extra flag and receipt when set", () => {
+    const file = new File(["x"], "r.png", { type: "image/png" });
+    const form = paymentFormData(
+      { ...base, method: "compensation", note: "celular", agreementId: "a1", isExtra: true },
+      file,
+    );
+    expect(form.get("note")).toBe("celular");
+    expect(form.get("agreementId")).toBe("a1");
+    expect(form.get("isExtra")).toBe("true");
+    expect(form.get("receipt")).toBeInstanceOf(File);
+  });
+});
 
 function row(id: string, contractId: string, extra: Partial<Payment> = {}): PaymentRow {
   return {

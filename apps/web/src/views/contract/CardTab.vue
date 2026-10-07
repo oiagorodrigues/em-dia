@@ -434,6 +434,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
       :today="today"
       @saved="upsertLocal"
       @removed="removeLocal"
+      @paid="reloadSummarySoon"
     />
   </div>
 </template>

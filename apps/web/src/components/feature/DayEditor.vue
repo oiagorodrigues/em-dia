@@ -1,29 +1,38 @@
 <script setup lang="ts">
 import {
+  createPaymentSchema,
   ENTRY_STATUS_LABEL,
   ENTRY_STATUSES,
+  formatCents,
   formatDuration,
+  monthName,
+  parseYearMonth,
   shiftMinutes,
   upsertEntrySchema,
   weekdayOf,
   type Contract,
   type EntryStatus,
   type IsoDate,
+  type Payment,
+  type PaymentMethod,
   type WorkEntry,
 } from "@emdia/shared";
 import { computed, ref, watch } from "vue";
-import { entriesApi, errorMessage } from "@/api";
+import { entriesApi, errorMessage, paymentsApi } from "@/api";
 import Button from "@/components/ui/Button.vue";
 import Field from "@/components/ui/Field.vue";
 import ChoiceField from "@/components/ui/ChoiceField.vue";
 import TimeField from "@/components/ui/TimeField.vue";
 import Sheet from "@/components/ui/Sheet.vue";
 import Stepper from "@/components/ui/Stepper.vue";
+import Toggle from "@/components/ui/Toggle.vue";
 import { useForm } from "@/composables/form.ts";
 import { formatDayMonth, formatRelative, WEEKDAY_LONG } from "@/lib/format.ts";
+import { dayPaymentDraft, paymentFormData } from "@/lib/payments.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { isWritable } from "@/lib/contract.ts";
+import PaymentFields from "./PaymentFields.vue";
 
 const open = defineModel<boolean>("open", { required: true });
 const { date, entry, contract, today } = defineProps<{
@@ -32,7 +41,11 @@ const { date, entry, contract, today } = defineProps<{
   contract: Contract;
   today: IsoDate;
 }>();
-const emit = defineEmits<{ saved: [entry: WorkEntry]; removed: [date: IsoDate] }>();
+const emit = defineEmits<{
+  saved: [entry: WorkEntry];
+  removed: [date: IsoDate];
+  paid: [payment: Payment];
+}>();
 
 const auth = useAuthStore();
 const toast = useToastStore();
@@ -112,21 +125,126 @@ const title = computed(() =>
   date ? `${WEEKDAY_LONG[weekdayOf(date)]}, ${formatDayMonth(date)}` : "",
 );
 
+/** The employer can pay a worked day in the same step; the payment counts in that day's month. */
+const canPay = computed(() => auth.isEmployer && !ended.value && !isFuture.value);
+const payNow = ref(false);
+const {
+  values: payValues,
+  errors: payErrors,
+  formError: payError,
+  validate: validatePay,
+  applyError: applyPayError,
+  clearError: clearPayError,
+} = useForm(createPaymentSchema, {
+  referenceMonth: "",
+  paidOn: today,
+  amountCents: null as number | null,
+  method: "pix" as PaymentMethod,
+});
+const receipt = ref<File | null>(null);
+const paying = computed(() => payNow.value && worked.value && canPay.value);
+const payHint = computed(() => {
+  if (!date) return undefined;
+  const month = monthName(parseYearMonth(date.slice(0, 7)).month);
+  return contract.payType === "daily"
+    ? `Vem com o valor da diária e entra na conta de ${month}.`
+    : `Entra na conta de ${month}.`;
+});
+
+watch(
+  () => [open.value, date] as const,
+  ([isOpen]) => {
+    if (!isOpen || !date) return;
+    Object.assign(payValues, dayPaymentDraft(contract, date, today));
+    receipt.value = null;
+    payNow.value = false;
+    payErrors.value = {};
+    payError.value = null;
+  },
+  { immediate: true },
+);
+
+const payInput = () => ({ ...payValues, amountCents: payValues.amountCents ?? 0 });
+
+async function payDay(): Promise<boolean> {
+  const data = validatePay(payInput());
+  if (!data) return false;
+  try {
+    const res = await paymentsApi.create(contract.id, paymentFormData(data, receipt.value));
+    emit("paid", res.payment);
+    return true;
+  } catch (e) {
+    applyPayError(e);
+    return false;
+  }
+}
+
+function focusFirstError(): void {
+  requestAnimationFrame(() => {
+    document.querySelector<HTMLElement>('#day-editor [aria-invalid="true"]')?.focus();
+  });
+}
+
+const entryInput = computed(() => ({
+  status: values.status,
+  checkIn: worked.value ? values.checkIn || null : null,
+  checkOut: worked.value ? values.checkOut || null : null,
+  breakMinutes: worked.value ? values.breakMinutes : 0,
+  note: values.note.trim() || null,
+}));
+/** Paying a day already recorded as is must not re-save it: that would undo its confirmation. */
+const unchanged = computed(() => {
+  const input = entryInput.value;
+  return (
+    !!entry &&
+    entry.status === input.status &&
+    entry.checkIn === input.checkIn &&
+    entry.checkOut === input.checkOut &&
+    entry.breakMinutes === input.breakMinutes &&
+    entry.note === input.note
+  );
+});
+const saveLabel = computed(() => {
+  if (paying.value) return unchanged.value ? "Pagar" : entry ? "Salvar e pagar" : "Anotar e pagar";
+  return entry ? "Salvar" : "Anotar";
+});
+
 function onSave(): void {
   if (!date) return;
-  const input = {
-    status: values.status,
-    checkIn: worked.value ? values.checkIn || null : null,
-    checkOut: worked.value ? values.checkOut || null : null,
-    breakMinutes: worked.value ? values.breakMinutes : 0,
-    note: values.note.trim() || null,
-  };
+  const input = entryInput.value;
+  const withPayment = paying.value;
+  // Check the payment before saving the day, so a typo doesn't leave the day saved and unpaid.
+  if (withPayment && !validatePay(payInput())) {
+    focusFirstError();
+    return;
+  }
+  const skipEntry = withPayment && unchanged.value;
   void submit(async (data) => {
-    const res = await entriesApi.upsert(contract.id, date, data);
-    emit("saved", res.entry);
-    toast.success(
-      entry?.confirmedAt ? "Dia atualizado. Precisa de nova confirmação." : "Dia anotado.",
-    );
+    if (!skipEntry) {
+      const res = await entriesApi.upsert(contract.id, date, data);
+      emit("saved", res.entry);
+    }
+    if (withPayment) {
+      if (!(await payDay())) {
+        toast.error(
+          skipEntry
+            ? "O pagamento não foi registrado. Confira e tente de novo."
+            : "Dia anotado, mas o pagamento não foi registrado. Confira e tente de novo.",
+        );
+        focusFirstError();
+        return;
+      }
+      const amount = formatCents(payValues.amountCents ?? 0);
+      toast.success(
+        skipEntry
+          ? `Pagamento de ${amount} registrado.`
+          : `Dia anotado e pagamento de ${amount} registrado.`,
+      );
+    } else {
+      toast.success(
+        entry?.confirmedAt ? "Dia atualizado. Precisa de nova confirmação." : "Dia anotado.",
+      );
+    }
     open.value = false;
   }, input);
 }
@@ -253,6 +371,22 @@ async function onRemove(): Promise<void> {
         />
       </Field>
 
+      <section v-if="worked && canPay" class="de__pay" aria-label="Pagamento do dia">
+        <Toggle v-model="payNow" label="Pagar este dia agora" :hint="payHint" />
+        <div v-if="payNow" class="de__payfields">
+          <p v-if="payError" class="form-error" role="alert">{{ payError }}</p>
+          <PaymentFields
+            v-model:paid-on="payValues.paidOn"
+            v-model:amount-cents="payValues.amountCents"
+            v-model:method="payValues.method"
+            v-model:receipt="receipt"
+            :errors="payErrors"
+            :today="today"
+            @clear="clearPayError"
+          />
+        </div>
+      </section>
+
       <div v-if="canDelete && !ended" class="de__danger">
         <Button variant="danger" icon="trash" :loading="removing" @click="onRemove">
           {{ confirmRemove ? "Toque de novo para apagar" : "Apagar registro" }}
@@ -265,7 +399,7 @@ async function onRemove(): Promise<void> {
         >Confirmar</Button
       >
       <Button type="submit" form="day-editor" variant="primary" :loading="submitting">
-        {{ entry ? "Salvar" : "Anotar" }}
+        {{ saveLabel }}
       </Button>
     </template>
   </Sheet>
@@ -333,6 +467,19 @@ async function onRemove(): Promise<void> {
 
 .de__night {
   color: var(--brand);
+}
+
+.de__pay {
+  display: grid;
+  gap: var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px dashed var(--rule);
+}
+
+.de__payfields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
 }
 
 .de__danger {

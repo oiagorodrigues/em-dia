@@ -1,7 +1,14 @@
 import type { EntryStatus, WorkEntry } from "@emdia/shared";
 import { describe, expect, it } from "vite-plus/test";
 import type { DashboardItem } from "@emdia/shared";
-import { boardCells, cellKind, matchesBoardStatus, rowTotals, stripDates } from "./board.ts";
+import {
+  boardCells,
+  cellKind,
+  dayOpens,
+  matchesBoardStatus,
+  rowTotals,
+  stripDates,
+} from "./board.ts";
 
 function entry(date: string, status: EntryStatus, minutes = 0): WorkEntry {
   return {
@@ -49,6 +56,14 @@ describe("cellKind", () => {
     expect(
       cellKind("2026-10-20", null, summary, { startedOn: "2026-01-01", endedOn: "2026-10-15" }),
     ).toBe("outside");
+  });
+});
+
+describe("dayOpens", () => {
+  it("opens every day inside the contract, recorded or not", () => {
+    for (const kind of ["worked", "absent", "soft", "missing", "planned", "none"] as const)
+      expect(dayOpens({ kind })).toBe(true);
+    expect(dayOpens({ kind: "outside" })).toBe(false);
   });
 });
 

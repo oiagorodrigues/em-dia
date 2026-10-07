@@ -24,7 +24,7 @@ The contract carries an agreed schedule (`weekly`, `month_days`, `per_month` or 
 Acceptance criteria:
 
 - E picks one kind when creating or editing a contract and sees a short pt-BR description of the result (for example "seg, qua e sex", "quinzenal: sex", "todo dia 5", "2x por mês", "quando precisar"). W sees the same text.
-- weekly: E picks weekdays and every how many weeks (1 or 2 and up to 4). Expected days are those weekdays in the month, in weeks that match, counting from the Monday-starting week of the start date. "Todos os dias" is all seven weekdays.
+- weekly: E picks weekdays and every how many weeks (1 or 2 and up to 4). Expected days are those weekdays in the month, in weeks that match, counting from the Monday-starting week that holds the first scheduled weekday on or after the start date (a quinzenal Friday that starts on a Saturday has its first visit the next Friday). "Todos os dias" is all seven weekdays.
 - month_days: E picks days 1 to 31. In a short month a day past its end falls on the last day. Days outside the contract period are not expected.
 - per_month: E gives a number of visits per month. No dates are expected; the month shows "N de M vezes" and nothing is flagged as unrecorded.
 - on_demand: nothing is expected, nothing is flagged, days are recorded as they happen.
@@ -41,6 +41,7 @@ Acceptance criteria:
 - Editing a confirmed entry clears the confirmation.
 - Dates before the start date or after the end date are rejected. Future dates accept only day off, holiday and excused.
 - W can delete their own unconfirmed entry; E can delete any entry.
+- Pay the day: when E marks a past or current day as worked, the day editor offers "pagar este dia agora". It is off by default; turned on, it shows the same pago em, valor, como pagou and comprovante fields as "novo pagamento". Valor is prefilled with the diária for daily pay and empty otherwise; pago em defaults to today. The payment's reference month is the worked day's month, not the month it is paid in. The payment is validated before the day is saved, so an invalid amount saves nothing. If the day is already recorded and E changed nothing, only the payment is sent, so W's confirmation stays. If the day saves and the payment fails, E is told and the sheet stays open to retry. W never sees the payment section in the day editor.
 
 ## Clock in and out
 
@@ -55,7 +56,7 @@ Acceptance criteria:
 
 ## Payments, receipts and acknowledgement
 
-- E registers a payment with reference month, date, amount (prefilled with the balance), method and an optional receipt (JPEG, PNG, WebP or PDF, up to 5 MB).
+- E registers a payment with reference month, date, amount (prefilled with the balance), method and an optional receipt (JPEG, PNG, WebP or PDF, up to 5 MB). The reference month is visible and editable; it defaults to the current month (or the month the form was opened from). A payment made from the day editor refers to that day's month.
 - A file with a wrong real type or over the size limit is rejected with a message, whatever its name or declared type.
 - E can replace the receipt or delete the payment. Both parties can open the receipt.
 - The receipt field says it takes drag and drop ("Arraste e solte o arquivo aqui ou clique para escolher", with the accepted types and size) and shows a drag-over state; on touch it says what a tap does. Dropping a file on a chosen receipt replaces it.
@@ -98,8 +99,9 @@ Layout and columns: [DESIGN](../DESIGN.md#screens).
 ## Quadro do mês (/cartao)
 
 - E sees one row per person and one column per day of the month. Worked, falta, justificada/folga/feriado, expected-but-unrecorded and today are visually distinct and each cell has a text label for assistive tech.
-- Row totals show horas, dias and a pagar; clicking a row opens that person's Cartão.
-- Below `md` the board becomes a list of people with a week strip.
+- Row totals show horas, dias and a pagar; clicking a row (outside the day cells) opens that person's Cartão.
+- Clicking a day cell, or Enter or Space on a focused cell, opens that day's editor in place, without leaving the board, so E can record the day and pay it there. Days outside the contract period do not open. Closing the editor returns focus to the cell; saving refreshes the board totals.
+- Below `md` the board becomes a list of people with a week strip. The person's name opens their Cartão; each day of the strip is a button that opens the day editor in place.
 - W's Cartão is their own time card.
 
 ## Payments across the team (/pagamentos)

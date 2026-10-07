@@ -7,6 +7,7 @@ const {
   tip,
   today = false,
   focusable = false,
+  action = false,
 } = defineProps<{
   kind: BoardCellKind;
   label: string;
@@ -14,14 +15,16 @@ const {
   today?: boolean;
   /** Roving focus inside the board: reachable by arrow keys, not by Tab. */
   focusable?: boolean;
+  /** Enter, Space or a click opens the day; the parent handles them. */
+  action?: boolean;
 }>();
 </script>
 
 <template>
   <span
     class="bcell"
-    :class="[`is-${kind}`, { 'is-today': today }]"
-    role="img"
+    :class="[`is-${kind}`, { 'is-today': today, 'is-action': action }]"
+    :role="action ? 'button' : 'img'"
     :aria-label="label"
     :data-tip="tip"
     :tabindex="focusable ? -1 : undefined"
@@ -73,6 +76,10 @@ const {
   border-radius: 50%;
   background: var(--ink-3);
   opacity: 0.7;
+}
+
+.bcell.is-action {
+  cursor: pointer;
 }
 
 .bcell.is-today {

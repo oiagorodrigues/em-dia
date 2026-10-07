@@ -1,4 +1,12 @@
-import type { Contract, Payment } from "@emdia/shared";
+import {
+  toYearMonth,
+  type Contract,
+  type CreatePaymentInput,
+  type IsoDate,
+  type Payment,
+  type PaymentMethod,
+  type YearMonth,
+} from "@emdia/shared";
 
 export interface PaymentRow {
   payment: Payment;
@@ -37,6 +45,44 @@ export function paymentTotals(rows: readonly PaymentRow[]): PaymentTotals {
     }),
     { count: 0, cents: 0, acknowledged: 0 },
   );
+}
+
+/** Multipart body of POST /payments. The API rejects empty optional fields, so they are left out. */
+export function paymentFormData(
+  input: CreatePaymentInput & { isExtra?: boolean },
+  receipt: File | null,
+): FormData {
+  const form = new FormData();
+  form.append("referenceMonth", input.referenceMonth);
+  form.append("paidOn", input.paidOn);
+  form.append("amountCents", String(input.amountCents));
+  form.append("method", input.method);
+  if (input.note) form.append("note", input.note);
+  if (input.agreementId) form.append("agreementId", input.agreementId);
+  if (input.isExtra) form.append("isExtra", "true");
+  if (receipt) form.append("receipt", receipt);
+  return form;
+}
+
+export interface DayPaymentDraft {
+  referenceMonth: YearMonth;
+  paidOn: IsoDate;
+  amountCents: number | null;
+  method: PaymentMethod;
+}
+
+/** Paying a day from the day editor: it counts in that day's month, is paid today, one diária. */
+export function dayPaymentDraft(
+  contract: Pick<Contract, "payType" | "rateCents">,
+  date: IsoDate,
+  today: IsoDate,
+): DayPaymentDraft {
+  return {
+    referenceMonth: toYearMonth(date),
+    paidOn: today,
+    amountCents: contract.payType === "daily" ? contract.rateCents : null,
+    method: "pix",
+  };
 }
 
 /** Years with possible payments, newest first: from the oldest contract start up to this year. */

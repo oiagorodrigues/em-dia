@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { OCCUPATION_LABEL } from "@emdia/shared";
-import { computed } from "vue";
+import { OCCUPATION_LABEL, type IsoDate } from "@emdia/shared";
+import { computed, onBeforeUnmount, ref } from "vue";
 import BoardGrid from "@/components/feature/BoardGrid.vue";
+import DayEditor from "@/components/feature/DayEditor.vue";
 import BoardLegend from "@/components/feature/BoardLegend.vue";
 import BoardWeekList from "@/components/feature/BoardWeekList.vue";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
@@ -14,6 +15,7 @@ import Select from "@/components/ui/Select.vue";
 import SkeletonBoard from "@/components/ui/SkeletonBoard.vue";
 import { useMonthQuery } from "@/composables/contractContext.ts";
 import { useMonthBoard } from "@/composables/monthBoard.ts";
+import { useInvalidate } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import { BOARD_STATUS_FILTERS, matchesBoardStatus, rowTotals, type BoardRow } from "@/lib/board.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
@@ -27,6 +29,7 @@ const { month, currentMonth, setMonth } = useMonthQuery();
 const monthModel = computed({ get: () => month.value, set: setMonth });
 
 const board = useMonthBoard(() => month.value);
+const invalidate = useInvalidate();
 /** Future months have nothing recorded: the board shows what is expected and the estimate. */
 const projected = computed(() => (board.data.value?.month ?? month.value) > currentMonth);
 const { state, active, clear } = useTableState({
@@ -79,6 +82,31 @@ const SORT_OPTIONS = [
   { value: "-horas", label: "Ordem: mais horas" },
   { value: "-apagar", label: "Ordem: mais a pagar" },
 ];
+
+/** A day opens in place, so the employer can record it (and pay it) without leaving the board. */
+const editorOpen = ref(false);
+const editing = ref<{ contractId: string; date: IsoDate } | null>(null);
+const editingRow = computed(
+  () => allRows.value.find((r) => r.item.contract.id === editing.value?.contractId) ?? null,
+);
+const editingEntry = computed(
+  () => editingRow.value?.cells.find((c) => c.date === editing.value?.date)?.entry ?? null,
+);
+
+function openDay(row: BoardRow, date: IsoDate): void {
+  editing.value = { contractId: row.item.contract.id, date };
+  editorOpen.value = true;
+}
+
+/** Saving a day and paying it both land here; refetch once they settle. */
+let reloadTimer: ReturnType<typeof setTimeout> | undefined;
+function reloadSoon(): void {
+  const id = editing.value?.contractId;
+  if (!id) return;
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => void invalidate.records(id), 300);
+}
+onBeforeUnmount(() => clearTimeout(reloadTimer));
 
 const count = computed(() =>
   shown.value.length === 1 ? "1 pessoa" : `${shown.value.length} pessoas`,
@@ -174,6 +202,7 @@ const count = computed(() =>
         :sort="state.sort"
         :aria-busy="board.loading.value || undefined"
         @sort="sortBy"
+        @day="openDay"
       />
       <BoardWeekList
         v-else
@@ -182,10 +211,23 @@ const count = computed(() =>
         :today="board.data.value.today"
         :current-month="currentMonth"
         :projected="projected"
+        @day="openDay"
       />
       <p v-if="wide" class="bv__hint">
-        Passe o mouse ou use as setas num dia para ver as horas. Enter abre o cartão da pessoa.
+        Passe o mouse ou use as setas num dia para ver as horas. Clique ou dê Enter num dia para
+        anotar e pagar; Enter na linha abre o cartão da pessoa.
       </p>
+      <DayEditor
+        v-if="editingRow"
+        v-model:open="editorOpen"
+        :date="editing?.date ?? null"
+        :entry="editingEntry"
+        :contract="editingRow.item.contract"
+        :today="board.data.value.today"
+        @saved="reloadSoon"
+        @removed="reloadSoon"
+        @paid="reloadSoon"
+      />
     </template>
   </div>
 </template>

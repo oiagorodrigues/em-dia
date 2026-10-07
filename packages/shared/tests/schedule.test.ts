@@ -54,6 +54,25 @@ describe("expectedDatesInMonth", () => {
     ]);
   });
 
+  it("every other week starts on the first scheduled day, not the start date's week", () => {
+    // Started Saturday 2026-09-26, after that week's Friday: the first visit is Friday 10-02.
+    const period = { startedOn: "2026-09-26", endedOn: null };
+    expect(expectedDatesInMonth(weekly([5], 2), "2026-09", period)).toEqual([]);
+    expect(expectedDatesInMonth(weekly([5], 2), "2026-10", period)).toEqual([
+      "2026-10-02",
+      "2026-10-16",
+      "2026-10-30",
+    ]);
+    // Tue/Fri every other week, started Saturday: the cycle begins on Tuesday 09-29.
+    expect(expectedDatesInMonth(weekly([2, 5], 2), "2026-10", period)).toEqual([
+      "2026-10-02",
+      "2026-10-13",
+      "2026-10-16",
+      "2026-10-27",
+      "2026-10-30",
+    ]);
+  });
+
   it("fixed day of the month clamps to short months", () => {
     const s: Schedule = {
       kind: "month_days",

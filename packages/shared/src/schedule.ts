@@ -54,6 +54,18 @@ function mondayEpochDay(date: IsoDate): number {
   return epochDay(date) - ((weekdayOf(date) + 6) % 7);
 }
 
+/**
+ * Week the every-N-weeks cycle counts from: the one holding the first scheduled weekday on or
+ * after the start. A quinzenal Friday that starts on a Saturday begins the next Friday.
+ */
+function cycleAnchor(startedOn: IsoDate, weekdays: ReadonlySet<number>): number {
+  const startWeekday = weekdayOf(startedOn);
+  let offset = 0;
+  while (offset < 6 && !weekdays.has((startWeekday + offset) % 7)) offset++;
+  const firstWeekday = (startWeekday + offset) % 7;
+  return epochDay(startedOn) + offset - ((firstWeekday + 6) % 7);
+}
+
 function inPeriod(date: IsoDate, { startedOn, endedOn }: Period): boolean {
   return date >= startedOn && (endedOn === null || date <= endedOn);
 }
@@ -73,7 +85,7 @@ export function expectedDatesInMonth(
     case "weekly": {
       const weekdays = new Set(schedule.weekdays);
       const every = Math.max(1, schedule.everyWeeks);
-      const anchor = mondayEpochDay(period.startedOn);
+      const anchor = cycleAnchor(period.startedOn, weekdays);
       return datesOfMonth(month).filter((date) => {
         if (!weekdays.has(weekdayOf(date)) || !inPeriod(date, period)) return false;
         const week = Math.floor((mondayEpochDay(date) - anchor) / 7);
