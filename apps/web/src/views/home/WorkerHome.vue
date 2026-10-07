@@ -16,6 +16,7 @@ import {
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { useRoute } from "vue-router";
 import { dashboardApi, entriesApi, errorMessage, paymentsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ClockButton from "@/components/feature/ClockButton.vue";
 import InstallHint from "@/components/feature/InstallHint.vue";
 import Ledger, { type LedgerLine } from "@/components/feature/Ledger.vue";
@@ -28,7 +29,7 @@ import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import ChoiceField from "@/components/ui/ChoiceField.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { clockStateOf } from "@/lib/entry.ts";
 import { attendanceLabel, attendanceText } from "@/lib/schedule.ts";
 import { firstName } from "@/lib/format.ts";
@@ -42,10 +43,13 @@ const auth = useAuthStore();
 const toast = useToastStore();
 const route = useRoute();
 
-const { data, error, loading, reload, mutate } = useResource(
-  () => 0,
+const dashboard = useResource(
+  () => undefined,
+  queryKeys.dashboard,
   () => dashboardApi.get(),
 );
+const { data, error, loading, reload, mutate } = dashboard;
+const invalidate = useInvalidate();
 
 const selectedId = ref<string>("");
 watch(
@@ -106,8 +110,11 @@ const today = nowInZone(DEFAULT_TIMEZONE).date;
 const currentMonth = toYearMonth(today);
 const viewMonth = ref<YearMonth>(currentMonth);
 const future = computed(() => isFutureMonth(viewMonth.value, today));
-const other = useResource(viewMonth, (m) =>
-  m === currentMonth ? Promise.resolve(null) : dashboardApi.get(m),
+/** The current month shares the cache entry (and the request) of the dashboard above. */
+const other = useResource(
+  () => (viewMonth.value === currentMonth ? undefined : viewMonth.value),
+  queryKeys.dashboard,
+  (m) => dashboardApi.get(m),
 );
 const viewItem = computed<DashboardItem | null>(() => {
   if (viewMonth.value === currentMonth) return item.value;
@@ -143,7 +150,7 @@ async function onClock(action: "in" | "out"): Promise<void> {
         ? `Entrada às ${entry.checkIn} registrada.`
         : `Saída às ${entry.checkOut} registrada.`,
     );
-    void reload();
+    void invalidate.records(current.contract.id);
   } catch (e) {
     toast.error(errorMessage(e));
     void reload();
@@ -163,6 +170,7 @@ async function acknowledge(payment: Payment): Promise<void> {
         i.lastPayment?.id === updated.id ? { ...i, lastPayment: updated } : i,
       ),
     }));
+    void invalidate.records(payment.contractId, dashboard);
     toast.success("Recebimento confirmado.");
   } catch (e) {
     toast.error(errorMessage(e));

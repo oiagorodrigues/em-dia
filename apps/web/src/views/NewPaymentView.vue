@@ -13,6 +13,7 @@ import {
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { agreementsApi, contractsApi, paymentsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ReceiptDrop from "@/components/feature/ReceiptDrop.vue";
 import PaymentsSidePanel from "@/components/feature/PaymentsSidePanel.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
@@ -27,7 +28,7 @@ import Select from "@/components/ui/Select.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import { previousInApp, useBack } from "@/composables/back.ts";
 import { useForm } from "@/composables/form.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { isOpenAgreement, nextInstallmentCents } from "@/lib/agreement.ts";
 import { isWritable } from "@/lib/contract.ts";
@@ -42,10 +43,16 @@ const queryMonth =
     ? route.query.mes
     : null;
 
-const contracts = useResource(
-  () => 0,
-  () => contractsApi.list().then((r) => r.contracts.filter(isWritable)),
+const allContracts = useResource(
+  () => null,
+  queryKeys.contracts,
+  () => contractsApi.list().then((r) => r.contracts),
 );
+const contracts = {
+  ...allContracts,
+  data: computed(() => allContracts.data.value?.filter(isWritable)),
+};
+const invalidate = useInvalidate();
 const queryAgreement = typeof route.query.acordo === "string" ? route.query.acordo : null;
 const contractId = ref(typeof route.query.vinculo === "string" ? route.query.vinculo : "");
 watch(contracts.data, (list) => {
@@ -68,11 +75,9 @@ const receipt = ref<File | null>(null);
 /** Prefill with what's still owed for the reference month, until the person types their own amount. */
 const touchedAmount = ref(false);
 const summary = useResource(
-  () => (contractId.value ? `${contractId.value}|${values.referenceMonth}` : ""),
-  (key) => {
-    if (!key || !YEAR_MONTH_RE.test(values.referenceMonth)) return Promise.resolve(null);
-    return contractsApi.summary(contractId.value, values.referenceMonth).then((r) => r.summary);
-  },
+  () => ({ id: contractId.value, month: values.referenceMonth }),
+  (s) => (s.id && YEAR_MONTH_RE.test(s.month) ? queryKeys.summary(s) : null),
+  (s) => contractsApi.summary(s.id, s.month).then((r) => r.summary),
 );
 watch(summary.data, (s) => {
   if (s && !touchedAmount.value) values.amountCents = s.balanceCents > 0 ? s.balanceCents : null;
@@ -84,13 +89,15 @@ const contractOptions = computed(() =>
 );
 
 /** Open agreements (accepted or still waiting for the worker) a compensation can pay down. */
-const agreements = useResource(
+const allAgreements = useResource(
   () => (values.method === "compensation" ? contractId.value : ""),
-  (id) =>
-    id
-      ? agreementsApi.list(id).then((r) => r.agreements.filter(isOpenAgreement))
-      : Promise.resolve([]),
+  (id) => (id ? queryKeys.agreements(id) : null),
+  (id) => agreementsApi.list(id).then((r) => r.agreements),
 );
+const agreements = {
+  ...allAgreements,
+  data: computed(() => allAgreements.data.value?.filter(isOpenAgreement)),
+};
 const agreementOptions = computed(() => [
   { value: "", label: "Nenhum: compensação avulsa" },
   ...(agreements.data.value ?? []).map((a) => ({
@@ -145,6 +152,7 @@ function onSubmit(): void {
     if (data.agreementId) form.append("agreementId", data.agreementId);
     if (receipt.value) form.append("receipt", receipt.value);
     await paymentsApi.create(contract.value.id, form);
+    void invalidate.records(contract.value.id);
     toast.success(`Pagamento de ${formatCents(data.amountCents)} registrado.`);
     // Back to where the form was opened from; a direct visit lands on the person's payments.
     if (previousInApp()) router.back();

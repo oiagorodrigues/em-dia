@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
 import { useBack } from "@/composables/back.ts";
+import { useInvalidate } from "@/composables/resource.ts";
 import { firstName } from "@/lib/format.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
@@ -17,10 +18,12 @@ const invite = ref<InviteDelivery | null>(null);
 const inviteError = ref<string | null>(null);
 const inviting = ref(false);
 const { to: backTo } = useBack("/equipe");
+const invalidate = useInvalidate();
 
 async function save(data: CreateContractInput): Promise<void> {
   const res = await contractsApi.create(data);
   created.value = res.contract;
+  void invalidate.all();
   window.scrollTo({ top: 0 });
   if (res.invite) invite.value = res.invite;
   else await generateInvite();

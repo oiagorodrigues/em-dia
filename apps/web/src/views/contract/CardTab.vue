@@ -16,6 +16,7 @@ import {
 } from "@emdia/shared";
 import { computed, onBeforeUnmount, ref, useTemplateRef } from "vue";
 import { contractsApi, entriesApi, errorMessage } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ClockButton from "@/components/feature/ClockButton.vue";
 import BulkFillSheet from "@/components/feature/BulkFillSheet.vue";
 import DayEditor from "@/components/feature/DayEditor.vue";
@@ -26,7 +27,7 @@ import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import { useContract } from "@/composables/contractContext.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useSwipe } from "@/composables/swipe.ts";
 import { clockStateOf } from "@/lib/entry.ts";
 import { attendanceLabel, attendanceText } from "@/lib/schedule.ts";
@@ -44,13 +45,14 @@ const maxMonth = computed(() =>
   contract.value.endedOn ? toYearMonth(contract.value.endedOn) : shiftMonth(currentMonth, 12),
 );
 
-const key = computed(() => `${contract.value.id}|${month.value}`);
-const entries = useResource(key, () =>
-  entriesApi.list(contract.value.id, month.value).then((r) => r.entries),
+const scope = computed(() => ({ id: contract.value.id, month: month.value }));
+const entries = useResource(scope, queryKeys.entries, (s) =>
+  entriesApi.list(s.id, s.month).then((r) => r.entries),
 );
-const summary = useResource(key, () =>
-  contractsApi.summary(contract.value.id, month.value).then((r) => r.summary),
+const summary = useResource(scope, queryKeys.summary, (s) =>
+  contractsApi.summary(s.id, s.month).then((r) => r.summary),
 );
+const invalidate = useInvalidate();
 
 const monthModel = computed({ get: () => month.value, set: setMonth });
 
@@ -95,7 +97,8 @@ function removeLocal(date: IsoDate): void {
 let summaryTimer: ReturnType<typeof setTimeout> | undefined;
 function reloadSummarySoon(): void {
   clearTimeout(summaryTimer);
-  summaryTimer = setTimeout(() => void summary.reload(), 400);
+  const id = contract.value.id;
+  summaryTimer = setTimeout(() => void invalidate.records(id, entries), 400);
 }
 onBeforeUnmount(() => clearTimeout(summaryTimer));
 

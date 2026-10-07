@@ -12,6 +12,7 @@ import {
 } from "@emdia/shared";
 import { computed, ref } from "vue";
 import { teamApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import HomePendencies from "@/components/feature/HomePendencies.vue";
 import HomeToday from "@/components/feature/HomeToday.vue";
 import InstallHint from "@/components/feature/InstallHint.vue";
@@ -20,7 +21,7 @@ import TeamTable from "@/components/feature/TeamTable.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import KpiCard from "@/components/ui/KpiCard.vue";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import { firstName } from "@/lib/format.ts";
 import { greeting } from "@/lib/greeting.ts";
@@ -32,7 +33,8 @@ const today = nowInZone(DEFAULT_TIMEZONE).date;
 const currentMonth = toYearMonth(today);
 const month = ref<YearMonth>(currentMonth);
 
-const team = useResource(month, (m) => teamApi.list(m));
+const team = useResource(month, queryKeys.team, (m) => teamApi.list(m));
+const invalidate = useInvalidate();
 const { state, clear } = useTableState({ defaultSort: { key: "nome", dir: "asc" } });
 
 /** The dashboard is about the people working here now; ended and removed live in Equipe. */
@@ -204,7 +206,7 @@ const people = computed(() =>
           :month="month"
           :projected="future"
           :loading="loadingFirst"
-          @reload="team.reload"
+          @reload="invalidate.all"
           @clear-filters="clear"
         />
       </section>
@@ -215,7 +217,7 @@ const people = computed(() =>
         class="order-1 col-span-12 grid content-start items-start gap-5 lg:order-none lg:grid-cols-2 2xl:col-span-4 2xl:grid-cols-1"
         aria-label="Hoje e pendências"
       >
-        <HomeToday v-if="isCurrent" :items="current" :today="today" @reload="team.reload" />
+        <HomeToday v-if="isCurrent" :items="current" :today="today" @reload="invalidate.all" />
         <HomePendencies :items="pending" />
       </aside>
     </template>

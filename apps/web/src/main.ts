@@ -4,10 +4,12 @@ import "./styles/tokens.css";
 import "./styles/base.css";
 import "./styles/tailwind.css";
 
+import { VueQueryPlugin } from "@tanstack/vue-query";
 import { createPinia } from "pinia";
 import { createApp } from "vue";
 import { z } from "zod";
 import { configureAuthHooks } from "@/api/client.ts";
+import { queryClient } from "@/api/query.ts";
 import { initInstallPrompt } from "@/composables/install.ts";
 import { initTheme } from "@/composables/theme.ts";
 import { createAppRouter } from "@/router/index.ts";
@@ -23,6 +25,7 @@ initInstallPrompt();
 const app = createApp(App);
 const pinia = createPinia();
 app.use(pinia);
+app.use(VueQueryPlugin, { queryClient });
 const router = createAppRouter();
 app.use(router);
 

@@ -24,6 +24,7 @@ import Select from "@/components/ui/Select.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import TableActions from "@/components/ui/TableActions.vue";
 import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
+import { useInvalidate } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import { useTeamPayments } from "@/composables/teamPayments.ts";
 import { isWritable } from "@/lib/contract.ts";
@@ -56,6 +57,7 @@ const year = computed(() => {
   return Number.isInteger(n) && n >= 2000 && n <= thisYear ? n : thisYear;
 });
 const payments = useTeamPayments(() => year.value);
+const invalidate = useInvalidate();
 
 const contracts = computed(() =>
   [...(payments.data.value?.contracts ?? [])].sort((a, b) =>
@@ -184,6 +186,7 @@ function replace(updated: Payment): void {
       r.payment.id === updated.id ? { ...r, payment: updated } : r,
     ),
   }));
+  void invalidate.records(updated.contractId, payments);
 }
 
 function acknowledge(row: PaymentRow): Promise<void> {
@@ -240,6 +243,7 @@ async function confirmRemove(): Promise<void> {
       contracts: prev?.contracts ?? [],
       rows: (prev?.rows ?? []).filter((r) => r.payment.id !== row.payment.id),
     }));
+    void invalidate.records(row.contract.id, payments);
     toast.success("Pagamento removido.");
   });
   removeOpen.value = false;

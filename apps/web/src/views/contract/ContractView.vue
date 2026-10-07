@@ -3,6 +3,7 @@ import { describeSchedule, OCCUPATION_LABEL, type Contract } from "@emdia/shared
 import { computed, nextTick, onBeforeUnmount, reactive, useTemplateRef, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import { contractsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ContactActions from "@/components/feature/ContactActions.vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import Button from "@/components/ui/Button.vue";
@@ -15,7 +16,7 @@ import Skeleton from "@/components/ui/Skeleton.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import { provideContract, useMonthQuery } from "@/composables/contractContext.ts";
 import { useContractRemoval } from "@/composables/contractRemoval.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { contactChannels, contractStatus, isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
@@ -29,17 +30,24 @@ const auth = useAuthStore();
 const route = useRoute();
 const { month, currentMonth, setMonth } = useMonthQuery();
 
-const { data, error, loading, reload, mutate } = useResource(
+const { data, error, loading, reload, mutate, key } = useResource(
   () => id,
+  queryKeys.contract,
   (cid) => contractsApi.get(cid).then((r) => r.contract),
 );
 
 // Tabs only render once `data` is loaded, so children always see a contract.
 const contract = computed(() => data.value as Contract);
 
+const invalidate = useInvalidate();
+function replaceContract(next: Contract): void {
+  mutate(next);
+  void invalidate.contract(next.id, { key });
+}
+
 const { confirmOpen, removing, restoring, askRemove, confirmRemove, restore } = useContractRemoval(
   data,
-  (next) => mutate(next),
+  replaceContract,
 );
 
 provideContract({
@@ -47,7 +55,7 @@ provideContract({
   month,
   currentMonth,
   setMonth,
-  replaceContract: (next) => mutate(next),
+  replaceContract,
   askRemove,
   restore,
   restoring,
