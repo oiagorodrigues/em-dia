@@ -202,7 +202,15 @@ export interface Payment {
   receipt: Receipt | null;
   /** Set when the payment pays down an agreement (method = compensation). */
   agreementId: string | null;
+  /**
+   * Paid on top of the month's pay (a party, a Saturday). Counts as an extra in
+   * what is due and as paid, so it leaves the month's balance untouched.
+   */
+  isExtra: boolean;
+  /** When the payment was confirmed: the worker's "recebi", or the employer closing it. */
   acknowledgedAt: string | null;
+  acknowledgedBy: string | null;
+  acknowledgedByRole: Role | null;
   createdBy: string;
   createdAt: string;
 }
@@ -265,6 +273,7 @@ export interface MonthSummary {
   grossCents: number;
   /** Subtracted from monthly pay for unjustified absences when deductAbsences is on. */
   absenceDeductionCents: number;
+  /** Signed adjustments plus extra payments (`Payment.isExtra`). */
   adjustmentsCents: number;
   dueCents: number;
   paidCents: number;

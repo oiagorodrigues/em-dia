@@ -23,6 +23,7 @@ import Select from "@/components/ui/Select.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import SkeletonForm from "@/components/ui/SkeletonForm.vue";
 import SkeletonLedger from "@/components/ui/SkeletonLedger.vue";
+import Toggle from "@/components/ui/Toggle.vue";
 import { previousInApp, useBack } from "@/composables/back.ts";
 import { useForm } from "@/composables/form.ts";
 import { useInvalidate, useResource } from "@/composables/resource.ts";
@@ -66,6 +67,7 @@ const { values, errors, formError, submitting, submit, clearError } = useForm(cr
   amountCents: null as number | null,
   method: (queryAgreement ? "compensation" : "pix") as PaymentMethod,
   note: "",
+  isExtra: route.query.extra === "1",
 });
 const agreementId = ref(queryAgreement ?? "");
 const receipt = ref<File | null>(null);
@@ -136,6 +138,7 @@ function onSubmit(): void {
     note: values.note.trim() || null,
     agreementId:
       values.method === "compensation" && agreementId.value ? agreementId.value : undefined,
+    isExtra: values.method !== "compensation" && values.isExtra,
   };
   void submit(async (data) => {
     if (!contract.value) return;
@@ -293,6 +296,13 @@ const { to: back } = useBack(
             @input="clearError('note')"
           />
         </Field>
+
+        <Toggle
+          v-if="values.method !== 'compensation'"
+          v-model="values.isExtra"
+          label="Pagamento extra"
+          hint="Fora do valor do mês, como uma festa ou um sábado. Aparece também em Extras e não mexe no saldo do mês."
+        />
 
         <Button type="submit" variant="primary" :loading="submitting" :disabled="!contract"
           >registrar pagamento</Button

@@ -19,7 +19,10 @@ const payment = (mimeType: string): Payment => ({
     sizeBytes: 2048,
   } as Payment["receipt"],
   agreementId: null,
+  isExtra: false,
   acknowledgedAt: null,
+  acknowledgedBy: null,
+  acknowledgedByRole: null,
   createdBy: "u1",
   createdAt: "2026-10-05T12:00:00Z",
 });

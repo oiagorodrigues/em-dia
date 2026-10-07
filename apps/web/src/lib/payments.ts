@@ -7,12 +7,24 @@ import {
   type PaymentMethod,
   type YearMonth,
 } from "@emdia/shared";
+import type { Tone } from "./tone.ts";
 
 export interface PaymentRow {
   payment: Payment;
   contract: Contract;
   /** Description of the agreement a compensation pays down, e.g. "Mesa de jantar". */
   agreement?: string | null;
+}
+
+/** "recebido" is the worker's word; the employer closing it without waiting reads "concluído". */
+export function receivedStatus(p: Pick<Payment, "acknowledgedAt" | "acknowledgedByRole">): {
+  label: string;
+  tone: Tone;
+  done: boolean;
+} {
+  if (!p.acknowledgedAt) return { label: "aguardando", tone: "amber", done: false };
+  if (p.acknowledgedByRole === "employer") return { label: "concluído", tone: "brand", done: true };
+  return { label: "recebido", tone: "brand", done: true };
 }
 
 /** Filters of the Pagamentos page; "" means "todos". */

@@ -49,6 +49,8 @@ Helper classes in `base.css`: `.kpi-grid` (KPI cards: a row when they fit, stack
 - Every collection renders through `components/ui/DataTable.vue`: a table on `md`+ and cards on `sm`, from one column definition (`lib/table.ts`). Views never write a raw `<table>`; the harness fails on it. Feature components with a genuinely tabular shape (time card, month board) live in `components/feature` and may use `<table>` or grids.
 - `composables/tableState.ts` (`useTableState`) mirrors search, filters, tab and sort in the route query. Pass it to `DataTable` as `state`; without it the table keeps local state.
 - Sorting, search and filtering run client-side on the rows already loaded. Columns declare how to read a sortable value and how to render the cell.
+- Row actions must stay reachable without horizontal scroll. `DataTable` watches its width (`ResizeObserver`) and, when the table overflows, tightens padding and then hides columns in `dropOrder` (`priority` ascending, `hideBelow` columns count as 0, ties right to left). Give every table's secondary columns a `priority` or `hideBelow`. Totals rows take colspans from the `columns` the `footer` slot receives (`spansAround` in `lib/table.ts`), never from breakpoints.
+- `truncate: true` on a free-text column cuts it at `width` (default 16rem) and shows the full text in a `Tooltip`.
 - Money, hours and dates are right-aligned in the mono face; status is a `StatusChip`.
 
 ## Breakpoints

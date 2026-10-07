@@ -1,6 +1,13 @@
 import type { Readable } from "node:stream";
-import type { CreatePaymentInput, Payment, Receipt, ReceiptMimeType } from "@emdia/shared";
-import { formatCents, RECEIPT_MIME_TYPES } from "@emdia/shared";
+import type {
+  CreatePaymentInput,
+  Payment,
+  Permission,
+  Receipt,
+  ReceiptMimeType,
+  UpdatePaymentInput,
+} from "@emdia/shared";
+import { formatCents, paymentRuleIssues, RECEIPT_MIME_TYPES } from "@emdia/shared";
 import { fileTypeFromBuffer } from "file-type";
 import { AppError, fieldError, notFound, receiptTooLarge } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
@@ -41,6 +48,10 @@ export function sanitizeFilename(name: string): string {
     .slice(0, 100);
   return cleaned || "comprovante";
 }
+
+/** Fields a confirmation vouches for; changing one asks for the confirmation again. */
+const MONEY_FIELDS = ["referenceMonth", "paidOn", "amountCents", "method", "agreementId"] as const;
+const EDITABLE_FIELDS = [...MONEY_FIELDS, "note", "isExtra"] as const;
 
 export function paymentsService(deps: ServiceDeps) {
   const { repos, files } = deps;
@@ -103,6 +114,34 @@ export function paymentsService(deps: ServiceDeps) {
     }
   }
 
+  async function markReceived(
+    actor: Actor,
+    contractId: string,
+    paymentId: string,
+    permission: Permission,
+    action: string,
+  ): Promise<Payment> {
+    await loadWritableContract(deps, actor, contractId);
+    requirePermission(actor, permission);
+    const payment = await findPayment(contractId, paymentId);
+    if (payment.acknowledgedAt) return toPayment(payment);
+    const acknowledgedAt = nowIso(deps);
+    await repos.tx(async (r) => {
+      await r.payments.acknowledge(paymentId, acknowledgedAt, actor.id, actor.role);
+      await audit(
+        deps,
+        { actorId: actor.id, contractId, action, entity: "payment", entityId: paymentId },
+        r,
+      );
+    });
+    return toPayment({
+      ...payment,
+      acknowledgedAt,
+      acknowledgedBy: actor.id,
+      acknowledgedByRole: actor.role,
+    });
+  }
+
   return {
     async list(actor: Actor, contractId: string, year: number | undefined): Promise<Payment[]> {
       await loadContract(deps, actor, contractId);
@@ -131,6 +170,9 @@ export function paymentsService(deps: ServiceDeps) {
         receipt: stored?.receipt ?? null,
         receiptFile: stored?.name ?? null,
         acknowledgedAt: null,
+        acknowledgedBy: null,
+        acknowledgedByRole: null,
+        isExtra: input.isExtra ?? false,
         agreementId,
         createdBy: actor.id,
         createdAt: nowIso(deps),
@@ -154,6 +196,7 @@ export function paymentsService(deps: ServiceDeps) {
                 amountCents: payment.amountCents,
                 receipt: !!stored,
                 method: payment.method,
+                isExtra: payment.isExtra,
               },
             },
             r,
@@ -236,27 +279,86 @@ export function paymentsService(deps: ServiceDeps) {
       if (payment.receiptFile) await discardFile(payment.receiptFile);
     },
 
-    async acknowledge(actor: Actor, contractId: string, paymentId: string): Promise<Payment> {
+    async update(
+      actor: Actor,
+      contractId: string,
+      paymentId: string,
+      input: UpdatePaymentInput,
+    ): Promise<Payment> {
       await loadWritableContract(deps, actor, contractId);
-      requirePermission(actor, "payment:acknowledge");
-      const payment = await findPayment(contractId, paymentId);
-      if (payment.acknowledgedAt) return toPayment(payment);
-      const acknowledgedAt = nowIso(deps);
+      requirePermission(actor, "payment:write");
+      const current = await findPayment(contractId, paymentId);
+      const next: PaymentRecord = {
+        ...current,
+        referenceMonth: input.referenceMonth ?? current.referenceMonth,
+        paidOn: input.paidOn ?? current.paidOn,
+        amountCents: input.amountCents ?? current.amountCents,
+        method: input.method ?? current.method,
+        note: input.note === undefined ? current.note : input.note || null,
+        agreementId: input.agreementId === undefined ? current.agreementId : input.agreementId,
+        isExtra: input.isExtra ?? current.isExtra,
+      };
+      const [issue] = paymentRuleIssues(next);
+      if (issue) throw fieldError(issue.path, issue.message);
+
+      const changed = EDITABLE_FIELDS.filter((k) => next[k] !== current[k]);
+      const reopens =
+        !!current.acknowledgedAt &&
+        changed.some((k) => (MONEY_FIELDS as readonly string[]).includes(k));
+      if (reopens) {
+        next.acknowledgedAt = null;
+        next.acknowledgedBy = null;
+        next.acknowledgedByRole = null;
+      }
+      // While the payment stays on the same agreement, its remainingCents already counts it.
+      const extraForAgreement =
+        next.agreementId === current.agreementId
+          ? next.amountCents - current.amountCents
+          : next.amountCents;
+      const agreementId = next.agreementId;
+      const checkRoom = (r: TxRepos) =>
+        agreementId && extraForAgreement > 0
+          ? assertAgreementRoom(r, contractId, agreementId, extraForAgreement)
+          : Promise.resolve();
+      await checkRoom(repos);
       await repos.tx(async (r) => {
-        await r.payments.acknowledge(paymentId, acknowledgedAt);
+        await checkRoom(r);
+        await r.payments.update(next);
         await audit(
           deps,
           {
             actorId: actor.id,
             contractId,
-            action: "payment.acknowledge",
+            action: "payment.update",
             entity: "payment",
             entityId: paymentId,
+            meta: {
+              changed,
+              referenceMonth: next.referenceMonth,
+              amountCents: next.amountCents,
+              reopened: reopens,
+            },
           },
           r,
         );
       });
-      return toPayment({ ...payment, acknowledgedAt });
+      return toPayment(next);
+    },
+
+    /** The worker's "recebi". */
+    acknowledge(actor: Actor, contractId: string, paymentId: string): Promise<Payment> {
+      return markReceived(
+        actor,
+        contractId,
+        paymentId,
+        "payment:acknowledge",
+        "payment.acknowledge",
+      );
+    },
+
+    /** The employer closes the payment without waiting for the worker. */
+    confirm(actor: Actor, contractId: string, paymentId: string): Promise<Payment> {
+      return markReceived(actor, contractId, paymentId, "payment:confirm", "payment.confirm");
     },
   };
 }

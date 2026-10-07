@@ -10,7 +10,9 @@ import {
   type Payment,
 } from "@emdia/shared";
 import { computed, ref, useTemplateRef } from "vue";
+import { useRouter } from "vue-router";
 import { errorMessage, paymentsApi } from "@/api";
+import PaymentEditSheet from "@/components/feature/PaymentEditSheet.vue";
 import ReceiptStub from "@/components/feature/ReceiptStub.vue";
 import ReceiptViewer from "@/components/feature/ReceiptViewer.vue";
 import PageHeader from "@/components/layout/PageHeader.vue";
@@ -23,6 +25,7 @@ import KpiCard from "@/components/ui/KpiCard.vue";
 import Select from "@/components/ui/Select.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import TableActions from "@/components/ui/TableActions.vue";
+import Tooltip from "@/components/ui/Tooltip.vue";
 import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
 import { useInvalidate } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
@@ -34,17 +37,18 @@ import {
   matchesPaymentFilters,
   paymentTotals,
   paymentYears,
+  receivedStatus,
   type PaymentRow,
 } from "@/lib/payments.ts";
 import { receiptProblem } from "@/lib/receipt.ts";
-import type { Column } from "@/lib/table.ts";
+import { spansAround, type Column } from "@/lib/table.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
 const auth = useAuthStore();
 const toast = useToastStore();
+const router = useRouter();
 const wide = useMediaQuery(MQ.md);
-const lg = useMediaQuery(MQ.lg);
 
 const thisYear = Number(nowInZone(DEFAULT_TIMEZONE).date.slice(0, 4));
 const { state, clear } = useTableState({
@@ -111,6 +115,7 @@ const columns = computed<Column<PaymentRow>[]>(() => [
     sortable: true,
     sortFirst: "desc",
     searchable: true,
+    priority: 2,
   },
   {
     key: "pago",
@@ -121,6 +126,7 @@ const columns = computed<Column<PaymentRow>[]>(() => [
     sortFirst: "desc",
     align: "right",
     mono: true,
+    priority: 1,
   },
   {
     key: "valor",
@@ -140,7 +146,6 @@ const columns = computed<Column<PaymentRow>[]>(() => [
     searchable: true,
     hideBelow: "lg",
   },
-  { key: "comprovante", label: "Comprovante", value: (r) => !!r.payment.receipt },
   {
     key: "recebido",
     label: "Recebido",
@@ -214,15 +219,17 @@ function onFile(e: Event): void {
   const file = input.files?.[0];
   input.value = "";
   const row = attaching.value;
-  if (!file || !row) return;
+  if (file && row) void uploadReceipt(row, file);
+}
+function uploadReceipt(row: PaymentRow, file: File): Promise<void> {
   const problem = receiptProblem(file);
   if (problem) {
     toast.error(problem);
-    return;
+    return Promise.resolve();
   }
   const form = new FormData();
   form.append("receipt", file);
-  void run(row, async () => {
+  return run(row, async () => {
     replace((await paymentsApi.replaceReceipt(row.contract.id, row.payment.id, form)).payment);
     toast.success("Comprovante anexado.");
   });
@@ -249,6 +256,36 @@ async function confirmRemove(): Promise<void> {
   removeOpen.value = false;
 }
 
+function canManage(row: PaymentRow): boolean {
+  return auth.isEmployer && isWritable(row.contract);
+}
+
+function confirm(row: PaymentRow): Promise<void> {
+  return run(row, async () => {
+    replace((await paymentsApi.confirm(row.contract.id, row.payment.id)).payment);
+    toast.success("Pagamento concluído.");
+  });
+}
+
+const editOpen = ref(false);
+const editing = ref<PaymentRow | null>(null);
+function edit(row: PaymentRow): void {
+  editing.value = row;
+  editOpen.value = true;
+}
+function onSaved(p: Payment): void {
+  replace(p);
+  toast.success("Pagamento atualizado.");
+}
+
+async function replaceViewed(file: File): Promise<void> {
+  const p = viewing.value;
+  const row = rows.value.find((r) => r.payment.id === p?.id);
+  if (!row) return;
+  await uploadReceipt(row, file);
+  viewing.value = rows.value.find((r) => r.payment.id === row.payment.id)?.payment ?? p;
+}
+
 function inlineActions(row: PaymentRow): InlineAction[] {
   const out: InlineAction[] = [];
   if (auth.isWorker && !row.payment.acknowledgedAt)
@@ -259,35 +296,51 @@ function inlineActions(row: PaymentRow): InlineAction[] {
       loading: busyId.value === row.payment.id,
       onClick: () => void acknowledge(row),
     });
-  out.push({
-    label: "Ver pagamentos",
-    icon: "eye",
-    to: {
-      path: `/equipe/${row.contract.id}/pagamentos`,
-      query: { mes: row.payment.referenceMonth },
-    },
-  });
+  // One receipt icon: the viewer (where it can be swapped) or, with none yet, the upload.
+  if (row.payment.receipt)
+    out.push({
+      label: `Ver comprovante de ${formatYearMonth(row.payment.referenceMonth)}`,
+      icon: "receipt",
+      tone: "brand",
+      onClick: () => view(row.payment),
+    });
+  else if (canManage(row))
+    out.push({
+      label: `Anexar comprovante de ${formatYearMonth(row.payment.referenceMonth)}`,
+      icon: "receipt",
+      loading: busyId.value === row.payment.id,
+      onClick: () => pickReceipt(row),
+    });
   return out;
 }
 
 function menuItems(row: PaymentRow): MenuItem[] {
-  const items: MenuItem[] = [];
-  if (row.payment.receipt)
-    items.push({ label: "ver comprovante", icon: "paperclip", onSelect: () => view(row.payment) });
-  if (auth.isEmployer && isWritable(row.contract)) {
-    items.push({
-      label: row.payment.receipt ? "trocar comprovante" : "anexar comprovante",
-      icon: "paperclip",
-      onSelect: () => pickReceipt(row),
-    });
-    items.push({ label: "remover", icon: "trash", danger: true, onSelect: () => askRemove(row) });
+  const items: MenuItem[] = [
+    {
+      label: "Ver pagamentos da pessoa",
+      icon: "eye",
+      onSelect: () =>
+        void router.push({
+          path: `/equipe/${row.contract.id}/pagamentos`,
+          query: { mes: row.payment.referenceMonth },
+        }),
+    },
+  ];
+  if (canManage(row)) {
+    items.push({ label: "Editar", icon: "pencil", onSelect: () => edit(row) });
+    if (!row.payment.acknowledgedAt)
+      items.push({
+        label: "Marcar como concluído",
+        icon: "check",
+        onSelect: () => void confirm(row),
+      });
+    items.push({ label: "Remover", icon: "trash", danger: true, onSelect: () => askRemove(row) });
   }
   return items;
 }
 
 const canRegister = computed(() => auth.isEmployer && contracts.value.some(isWritable));
-const firstColspan = 3;
-const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
+const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown, "valor");
 </script>
 
 <template>
@@ -398,7 +451,9 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
           <Avatar :name="personOf(row.contract)" :size="32" />
           <span class="pv__who-text">
             <strong class="pv__nowrap">{{ personOf(row.contract) }}</strong>
-            <span v-if="row.payment.note" class="pv__note">{{ row.payment.note }}</span>
+            <Tooltip v-if="row.payment.note" :text="row.payment.note"
+              ><span class="pv__note">{{ row.payment.note }}</span></Tooltip
+            >
           </span>
         </span>
       </template>
@@ -410,24 +465,14 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
           <StatusChip tone="neutral" :dot="false">{{
             PAYMENT_METHOD_LABEL[row.payment.method]
           }}</StatusChip>
+          <StatusChip v-if="row.payment.isExtra" tone="brand" :dot="false">extra</StatusChip>
           <span v-if="row.agreement" class="pv__agreement">{{ row.agreement }}</span>
         </span>
       </template>
-      <template #cell-comprovante="{ row }">
-        <button
-          v-if="row.payment.receipt"
-          type="button"
-          class="pv__receipt"
-          :aria-label="`Ver comprovante de ${formatYearMonth(row.payment.referenceMonth)}`"
-          @click="view(row.payment)"
-        >
-          anexado
-        </button>
-        <span v-else class="pv__dash" aria-label="sem comprovante">—</span>
-      </template>
       <template #cell-recebido="{ row }">
-        <StatusChip v-if="row.payment.acknowledgedAt" tone="brand">recebido</StatusChip>
-        <StatusChip v-else tone="amber">aguardando</StatusChip>
+        <StatusChip :tone="receivedStatus(row.payment).tone">{{
+          receivedStatus(row.payment).label
+        }}</StatusChip>
       </template>
 
       <template #row-actions="{ row }">
@@ -444,20 +489,25 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
           <ReceiptStub
             :payment="row.payment"
             :can-acknowledge="auth.isWorker"
+            :can-manage="canManage(row)"
             :busy="busyId === row.payment.id"
             @acknowledge="acknowledge(row)"
+            @confirm="confirm(row)"
+            @edit="edit(row)"
+            @remove="askRemove(row)"
+            @attach="uploadReceipt(row, $event)"
             @view="view(row.payment)"
           />
         </div>
       </template>
 
-      <template #footer="{ rows: shown }">
+      <template #footer="{ rows: shown, columns: visible }">
         <tr v-if="wide">
-          <td :colspan="firstColspan" class="pv__foot-label">
+          <td :colspan="footerSpans(visible)[0]" class="pv__foot-label">
             Total · {{ shown.length === 1 ? "1 pagamento" : `${shown.length} pagamentos` }}
           </td>
           <td class="pv__foot-sum mono">{{ formatCents(paymentTotals(shown).cents) }}</td>
-          <td :colspan="restColspan" class="pv__foot-ack">
+          <td :colspan="footerSpans(visible)[1]" class="pv__foot-ack">
             {{ paymentTotals(shown).acknowledged }} de {{ shown.length }} com “recebi”
           </td>
         </tr>
@@ -493,7 +543,22 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
       :accept="RECEIPT_MIME_TYPES.join(',')"
       @change="onFile"
     />
-    <ReceiptViewer v-model:open="viewerOpen" :payment="viewing" />
+    <ReceiptViewer
+      v-model:open="viewerOpen"
+      :payment="viewing"
+      :can-replace="
+        auth.isEmployer && rows.some((r) => r.payment.id === viewing?.id && canManage(r))
+      "
+      :replacing="!!viewing && busyId === viewing.id"
+      @replace="replaceViewed"
+    />
+    <PaymentEditSheet
+      v-if="auth.isEmployer"
+      v-model:open="editOpen"
+      :payment="editing?.payment ?? null"
+      :subtitle="editing ? personOf(editing.contract) : undefined"
+      @saved="onSaved"
+    />
     <ConfirmDialog
       v-model:open="removeOpen"
       title="Remover pagamento?"
@@ -533,7 +598,7 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
 }
 
 .pv__note {
-  max-width: 28ch;
+  max-width: 20ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -556,29 +621,8 @@ const restColspan = computed(() => (lg.value ? 3 : 2) + 1);
   color: var(--ink-2);
 }
 
-.pv__receipt {
-  min-height: 32px;
-  padding: 0 var(--s-2);
-  border-radius: var(--r-1);
-  font-size: var(--t-14);
-  color: var(--ink);
-  text-decoration: underline;
-  text-decoration-color: var(--rule);
-  text-underline-offset: 3px;
-}
-
-.pv__receipt:hover {
-  background: var(--surface-2);
-  text-decoration-color: currentColor;
-}
-
 .pv__nowrap {
   white-space: nowrap;
-}
-
-.pv__dash {
-  font-size: var(--t-12);
-  color: var(--ink-3);
 }
 
 .pv__card {

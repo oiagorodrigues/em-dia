@@ -1,8 +1,19 @@
 <script setup lang="ts" generic="T">
-import { computed, reactive, useId, useSlots } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  reactive,
+  ref,
+  useId,
+  useSlots,
+  useTemplateRef,
+  watch,
+} from "vue";
 import { useRouter, type RouteLocationRaw } from "vue-router";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
 import {
+  dropOrder,
   nextSort,
   searchRows,
   sortRows,
@@ -15,6 +26,7 @@ import { staggerDelay } from "@/lib/motion.ts";
 import FilterDrawer from "./FilterDrawer.vue";
 import Icon from "./Icon.vue";
 import SkeletonTable from "./SkeletonTable.vue";
+import Tooltip from "./Tooltip.vue";
 
 const {
   rows,
@@ -74,8 +86,8 @@ defineSlots<{
   actions?: () => unknown;
   /** Shown when there are no rows at all (before any filter). */
   empty?: () => unknown;
-  /** Totals row (table) / summary (cards). */
-  footer?: (props: { rows: readonly T[] }) => unknown;
+  /** Totals row (table) / summary (cards). `columns` are the ones shown, for colspans. */
+  footer?: (props: { rows: readonly T[]; columns: readonly Column<T>[] }) => unknown;
 }>();
 
 const router = useRouter();
@@ -88,11 +100,68 @@ const xxl = useMediaQuery(MQ["2xl"]);
 const internal = reactive<TableState>({ q: "", sort: defaultSort, filters: {} });
 const state = computed(() => externalState ?? internal);
 
-const visibleColumns = computed(() =>
+const breakpointColumns = computed(() =>
   columns.filter(
     (c) => !c.hideBelow || { lg: lg.value, xl: xl.value, "2xl": xxl.value }[c.hideBelow],
   ),
 );
+
+/** Keys dropped because the table was wider than its box (see `Column.priority`). */
+const squeezed = ref<string[]>([]);
+const visibleColumns = computed(() =>
+  breakpointColumns.value.filter((c) => !squeezed.value.includes(c.key)),
+);
+
+const scroller = useTemplateRef<HTMLElement>("scroller");
+let fitting = false;
+
+/** Narrower cell padding, tried before any column is dropped. */
+const tight = ref(false);
+
+/** Shows every column, then tightens and drops the lowest priority ones until nothing overflows. */
+async function fit(): Promise<void> {
+  const el = scroller.value;
+  if (!el || fitting) return;
+  fitting = true;
+  try {
+    squeezed.value = [];
+    tight.value = false;
+    await nextTick();
+    if (el.scrollWidth <= el.clientWidth) return;
+    tight.value = true;
+    await nextTick();
+    for (const key of dropOrder(breakpointColumns.value)) {
+      if (el.scrollWidth <= el.clientWidth) break;
+      squeezed.value = [...squeezed.value, key];
+      await nextTick();
+    }
+  } finally {
+    fitting = false;
+  }
+}
+
+let observer: ResizeObserver | undefined;
+let lastWidth = -1;
+watch(scroller, (el) => {
+  observer?.disconnect();
+  observer = undefined;
+  if (!el) return;
+  void fit();
+  if (typeof ResizeObserver === "undefined") return;
+  // Only width matters; dropping a column changes the height and must not refit.
+  observer = new ResizeObserver(([entry]) => {
+    const width = Math.round(entry?.contentRect.width ?? 0);
+    if (width === lastWidth) return;
+    lastWidth = width;
+    void fit();
+  });
+  observer.observe(el);
+});
+watch(
+  () => [rows.length, breakpointColumns.value.length],
+  () => void fit(),
+);
+onBeforeUnmount(() => observer?.disconnect());
 
 const filtered = computed(() => (filter ? rows.filter(filter) : [...rows]));
 const searched = computed(() => searchRows(filtered.value, columns, state.value.q));
@@ -199,8 +268,8 @@ function clearAll(): void {
       </div>
     </template>
 
-    <div v-else-if="wide" class="dt__scroll">
-      <table :id="id" class="dt__table">
+    <div v-else-if="wide" ref="scroller" class="dt__scroll">
+      <table :id="id" class="dt__table" :class="{ 'is-tight': tight }">
         <thead>
           <tr>
             <th
@@ -248,9 +317,18 @@ function clearAll(): void {
               :key="col.key"
               :class="[`is-${col.align ?? 'left'}`, { mono: col.mono }]"
             >
-              <slot :name="`cell-${col.key}`" :row="row" :value="valueOf(col, row)">{{
-                textOf(col, row)
-              }}</slot>
+              <slot :name="`cell-${col.key}`" :row="row" :value="valueOf(col, row)">
+                <span
+                  v-if="col.truncate && textOf(col, row) !== '—'"
+                  class="dt__trunc"
+                  :style="col.width ? { maxWidth: col.width } : undefined"
+                >
+                  <Tooltip :text="textOf(col, row)"
+                    ><span class="dt__trunc-text">{{ textOf(col, row) }}</span></Tooltip
+                  >
+                </span>
+                <template v-else>{{ textOf(col, row) }}</template>
+              </slot>
             </td>
             <td v-if="hasSlot('row-actions')" class="dt__row-actions">
               <div class="dt__row-actions-inner"><slot name="row-actions" :row="row" /></div>
@@ -258,7 +336,7 @@ function clearAll(): void {
           </tr>
         </TransitionGroup>
         <tfoot v-if="hasSlot('footer')">
-          <slot name="footer" :rows="shown" />
+          <slot name="footer" :rows="shown" :columns="visibleColumns" />
         </tfoot>
       </table>
     </div>
@@ -293,7 +371,7 @@ function clearAll(): void {
         </li>
       </TransitionGroup>
       <div v-if="hasSlot('footer')" class="dt__card-footer">
-        <slot name="footer" :rows="shown" />
+        <slot name="footer" :rows="shown" :columns="columns" />
       </div>
     </template>
   </section>
@@ -478,6 +556,35 @@ td.mono {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-stretch: 87.5%;
+  white-space: nowrap;
+}
+
+.dt__table.is-tight th,
+.dt__table.is-tight td {
+  padding-left: var(--s-2);
+  padding-right: var(--s-2);
+}
+
+.dt__table.is-tight th:first-child,
+.dt__table.is-tight td:first-child {
+  padding-left: var(--s-4);
+}
+
+.dt__trunc {
+  display: block;
+  max-width: 16rem;
+  min-width: 4rem;
+}
+
+.dt__trunc :deep(.tip-anchor) {
+  display: flex;
+  max-width: 100%;
+}
+
+.dt__trunc-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

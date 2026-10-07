@@ -19,7 +19,7 @@ export interface SummaryInput {
   entries: Pick<WorkEntry, "date" | "status" | "minutes" | "confirmedAt">[];
   adjustments: Pick<Adjustment, "kind" | "amountCents">[];
   /** Payments whose referenceMonth equals `month`. */
-  payments: Pick<Payment, "amountCents">[];
+  payments: (Pick<Payment, "amountCents"> & Partial<Pick<Payment, "isExtra">>)[];
   /** Local "today" of the household; days after it never count as unrecorded. */
   today: IsoDate;
 }
@@ -84,10 +84,10 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
       : 0;
   const earnedCents = grossCents - absenceDeductionCents;
 
-  const adjustmentsCents = adjustments.reduce(
-    (sum, a) => sum + ADJUSTMENT_SIGN[a.kind] * a.amountCents,
-    0,
-  );
+  const extraPaidCents = payments.reduce((sum, p) => sum + (p.isExtra ? p.amountCents : 0), 0);
+  const adjustmentsCents =
+    adjustments.reduce((sum, a) => sum + ADJUSTMENT_SIGN[a.kind] * a.amountCents, 0) +
+    extraPaidCents;
   const dueCents = earnedCents + adjustmentsCents;
   const paidCents = payments.reduce((sum, p) => sum + p.amountCents, 0);
 

@@ -397,9 +397,11 @@ async function addExtra(state: State): Promise<void> {
   const before = parseCents(await textOf(total));
 
   await page.goto(`${BASE}/equipe/${id}/extras`);
-  await choose(page, "Tipo", "Vale-transporte");
-  await page.getByLabel("Valor", { exact: true }).fill("2000");
-  await action(page, /^lançar em/i).click();
+  await action(page, "Novo lançamento").click();
+  const sheet = page.getByRole("dialog");
+  await choose(sheet, "Tipo", "Vale-transporte");
+  await sheet.getByLabel("Valor", { exact: true }).fill("2000");
+  await action(sheet, /^lançar em/i).click();
   await see("the new entry in the list", page.getByRole("list").getByText("Vale-transporte"));
   await see("the extras net", page.getByText("saldo dos lançamentos"));
   const net = await textOf(page.locator(".ex__net .mono"));

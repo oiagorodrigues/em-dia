@@ -1,4 +1,4 @@
-import { createPaymentSchema, yearQuerySchema } from "@emdia/shared";
+import { createPaymentSchema, updatePaymentSchema, yearQuerySchema } from "@emdia/shared";
 import { Router } from "express";
 import { AppError } from "../../lib/errors.ts";
 import type { Services } from "../../services/index.ts";
@@ -48,8 +48,19 @@ export function paymentRoutes({ payments }: Services, receiptMaxBytes: number): 
     res.status(204).end();
   });
 
+  router.patch("/contracts/:id/payments/:pid", async (req, res) => {
+    const input = parse(updatePaymentSchema, req.body);
+    res.json({
+      payment: await payments.update(actorOf(res), req.params.id, req.params.pid, input),
+    });
+  });
+
   router.post("/contracts/:id/payments/:pid/acknowledge", async (req, res) => {
     res.json({ payment: await payments.acknowledge(actorOf(res), req.params.id, req.params.pid) });
+  });
+
+  router.post("/contracts/:id/payments/:pid/confirm", async (req, res) => {
+    res.json({ payment: await payments.confirm(actorOf(res), req.params.id, req.params.pid) });
   });
 
   return router;

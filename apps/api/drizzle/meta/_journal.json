@@ -15,6 +15,13 @@
       "when": 1791343530773,
       "tag": "0001_agreement_archived_at",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791344780634,
+      "tag": "0002_payments_confirm_extra",
+      "breakpoints": true
     }
   ]
 }
