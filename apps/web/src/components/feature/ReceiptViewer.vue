@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { formatCents, formatYearMonth, type Payment } from "@emdia/shared";
-import { computed, ref, watch } from "vue";
+import { formatCents, formatYearMonth, RECEIPT_MIME_TYPES, type Payment } from "@emdia/shared";
+import { computed, ref, useTemplateRef, watch } from "vue";
 import { errorMessage, paymentsApi } from "@/api";
 import { sanitizeFilename } from "@/api/client.ts";
 import Button from "@/components/ui/Button.vue";
@@ -11,7 +11,25 @@ import { useObjectUrl } from "@/composables/objectUrl.ts";
 import { formatBytes } from "@/lib/format.ts";
 
 const open = defineModel<boolean>("open", { required: true });
-const { payment } = defineProps<{ payment: Payment | null }>();
+const {
+  payment,
+  canReplace = false,
+  replacing = false,
+} = defineProps<{
+  payment: Payment | null;
+  /** Shows "Trocar comprovante"; the parent uploads the picked file and passes the new payment. */
+  canReplace?: boolean;
+  replacing?: boolean;
+}>();
+const emit = defineEmits<{ replace: [file: File] }>();
+
+const picker = useTemplateRef<HTMLInputElement>("picker");
+function onPicked(e: Event): void {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (file) emit("replace", file);
+}
 
 const { url, set } = useObjectUrl();
 const loading = ref(false);
@@ -21,7 +39,7 @@ const filename = ref("comprovante");
 const isImage = computed(() => payment?.receipt?.mimeType.startsWith("image/") ?? false);
 
 watch(
-  () => [open.value, payment?.id] as const,
+  () => [open.value, payment?.id, payment?.receipt?.uploadedAt] as const,
   async ([isOpen, id]) => {
     if (!isOpen || !id || !payment?.receipt) return;
     loading.value = true;
@@ -57,6 +75,17 @@ function onClosed(): void {
     @closed="onClosed"
   >
     <div class="rv">
+      <!-- Inside the dialog: everything outside a modal dialog is inert. -->
+      <input
+        v-if="canReplace"
+        ref="picker"
+        class="visually-hidden"
+        type="file"
+        tabindex="-1"
+        aria-hidden="true"
+        :accept="RECEIPT_MIME_TYPES.join(',')"
+        @change="onPicked"
+      />
       <Skeleton v-if="loading" h="320px" />
       <EmptyState v-else-if="error" tone="error" title="Não deu para abrir o comprovante.">{{
         error
@@ -74,9 +103,14 @@ function onClosed(): void {
         <p class="rv__meta mono">{{ filename }} · {{ formatBytes(payment.receipt.sizeBytes) }}</p>
       </template>
     </div>
-    <template v-if="url" #footer>
-      <Button :href="url" icon="external">Abrir</Button>
-      <Button :href="url" :download="filename" icon="download" variant="primary">Baixar</Button>
+    <template v-if="url || canReplace" #footer>
+      <Button v-if="canReplace" icon="upload" :loading="replacing" @click="picker?.click()"
+        >Trocar comprovante</Button
+      >
+      <template v-if="url">
+        <Button :href="url" icon="external">Abrir</Button>
+        <Button :href="url" :download="filename" icon="download" variant="primary">Baixar</Button>
+      </template>
     </template>
   </Sheet>
 </template>

@@ -25,6 +25,7 @@ import DateField from "@/components/ui/DateField.vue";
 import MonthField from "@/components/ui/MonthField.vue";
 import Select from "@/components/ui/Select.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
+import Toggle from "@/components/ui/Toggle.vue";
 import { previousInApp, useBack } from "@/composables/back.ts";
 import { useForm } from "@/composables/form.ts";
 import { useResource } from "@/composables/resource.ts";
@@ -61,6 +62,7 @@ const { values, errors, formError, submitting, submit, clearError } = useForm(cr
   amountCents: null as number | null,
   method: (queryAgreement ? "compensation" : "pix") as PaymentMethod,
   note: "",
+  isExtra: route.query.extra === "1",
 });
 const agreementId = ref(queryAgreement ?? "");
 const receipt = ref<File | null>(null);
@@ -132,6 +134,7 @@ function onSubmit(): void {
     note: values.note.trim() || null,
     agreementId:
       values.method === "compensation" && agreementId.value ? agreementId.value : undefined,
+    isExtra: values.method !== "compensation" && values.isExtra,
   };
   void submit(async (data) => {
     if (!contract.value) return;
@@ -143,6 +146,7 @@ function onSubmit(): void {
     if (data.note) form.append("note", data.note);
     // The API rejects an empty agreementId, so the field is left out entirely.
     if (data.agreementId) form.append("agreementId", data.agreementId);
+    if (data.isExtra) form.append("isExtra", "true");
     if (receipt.value) form.append("receipt", receipt.value);
     await paymentsApi.create(contract.value.id, form);
     toast.success(`Pagamento de ${formatCents(data.amountCents)} registrado.`);
@@ -321,6 +325,13 @@ const { to: back } = useBack(
             @input="clearError('note')"
           />
         </Field>
+
+        <Toggle
+          v-if="values.method !== 'compensation'"
+          v-model="values.isExtra"
+          label="Pagamento extra"
+          hint="Fora do valor do mês, como uma festa ou um sábado. Aparece também em Extras e não mexe no saldo do mês."
+        />
 
         <Button type="submit" variant="primary" :loading="submitting" :disabled="!contract"
           >registrar pagamento</Button

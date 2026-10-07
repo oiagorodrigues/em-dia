@@ -9,12 +9,12 @@ import {
 } from "@emdia/shared";
 import { computed, ref, useTemplateRef } from "vue";
 import { agreementsApi, errorMessage, paymentsApi } from "@/api";
+import PaymentEditSheet from "@/components/feature/PaymentEditSheet.vue";
 import ReceiptStub from "@/components/feature/ReceiptStub.vue";
 import ReceiptViewer from "@/components/feature/ReceiptViewer.vue";
 import Button from "@/components/ui/Button.vue";
 import DataTable from "@/components/ui/DataTable.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
-import Icon from "@/components/ui/Icon.vue";
 import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
 import Select from "@/components/ui/Select.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
@@ -25,8 +25,9 @@ import { useTableState } from "@/composables/tableState.ts";
 import { isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
+import { receivedStatus } from "@/lib/payments.ts";
 import { receiptProblem } from "@/lib/receipt.ts";
-import type { Column } from "@/lib/table.ts";
+import { spansAround, type Column } from "@/lib/table.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
@@ -99,6 +100,7 @@ const columns: Column<Payment>[] = [
     sortable: true,
     sortFirst: "desc",
     mono: true,
+    priority: 3,
   },
   {
     key: "valor",
@@ -117,9 +119,17 @@ const columns: Column<Payment>[] = [
     search: (p) => agreementName(p) ?? "",
     sortable: true,
     searchable: true,
+    priority: 2,
   },
-  { key: "nota", label: "Observação", value: (p) => p.note, searchable: true, hideBelow: "xl" },
-  { key: "comprovante", label: "Comprovante", value: (p) => !!p.receipt },
+  {
+    key: "nota",
+    label: "Observação",
+    value: (p) => p.note,
+    searchable: true,
+    truncate: true,
+    width: "18ch",
+    priority: 1,
+  },
   {
     key: "recebido",
     label: "Recebido",
@@ -127,9 +137,8 @@ const columns: Column<Payment>[] = [
     sortable: true,
   },
 ];
-const xl = useMediaQuery(MQ.xl);
-/** Columns after "valor" in the footer row: forma, [nota], comprovante, recebido, [ações]. */
-const footerSpan = computed(() => (xl.value ? 4 : 3) + (canManage.value ? 1 : 0));
+
+const footerSpans = (shown: readonly Column<Payment>[]) => spansAround(shown, "valor");
 
 function filter(p: Payment): boolean {
   if (state.filters.recebido === "sim") return !!p.acknowledgedAt;
@@ -215,28 +224,70 @@ function onPicked(e: Event): void {
   attaching.value = null;
 }
 
+async function confirm(p: Payment): Promise<void> {
+  busyId.value = p.id;
+  try {
+    replace((await paymentsApi.confirm(contract.value.id, p.id)).payment);
+    toast.success("Pagamento concluído.");
+  } catch (e) {
+    toast.error(errorMessage(e));
+  } finally {
+    busyId.value = null;
+  }
+}
+
+/** One receipt icon: opens the viewer (where it can be swapped) or, with none yet, the upload. */
 function inlineFor(p: Payment): InlineAction[] {
-  return p.receipt
-    ? [
-        {
-          label: `Ver comprovante de ${formatYearMonth(p.referenceMonth)}`,
-          icon: "eye",
-          onClick: () => view(p),
-        },
-      ]
-    : [];
+  if (p.receipt)
+    return [
+      {
+        label: `Ver comprovante de ${formatYearMonth(p.referenceMonth)}`,
+        icon: "receipt",
+        tone: "brand",
+        onClick: () => view(p),
+      },
+    ];
+  if (!canManage.value) return [];
+  return [
+    {
+      label: `Anexar comprovante de ${formatYearMonth(p.referenceMonth)}`,
+      icon: "receipt",
+      loading: busyId.value === p.id,
+      onClick: () => pickFor(p),
+    },
+  ];
 }
 
 function menuFor(p: Payment): MenuItem[] {
   if (!canManage.value) return [];
-  return [
-    {
-      label: p.receipt ? "Trocar comprovante" : "Anexar comprovante",
-      icon: "paperclip",
-      onSelect: () => pickFor(p),
-    },
-    { label: "Remover pagamento", icon: "trash", danger: true, onSelect: () => void remove(p) },
-  ];
+  const items: MenuItem[] = [{ label: "Editar", icon: "pencil", onSelect: () => edit(p) }];
+  if (!p.acknowledgedAt)
+    items.push({ label: "Marcar como concluído", icon: "check", onSelect: () => void confirm(p) });
+  items.push({
+    label: "Remover pagamento",
+    icon: "trash",
+    danger: true,
+    onSelect: () => void remove(p),
+  });
+  return items;
+}
+
+const editOpen = ref(false);
+const editing = ref<Payment | null>(null);
+function edit(p: Payment): void {
+  editing.value = p;
+  editOpen.value = true;
+}
+function onSaved(p: Payment): void {
+  replace(p);
+  toast.success("Pagamento atualizado.");
+}
+
+async function replaceViewed(file: File): Promise<void> {
+  const p = viewing.value;
+  if (!p) return;
+  await attach(p, file);
+  viewing.value = payments.data.value?.find((x) => x.id === p.id) ?? p;
 }
 
 const agreements = useResource(
@@ -324,24 +375,18 @@ function onClear(): void {
         <span class="pt__ref">{{ formatYearMonth(row.referenceMonth) }}</span>
       </template>
 
-      <template #cell-nota="{ row }">
-        <span class="pt__note">{{ row.note ?? "" }}</span>
-      </template>
-
       <template #cell-forma="{ row }">
-        <span class="pt__method">{{ PAYMENT_METHOD_LABEL[row.method] }}</span>
+        <span class="pt__method"
+          >{{ PAYMENT_METHOD_LABEL[row.method] }}
+          <StatusChip v-if="row.isExtra" tone="brand" :dot="false">extra</StatusChip></span
+        >
         <span v-if="agreementName(row)" class="pt__agr">acordo: {{ agreementName(row) }}</span>
       </template>
 
-      <template #cell-comprovante="{ row }">
-        <span v-if="row.receipt" class="pt__clip"
-          ><Icon name="paperclip" :size="14" /> anexado</span
-        >
-        <span v-else class="pt__none">—</span>
-      </template>
-
       <template #cell-recebido="{ row }">
-        <StatusChip v-if="row.acknowledgedAt" tone="brand">recebido</StatusChip>
+        <StatusChip v-if="row.acknowledgedAt" tone="brand">{{
+          receivedStatus(row).label
+        }}</StatusChip>
         <Button
           v-else-if="auth.isWorker"
           variant="primary"
@@ -369,19 +414,21 @@ function onClear(): void {
           :can-manage="canManage"
           :busy="busyId === row.id"
           @acknowledge="acknowledge(row)"
+          @confirm="confirm(row)"
+          @edit="edit(row)"
           @remove="remove(row)"
           @attach="attach(row, $event)"
           @view="view(row)"
         />
       </template>
 
-      <template #footer>
+      <template #footer="{ columns: shown }">
         <tr v-if="wide">
-          <td colspan="2">
+          <td :colspan="footerSpans(shown)[0]">
             total pago em <span class="mono">{{ year }}</span>
           </td>
           <td class="pt__tot mono">{{ formatCents(total) }}</td>
-          <td :colspan="footerSpan" />
+          <td :colspan="footerSpans(shown)[1]" />
         </tr>
         <p v-else class="pt__sum">
           <span class="label">total pago em {{ year }}</span>
@@ -399,7 +446,20 @@ function onClear(): void {
       :accept="RECEIPT_MIME_TYPES.join(',')"
       @change="onPicked"
     />
-    <ReceiptViewer v-model:open="viewerOpen" :payment="viewing" />
+    <ReceiptViewer
+      v-model:open="viewerOpen"
+      :payment="viewing"
+      :can-replace="canManage"
+      :replacing="!!viewing && busyId === viewing.id"
+      @replace="replaceViewed"
+    />
+    <PaymentEditSheet
+      v-if="canManage"
+      v-model:open="editOpen"
+      :payment="editing"
+      :subtitle="contract.workerName"
+      @saved="onSaved"
+    />
   </div>
 </template>
 
@@ -415,19 +475,14 @@ function onClear(): void {
 }
 
 .pt__method {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  white-space: nowrap;
 }
 
 .pt__agr {
   display: block;
-  font-size: var(--t-12);
-  color: var(--ink-2);
-}
-
-.pt__clip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   font-size: var(--t-12);
   color: var(--ink-2);
 }
@@ -439,20 +494,7 @@ function onClear(): void {
 
 .pt__ref {
   font-weight: 600;
-}
-
-.pt__note {
-  display: block;
-  max-width: 28ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--ink-2);
-}
-
-.pt__none {
-  color: var(--ink-3);
-  padding-left: var(--s-3);
 }
 
 .pt :deep(.dt__card) {

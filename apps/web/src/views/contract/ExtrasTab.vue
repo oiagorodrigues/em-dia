@@ -6,13 +6,13 @@ import {
   createAdjustmentSchema,
   formatCents,
   formatYearMonth,
+  parseYearMonth,
   shiftMonth,
   toYearMonth,
-  type Adjustment,
   type AdjustmentKind,
 } from "@emdia/shared";
 import { computed, ref } from "vue";
-import { adjustmentsApi, errorMessage } from "@/api";
+import { adjustmentsApi, errorMessage, paymentsApi } from "@/api";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import Button from "@/components/ui/Button.vue";
 import DataTable from "@/components/ui/DataTable.vue";
@@ -21,17 +21,20 @@ import Field from "@/components/ui/Field.vue";
 import MoneyInput from "@/components/ui/MoneyInput.vue";
 import Segmented from "@/components/ui/Segmented.vue";
 import Select from "@/components/ui/Select.vue";
+import Sheet from "@/components/ui/Sheet.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import TableActions from "@/components/ui/TableActions.vue";
+import type { InlineAction } from "@/components/ui/menu.ts";
 import { useContract } from "@/composables/contractContext.ts";
 import { useForm } from "@/composables/form.ts";
 import { useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
+import { isWritable } from "@/lib/contract.ts";
+import { extraRows, extraSigned, type ExtraRow } from "@/lib/extras.ts";
 import { formatRelative } from "@/lib/format.ts";
 import type { Column } from "@/lib/table.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
-import { isWritable } from "@/lib/contract.ts";
 
 const auth = useAuthStore();
 const toast = useToastStore();
@@ -47,10 +50,17 @@ const list = useResource(
   () => `${contract.value.id}|${month.value}`,
   () => adjustmentsApi.list(contract.value.id, month.value).then((r) => r.adjustments),
 );
-
-const net = computed(
-  () => list.data.value?.reduce((s, a) => s + ADJUSTMENT_SIGN[a.kind] * a.amountCents, 0) ?? 0,
+/** Payments flagged as extra count here too; the API lists payments by year. */
+const payments = useResource(
+  () => `${contract.value.id}|${parseYearMonth(month.value).year}`,
+  () =>
+    paymentsApi.list(contract.value.id, parseYearMonth(month.value).year).then((r) => r.payments),
 );
+
+const rows = computed(() =>
+  extraRows(list.data.value ?? [], payments.data.value ?? [], month.value),
+);
+const net = computed(() => rows.value.reduce((s, r) => s + extraSigned(r), 0));
 const canWrite = computed(() => auth.isEmployer && isWritable(contract.value));
 
 const { state, clear } = useTableState({
@@ -59,31 +69,33 @@ const { state, clear } = useTableState({
   prefix: "ex_",
 });
 
-function signed(a: Adjustment): number {
-  return ADJUSTMENT_SIGN[a.kind] * a.amountCents;
+function kindLabel(r: ExtraRow): string {
+  return r.source === "payment" ? "Pagamento extra" : ADJUSTMENT_KIND_LABEL[r.adjustment.kind];
 }
 
-const columns: Column<Adjustment>[] = [
+const columns: Column<ExtraRow>[] = [
   {
     key: "mes",
     label: "Mês",
-    value: (a) => a.month,
-    format: (a) => formatYearMonth(a.month),
+    value: (r) => r.month,
+    format: (r) => formatYearMonth(r.month),
     hideBelow: "lg",
   },
+  { key: "tipo", label: "Tipo", value: kindLabel, sortable: true, searchable: true },
   {
-    key: "tipo",
-    label: "Tipo",
-    value: (a) => ADJUSTMENT_KIND_LABEL[a.kind],
-    sortable: true,
+    key: "descricao",
+    label: "Descrição",
+    value: (r) => r.description,
     searchable: true,
+    truncate: true,
+    width: "28ch",
+    priority: 1,
   },
-  { key: "descricao", label: "Descrição", value: (a) => a.description, searchable: true },
   {
     key: "lancado",
     label: "Lançado",
-    value: (a) => a.createdAt,
-    format: (a) => formatRelative(a.createdAt),
+    value: (r) => r.createdAt,
+    format: (r) => formatRelative(r.createdAt),
     sortable: true,
     sortFirst: "desc",
     mono: true,
@@ -92,7 +104,7 @@ const columns: Column<Adjustment>[] = [
   {
     key: "valor",
     label: "Valor",
-    value: signed,
+    value: extraSigned,
     sortable: true,
     sortFirst: "desc",
     align: "right",
@@ -110,13 +122,14 @@ const tipo = computed({
   set: (v: string) => (state.filters.tipo = v),
 });
 
-function filter(a: Adjustment): boolean {
-  if (state.filters.tipo === "mais") return ADJUSTMENT_SIGN[a.kind] > 0;
-  if (state.filters.tipo === "menos") return ADJUSTMENT_SIGN[a.kind] < 0;
+function filter(r: ExtraRow): boolean {
+  if (state.filters.tipo === "mais") return extraSigned(r) > 0;
+  if (state.filters.tipo === "menos") return extraSigned(r) < 0;
   return true;
 }
 
 const kindOptions = ADJUSTMENT_KINDS.map((k) => ({ value: k, label: ADJUSTMENT_KIND_LABEL[k] }));
+const formOpen = ref(false);
 const { values, errors, formError, submitting, submit, clearError } = useForm(
   createAdjustmentSchema,
   {
@@ -125,6 +138,16 @@ const { values, errors, formError, submitting, submit, clearError } = useForm(
     description: "",
   },
 );
+
+function openForm(): void {
+  values.kind = "bonus";
+  values.amountCents = null;
+  values.description = "";
+  formError.value = null;
+  clearError("amountCents");
+  clearError("description");
+  formOpen.value = true;
+}
 
 function onAdd(): void {
   const input = {
@@ -136,18 +159,17 @@ function onAdd(): void {
   void submit(async (data) => {
     const { adjustment } = await adjustmentsApi.create(contract.value.id, data);
     list.mutate((l = []) => [...l, adjustment]);
-    values.amountCents = null;
-    values.description = "";
+    formOpen.value = false;
     toast.success(`${ADJUSTMENT_KIND_LABEL[adjustment.kind]} lançado.`);
   }, input);
 }
 
 const removing = ref<string | null>(null);
-async function remove(a: Adjustment): Promise<void> {
-  removing.value = a.id;
+async function remove(id: string): Promise<void> {
+  removing.value = id;
   try {
-    await adjustmentsApi.remove(contract.value.id, a.id);
-    list.mutate((l = []) => l.filter((x) => x.id !== a.id));
+    await adjustmentsApi.remove(contract.value.id, id);
+    list.mutate((l = []) => l.filter((x) => x.id !== id));
     toast.success("Lançamento removido.");
   } catch (e) {
     toast.error(errorMessage(e));
@@ -155,102 +177,132 @@ async function remove(a: Adjustment): Promise<void> {
     removing.value = null;
   }
 }
+
+function actionsFor(r: ExtraRow): InlineAction[] {
+  if (r.source === "payment")
+    return [
+      {
+        label: `Ver pagamento extra de ${formatCents(r.payment.amountCents)} em Pagamentos`,
+        icon: "wallet",
+        to: {
+          name: "contract-payments",
+          params: { id: contract.value.id },
+          query: { mes: r.month },
+        },
+      },
+    ];
+  if (!canWrite.value) return [];
+  return [
+    {
+      label: `Remover ${ADJUSTMENT_KIND_LABEL[r.adjustment.kind]} de ${formatCents(r.adjustment.amountCents)}`,
+      icon: "trash",
+      tone: "coral",
+      loading: removing.value === r.id,
+      onClick: () => void remove(r.id),
+    },
+  ];
+}
+
+const extraPaymentLink = computed(() => ({
+  path: "/pagamentos/novo",
+  query: { vinculo: contract.value.id, mes: month.value, extra: "1" },
+}));
 </script>
 
 <template>
   <div class="ex">
-    <div class="ex__main">
-      <MonthSwitcher v-model="monthModel" :min="minMonth" :max="maxMonth" prefix="extras de" />
+    <MonthSwitcher v-model="monthModel" :min="minMonth" :max="maxMonth" prefix="extras de" />
 
-      <EmptyState
-        v-if="list.error.value && !list.data.value"
-        tone="error"
-        title="Não deu para carregar os extras."
-      >
-        {{ list.error.value.message }}
-        <template #actions><Button @click="list.reload">Tentar de novo</Button></template>
-      </EmptyState>
+    <EmptyState
+      v-if="list.error.value && !list.data.value"
+      tone="error"
+      title="Não deu para carregar os extras."
+    >
+      {{ list.error.value.message }}
+      <template #actions><Button @click="list.reload">Tentar de novo</Button></template>
+    </EmptyState>
 
-      <DataTable
-        v-else
-        :rows="list.data.value ?? []"
-        :columns="columns"
-        :row-key="(a) => a.id"
-        :state="state"
-        :default-sort="{ key: 'lancado', dir: 'desc' }"
-        :filter="filter"
-        :filters-active="!!state.filters.tipo"
-        :filter-count="state.filters.tipo ? 1 : 0"
-        :loading="list.loading.value && !list.data.value"
-        label="Lançamentos do mês"
-        search-placeholder="Buscar tipo ou descrição"
-        :count-label="(n) => (n === 1 ? '1 lançamento' : `${n} lançamentos`)"
-        @clear-filters="clear"
-      >
-        <template #filters>
-          <Select v-model="tipo" :options="KIND_FILTER" label="Tipo" class="ex__filter" />
-        </template>
+    <DataTable
+      v-else
+      :rows="rows"
+      :columns="columns"
+      :row-key="(r) => r.id"
+      :state="state"
+      :default-sort="{ key: 'lancado', dir: 'desc' }"
+      :filter="filter"
+      :filters-active="!!state.filters.tipo"
+      :filter-count="state.filters.tipo ? 1 : 0"
+      :loading="list.loading.value && !list.data.value"
+      label="Lançamentos do mês"
+      search-placeholder="Buscar tipo ou descrição"
+      :count-label="(n) => (n === 1 ? '1 lançamento' : `${n} lançamentos`)"
+      @clear-filters="clear"
+    >
+      <template #filters>
+        <Select v-model="tipo" :options="KIND_FILTER" label="Tipo" class="ex__filter" />
+      </template>
 
-        <template #empty>
-          <EmptyState title="Nada lançado neste mês.">
-            Extras, vale-transporte, adiantamentos e descontos entram aqui e mudam o valor do mês.
-          </EmptyState>
-        </template>
+      <template v-if="canWrite" #actions>
+        <Button variant="primary" icon="plus" @click="openForm">Novo lançamento</Button>
+      </template>
 
-        <template #cell-tipo="{ row }">
-          <StatusChip :tone="ADJUSTMENT_SIGN[row.kind] < 0 ? 'coral' : 'brand'">{{
-            ADJUSTMENT_KIND_LABEL[row.kind]
-          }}</StatusChip>
-        </template>
+      <template #empty>
+        <EmptyState title="Nada lançado neste mês.">
+          Extras, vale-transporte, adiantamentos, descontos e pagamentos extras entram aqui e mudam
+          o valor do mês.
+        </EmptyState>
+      </template>
 
-        <template #cell-descricao="{ row }">
-          <span class="ex__desc">{{ row.description ?? "—" }}</span>
-        </template>
+      <template #cell-tipo="{ row }">
+        <StatusChip :tone="extraSigned(row) < 0 ? 'coral' : 'brand'">{{
+          kindLabel(row)
+        }}</StatusChip>
+      </template>
 
-        <template #cell-valor="{ row }">
-          <span :class="ADJUSTMENT_SIGN[row.kind] < 0 ? 'is-minus' : 'is-plus'"
-            >{{ ADJUSTMENT_SIGN[row.kind] < 0 ? "−" : "+" }}
-            {{ formatCents(row.amountCents) }}</span
-          >
-        </template>
-
-        <template #card="{ row }">
-          <div class="ex__what">
-            <p class="ex__kind">{{ ADJUSTMENT_KIND_LABEL[row.kind] }}</p>
-            <p v-if="row.description" class="ex__desc">{{ row.description }}</p>
-            <p class="ex__when">{{ formatRelative(row.createdAt) }}</p>
-          </div>
-          <p class="ex__amt mono" :class="ADJUSTMENT_SIGN[row.kind] < 0 ? 'is-minus' : 'is-plus'">
-            {{ ADJUSTMENT_SIGN[row.kind] < 0 ? "−" : "+" }} {{ formatCents(row.amountCents) }}
-          </p>
-        </template>
-
-        <template v-if="canWrite" #row-actions="{ row }">
-          <TableActions
-            :actions="[
-              {
-                label: `Remover ${ADJUSTMENT_KIND_LABEL[row.kind]} de ${formatCents(row.amountCents)}`,
-                icon: 'trash',
-                tone: 'coral',
-                loading: removing === row.id,
-                onClick: () => void remove(row),
-              },
-            ]"
-          />
-        </template>
-      </DataTable>
-
-      <p v-if="list.data.value && list.data.value.length > 0" class="ex__net">
-        <span>saldo dos lançamentos</span>
-        <span class="mono" :class="{ 'is-minus': net < 0 }"
-          >{{ net < 0 ? "−" : "+" }} {{ formatCents(Math.abs(net)) }}</span
+      <template #cell-valor="{ row }">
+        <span :class="extraSigned(row) < 0 ? 'is-minus' : 'is-plus'"
+          >{{ extraSigned(row) < 0 ? "−" : "+" }}
+          {{ formatCents(Math.abs(extraSigned(row))) }}</span
         >
-      </p>
-    </div>
+        <span v-if="row.source === 'payment'" class="ex__paid">já pago</span>
+      </template>
 
-    <aside class="ex__aside">
-      <form v-if="canWrite" class="ex__form sheet" novalidate @submit.prevent="onAdd">
-        <h2 class="section-title">Lançar</h2>
+      <template #card="{ row }">
+        <div class="ex__what">
+          <p class="ex__kind">{{ kindLabel(row) }}</p>
+          <p v-if="row.description" class="ex__desc">{{ row.description }}</p>
+          <p class="ex__when">
+            {{ formatRelative(row.createdAt) }}
+            <template v-if="row.source === 'payment'"> · já pago</template>
+          </p>
+        </div>
+        <p class="ex__amt mono" :class="extraSigned(row) < 0 ? 'is-minus' : 'is-plus'">
+          {{ extraSigned(row) < 0 ? "−" : "+" }} {{ formatCents(Math.abs(extraSigned(row))) }}
+        </p>
+      </template>
+
+      <template #row-actions="{ row }">
+        <TableActions :actions="actionsFor(row)" />
+      </template>
+    </DataTable>
+
+    <p v-if="rows.length > 0" class="ex__net">
+      <span>saldo dos lançamentos</span>
+      <span class="mono" :class="{ 'is-minus': net < 0 }"
+        >{{ net < 0 ? "−" : "+" }} {{ formatCents(Math.abs(net)) }}</span
+      >
+    </p>
+
+    <p v-if="auth.isWorker" class="ex__ro">
+      Só quem contrata lança extras e descontos. Você vê tudo aqui.
+    </p>
+
+    <Sheet
+      v-model:open="formOpen"
+      title="Novo lançamento"
+      :subtitle="`${contract.workerName} · ${formatYearMonth(month)}`"
+    >
+      <form id="adjustment-form" class="stack" novalidate @submit.prevent="onAdd">
         <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
         <fieldset class="ex__set">
           <legend class="label">Tipo</legend>
@@ -286,26 +338,24 @@ async function remove(a: Adjustment): Promise<void> {
             :aria-describedby="describedBy"
           />
         </Field>
-        <Button type="submit" variant="primary" icon="plus" :loading="submitting"
+        <p class="muted ex__hint">
+          Já pagou o extra na hora?
+          <RouterLink :to="extraPaymentLink">Registre como pagamento extra</RouterLink>: ele aparece
+          aqui e em Pagamentos.
+        </p>
+      </form>
+      <template #footer>
+        <Button @click="formOpen = false">Cancelar</Button>
+        <Button type="submit" form="adjustment-form" variant="primary" :loading="submitting"
           >Lançar em {{ month.slice(5) }}/{{ month.slice(0, 4) }}</Button
         >
-      </form>
-      <p v-else-if="auth.isWorker" class="ex__ro">
-        Só quem contrata lança extras e descontos. Você vê tudo aqui.
-      </p>
-    </aside>
+      </template>
+    </Sheet>
   </div>
 </template>
 
 <style scoped>
 .ex {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-6);
-}
-
-.ex__main,
-.ex__aside {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-5);
@@ -341,6 +391,13 @@ async function remove(a: Adjustment): Promise<void> {
   font-weight: 600;
 }
 
+.ex__paid {
+  display: block;
+  font-family: var(--font-text);
+  font-size: var(--t-12);
+  color: var(--ink-2);
+}
+
 .is-minus {
   color: var(--coral-ink);
 }
@@ -351,13 +408,6 @@ async function remove(a: Adjustment): Promise<void> {
   padding: var(--s-3) var(--s-4) 0;
   border-top: 3px double var(--ink);
   font-weight: 600;
-}
-
-.ex__form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--s-5);
-  padding: var(--s-5);
 }
 
 .ex__set {
@@ -371,23 +421,13 @@ async function remove(a: Adjustment): Promise<void> {
   margin-bottom: var(--s-3);
 }
 
-.ex__form > :deep(.btn) {
-  justify-self: start;
+.ex__hint a {
+  color: var(--brand);
+  font-weight: 600;
 }
 
 .ex__ro {
   font-size: var(--t-14);
   color: var(--ink-2);
-}
-
-@media (min-width: 960px) {
-  .ex {
-    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
-    align-items: start;
-  }
-  .ex__aside {
-    position: sticky;
-    top: var(--s-6);
-  }
 }
 </style>

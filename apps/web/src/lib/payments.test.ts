@@ -1,6 +1,12 @@
 import type { Contract, Payment } from "@emdia/shared";
 import { describe, expect, it } from "vite-plus/test";
-import { matchesPaymentFilters, paymentTotals, paymentYears, type PaymentRow } from "./payments.ts";
+import {
+  matchesPaymentFilters,
+  paymentTotals,
+  paymentYears,
+  receivedStatus,
+  type PaymentRow,
+} from "./payments.ts";
 
 function row(id: string, contractId: string, extra: Partial<Payment> = {}): PaymentRow {
   return {
@@ -15,6 +21,9 @@ function row(id: string, contractId: string, extra: Partial<Payment> = {}): Paym
       note: null,
       receipt: null,
       acknowledgedAt: null,
+      acknowledgedBy: null,
+      acknowledgedByRole: null,
+      isExtra: false,
       createdBy: "u",
       createdAt: "2026-10-02T00:00:00Z",
       agreementId: null,
@@ -46,6 +55,22 @@ describe("matchesPaymentFilters", () => {
     expect(
       rows.filter((r) => matchesPaymentFilters(r, { recebido: "nao" })).map((r) => r.payment.id),
     ).toEqual(["a"]);
+  });
+});
+
+describe("receivedStatus", () => {
+  it("tells the worker's recebi from the employer closing the payment", () => {
+    expect(receivedStatus({ acknowledgedAt: null, acknowledgedByRole: null }).label).toBe(
+      "aguardando",
+    );
+    expect(receivedStatus({ acknowledgedAt: "x", acknowledgedByRole: "worker" }).label).toBe(
+      "recebido",
+    );
+    expect(receivedStatus({ acknowledgedAt: "x", acknowledgedByRole: "employer" })).toEqual({
+      label: "concluído",
+      tone: "brand",
+      done: true,
+    });
   });
 });
 

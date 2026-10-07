@@ -17,6 +17,7 @@ import type {
   RegisterInput,
   UpdateContractInput,
   UpdateMeInput,
+  UpdatePaymentInput,
   UpsertEntryInput,
   WorkEntry,
   YearMonth,
@@ -180,6 +181,16 @@ export const paymentsApi = {
       {
         method: "POST",
       },
+    ),
+  update: (contractId: string, paymentId: string, body: UpdatePaymentInput) =>
+    request<{ payment: Payment }>(`/contracts/${enc(contractId)}/payments/${enc(paymentId)}`, {
+      method: "PATCH",
+      body,
+    }),
+  confirm: (contractId: string, paymentId: string) =>
+    request<{ payment: Payment }>(
+      `/contracts/${enc(contractId)}/payments/${enc(paymentId)}/confirm`,
+      { method: "POST" },
     ),
 };
 
