@@ -3,7 +3,7 @@
 ## System diagram
 
 ```
-  Browser (PWA, Vue 3.6)                     Server (Node 24)
+  Browser (PWA, Vue 3.5)                     Server (Node 24)
  +-------------------------+   HTTPS    +--------------------------------------+
  | views                   |  /api/v1   | server.ts | vercel.ts  (entries)     |
  |  components/{ui,feature}| ---------> | runtime.ts (wiring, boot checks)     |

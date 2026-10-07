@@ -4,7 +4,7 @@ Visual rules are in [DESIGN](DESIGN.md). This file covers conventions and behavi
 
 ## Conventions
 
-- Vue 3.6 single-file components with `<script setup lang="ts">`.
+- Vue 3.5 single-file components with `<script setup lang="ts">`.
 - Types and schemas come from `@emdia/shared`. Reuse the zod schemas for client-side form validation.
 - Server data lives in the TanStack Query cache (see [Data fetching](#data-fetching)); session state lives in Pinia stores; components hold only view state. Do not call `fetch` outside `src/api`.
 - Styling: components keep scoped CSS for their own internals, using tokens from `src/styles/tokens.css`. Pages compose layout with Tailwind utilities (see below). No raw hex values anywhere.

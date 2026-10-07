@@ -10,7 +10,7 @@ The repo is the system of record: if a decision is not in here, it does not exis
 | ----------------- | -------------------------------------------------------------------------- |
 | `packages/shared` | `@emdia/shared`: domain types, zod schemas, RBAC, pay math, time helpers   |
 | `apps/api`        | Express 5 API (`/api/v1`), Postgres via Drizzle (PGlite locally)           |
-| `apps/web`        | Vue 3.6 + Pinia + vue-router PWA (vite-plugin-pwa)                         |
+| `apps/web`        | Vue 3.5 + Pinia + vue-router PWA (vite-plugin-pwa)                         |
 | `tools/e2e`       | Browser journeys and screenshots (`node scripts/flows.ts`, see its README) |
 | `tools/harness`   | `@emdia/harness`: architecture, taste and doc tests, schema generator      |
 | `tools/e2e`       | `@emdia/e2e`: drives the running app in Chrome (screenshots, journeys)     |
