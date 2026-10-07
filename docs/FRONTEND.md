@@ -30,6 +30,7 @@ Helper classes in `base.css`: `.kpi-grid` (KPI cards: a row when they fit, stack
 - Pages fade in and rise 8px (`route-*` transition in `App.vue`, keyed by the top-level route so tabs don't remount the page); tabs cross-fade with `<Transition name="tab-fade" mode="out-in">`.
 - Active nav and tab indicators slide: `useSlidingIndicator(container, ".is-active", "x" | "y", () => activeKey)` from `lib/motion.ts` returns a style for one absolutely positioned indicator element.
 - `DataTable` rows fade in with a 20ms stagger (capped at 8) and fade out on removal. KPI values count up when you pass `amount` + `format` to `KpiCard` (`useCountUp`).
+- Loading states mirror the loaded layout. Use the pieces in `components/ui`: `Skeleton` (bar or `round`), `SkeletonKpi`, `SkeletonTable` (real header on md+, cards below; `DataTable` uses it with its visible columns), `SkeletonTimeCard`, `SkeletonBoard` (board grid or week cards), `SkeletonLedger`, `SkeletonMonth`, `SkeletonForm`. `KpiCard`'s `loading` keeps the label and swaps value and caption. `ContractTabSkeleton` draws the active tab's layout while the contract loads. Show them only while there is no data yet.
 - Durations `--d-fast` 120ms, `--d-base` 180ms, `--d-sheet` 220ms; `--ease-out` to enter, `--ease-in` to leave. `prefers-reduced-motion` keeps only opacity.
 
 ## Controls

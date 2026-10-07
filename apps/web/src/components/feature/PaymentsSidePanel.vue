@@ -11,7 +11,7 @@ import {
 import { computed } from "vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import Icon from "@/components/ui/Icon.vue";
-import Skeleton from "@/components/ui/Skeleton.vue";
+import SkeletonLedger from "@/components/ui/SkeletonLedger.vue";
 import { firstName } from "@/lib/format.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import Ledger, { type LedgerLine } from "./Ledger.vue";
@@ -80,9 +80,7 @@ async function copyPix(): Promise<void> {
     <div class="psp__saldo">
       <p class="label">saldo de {{ monthLabel }}</p>
       <div v-if="loading && !summary" aria-busy="true">
-        <Skeleton h="18px" />
-        <Skeleton h="18px" gap="8px" />
-        <Skeleton h="22px" gap="12px" />
+        <SkeletonLedger />
       </div>
       <Ledger v-else-if="summary" :lines="lines" :total="total" />
       <p v-else class="psp__muted">Escolha o mês de referência para ver o saldo.</p>
