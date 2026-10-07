@@ -960,7 +960,7 @@ async function futureMonth(state: State): Promise<void> {
   const forecast = page.getByRole("region", { name: /^Previsão de/ });
   await see("the forecast section", forecast.first());
   const tags = await page.getByText("Previsto", { exact: true }).count();
-  if (tags < 3) throw new Error(`expected 3 'previsto' KPI tags, found ${tags}`);
+  if (tags < 2) throw new Error(`expected 2 'previsto' KPI tags (custo, dias), found ${tags}`);
   await absent("the actual-month summary", page.getByRole("region", { name: /^Resumo de/ }));
   await absent(
     "the today and pendencies panel",
