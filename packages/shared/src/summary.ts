@@ -1,6 +1,5 @@
 import {
-  ADJUSTMENT_SIGN,
-  type Adjustment,
+  PAYMENT_KIND_DUE_SIGN,
   type Contract,
   type IsoDate,
   type MonthSummary,
@@ -8,6 +7,7 @@ import {
   type WorkEntry,
   type YearMonth,
 } from "./domain.ts";
+import { countsAsPaid } from "./payment.ts";
 import { expectedCountInMonth, expectedDatesInMonth } from "./schedule.ts";
 
 export interface SummaryInput {
@@ -17,15 +17,14 @@ export interface SummaryInput {
   >;
   month: YearMonth;
   entries: Pick<WorkEntry, "date" | "status" | "minutes" | "confirmedAt">[];
-  adjustments: Pick<Adjustment, "kind" | "amountCents">[];
-  /** Payments whose referenceMonth equals `month`. */
-  payments: (Pick<Payment, "amountCents"> & Partial<Pick<Payment, "isExtra">>)[];
+  /** Payments-list entries whose referenceMonth equals `month`, of every kind. */
+  payments: Pick<Payment, "amountCents" | "kind" | "method">[];
   /** Local "today" of the household; days after it never count as unrecorded. */
   today: IsoDate;
 }
 
 export function computeMonthSummary(input: SummaryInput): MonthSummary {
-  const { contract, month, entries, adjustments, payments, today } = input;
+  const { contract, month, entries, payments, today } = input;
   const byDate = new Map(entries.map((e) => [e.date, e]));
 
   let totalMinutes = 0;
@@ -84,12 +83,12 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
       : 0;
   const earnedCents = grossCents - absenceDeductionCents;
 
-  const extraPaidCents = payments.reduce((sum, p) => sum + (p.isExtra ? p.amountCents : 0), 0);
-  const adjustmentsCents =
-    adjustments.reduce((sum, a) => sum + ADJUSTMENT_SIGN[a.kind] * a.amountCents, 0) +
-    extraPaidCents;
+  const adjustmentsCents = payments.reduce(
+    (sum, p) => sum + PAYMENT_KIND_DUE_SIGN[p.kind] * p.amountCents,
+    0,
+  );
   const dueCents = earnedCents + adjustmentsCents;
-  const paidCents = payments.reduce((sum, p) => sum + p.amountCents, 0);
+  const paidCents = payments.reduce((sum, p) => sum + (countsAsPaid(p) ? p.amountCents : 0), 0);
 
   return {
     month,

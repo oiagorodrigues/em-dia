@@ -1,6 +1,7 @@
 export * from "./domain.ts";
 export * from "./estimate.ts";
 export * from "./money.ts";
+export * from "./payment.ts";
 export * from "./rbac.ts";
 export * from "./schedule.ts";
 export * from "./schemas.ts";

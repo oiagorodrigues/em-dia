@@ -1,11 +1,12 @@
 import { z } from "zod";
 import {
-  ADJUSTMENT_KINDS,
   ENTRY_STATUSES,
   OCCUPATIONS,
   PAY_TYPES,
+  PAYMENT_KINDS,
   PAYMENT_METHODS,
   ROLES,
+  type PaymentKind,
   type PaymentMethod,
 } from "./domain.ts";
 import { SCHEDULE_KINDS } from "./schedule.ts";
@@ -166,61 +167,88 @@ export type UpsertEntryInput = z.infer<typeof upsertEntrySchema>;
 
 export const clockSchema = z.object({ action: z.enum(["in", "out"]) });
 
-export const createAdjustmentSchema = z.object({
-  month: yearMonth,
-  kind: z.enum(ADJUSTMENT_KINDS),
-  amountCents: cents.min(1),
-  description: shortText.nullable().optional(),
-});
-export type CreateAdjustmentInput = z.infer<typeof createAdjustmentSchema>;
+/** A multipart select left empty arrives as ""; it means "no method", as for a desconto. */
+const paymentMethod = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.enum(PAYMENT_METHODS).nullable(),
+);
+const linkId = z.preprocess((v) => (v === "" ? null : v), z.string().min(1).nullable());
 
-/** Multipart sends "true"/"false"; z.coerce.boolean would read "false" as true. */
-const formBoolean = z.union([
-  z.boolean(),
-  z.enum(["true", "false"]).transform((v) => v === "true"),
-]);
-
-/** Multipart form fields arrive as strings; amountCents and isExtra are coerced. */
+/** Multipart form fields arrive as strings; amountCents is coerced. */
 const paymentFields = z.object({
+  kind: z.enum(PAYMENT_KINDS),
   referenceMonth: yearMonth,
   paidOn: isoDate,
   amountCents: z.coerce.number().int().min(1).max(100_000_000),
-  method: z.enum(PAYMENT_METHODS),
+  method: paymentMethod.optional(),
   note: shortText.nullable().optional(),
-  agreementId: z.string().min(1).nullable().optional(),
-  isExtra: formBoolean.optional(),
+  agreementId: linkId.optional(),
+  advanceId: linkId.optional(),
 });
 
 export interface PaymentRuleIssue {
-  path: "method" | "note" | "isExtra";
+  path: "kind" | "method" | "note" | "advanceId";
   message: string;
 }
 
+export interface PaymentRuleOptions {
+  /** A gratificação migrated from the old Extras tab has no method and may keep it that way. */
+  methodOptional?: boolean;
+}
+
 /** Cross-field rules, shared by create and by the API after merging an edit onto the stored payment. */
-export function paymentRuleIssues(v: {
-  method: PaymentMethod;
-  note?: string | null;
-  agreementId?: string | null;
-  isExtra?: boolean;
-}): PaymentRuleIssue[] {
+export function paymentRuleIssues(
+  v: {
+    kind: PaymentKind;
+    method?: PaymentMethod | null;
+    note?: string | null;
+    agreementId?: string | null;
+    advanceId?: string | null;
+  },
+  options: PaymentRuleOptions = {},
+): PaymentRuleIssue[] {
   const issues: PaymentRuleIssue[] = [];
+  if (v.kind === "deduction") {
+    if (v.method) {
+      issues.push({ path: "method", message: "Desconto não é dinheiro entregue: fica sem forma" });
+    }
+    if (v.agreementId || v.advanceId) {
+      issues.push({ path: "kind", message: "Desconto não abate acordo nem adiantamento" });
+    }
+    return issues;
+  }
+  if (!v.method) {
+    if (!options.methodOptional) issues.push({ path: "method", message: "Escolha como pagou" });
+    return issues;
+  }
+  if (v.agreementId && v.advanceId) {
+    issues.push({
+      path: "advanceId",
+      message: "Abata de um acordo ou de um adiantamento, não dos dois",
+    });
+  }
   if (v.agreementId && v.method !== "compensation") {
     issues.push({ path: "method", message: "Acordos são abatidos como compensação" });
   }
-  if (v.method === "compensation" && !v.agreementId && !v.note) {
-    issues.push({ path: "note", message: "Diga com o que foi compensado" });
+  if (v.advanceId && v.method !== "compensation") {
+    issues.push({ path: "method", message: "Adiantamentos são abatidos como compensação" });
   }
-  if (v.isExtra && v.method === "compensation") {
-    issues.push({ path: "isExtra", message: "Compensação não entra como extra" });
+  if (v.method === "compensation" && v.kind !== "pay") {
+    issues.push({ path: "kind", message: "Compensação só abate diárias/salário" });
+  }
+  if (v.method === "compensation" && !v.agreementId && !v.advanceId && !v.note) {
+    issues.push({ path: "note", message: "Diga com o que foi compensado" });
   }
   return issues;
 }
 
-export const createPaymentSchema = paymentFields.superRefine((v, ctx) => {
-  for (const issue of paymentRuleIssues(v)) {
-    ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message });
-  }
-});
+export const createPaymentSchema = paymentFields
+  .extend({ kind: z.enum(PAYMENT_KINDS).default("pay") })
+  .superRefine((v, ctx) => {
+    for (const issue of paymentRuleIssues(v)) {
+      ctx.addIssue({ code: "custom", path: [issue.path], message: issue.message });
+    }
+  });
 export type CreatePaymentInput = z.infer<typeof createPaymentSchema>;
 
 /** JSON edit of a payment; the receipt has its own endpoint. Rules run on the merged result. */

@@ -183,7 +183,6 @@ describe("monthly pay with absences", () => {
       { date: "2026-09-02", status: "excused", minutes: 0, confirmedAt: "x" },
       { date: "2026-09-03", status: "worked", minutes: 480, confirmedAt: "x" },
     ],
-    adjustments: [],
     payments: [],
     today: "2026-09-30",
   };

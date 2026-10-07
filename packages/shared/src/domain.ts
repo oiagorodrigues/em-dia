@@ -55,21 +55,28 @@ export const ENTRY_STATUS_LABEL: Record<EntryStatus, string> = {
   holiday: "Feriado",
 };
 
-export const ADJUSTMENT_KINDS = ["bonus", "transport", "advance", "deduction"] as const;
-export type AdjustmentKind = (typeof ADJUSTMENT_KINDS)[number];
+/**
+ * What an entry of the payments list is. "pay" settles diárias or salary; gratificação
+ * and vale-transporte are money handed on top of the pay; an adiantamento is money
+ * handed ahead and paid down with work days; a desconto only lowers what is due.
+ */
+export const PAYMENT_KINDS = ["pay", "bonus", "transport", "advance", "deduction"] as const;
+export type PaymentKind = (typeof PAYMENT_KINDS)[number];
 
-export const ADJUSTMENT_KIND_LABEL: Record<AdjustmentKind, string> = {
-  bonus: "Extra / gratificação",
+export const PAYMENT_KIND_LABEL: Record<PaymentKind, string> = {
+  pay: "Diárias/salário",
+  bonus: "Gratificação",
   transport: "Vale-transporte",
-  advance: "Adiantamento (vale)",
+  advance: "Adiantamento",
   deduction: "Desconto",
 };
 
-/** Sign applied to amountCents when computing the amount due. */
-export const ADJUSTMENT_SIGN: Record<AdjustmentKind, 1 | -1> = {
+/** How an entry of each kind moves the month's amount due. */
+export const PAYMENT_KIND_DUE_SIGN: Record<PaymentKind, 1 | 0 | -1> = {
+  pay: 0,
   bonus: 1,
   transport: 1,
-  advance: -1,
+  advance: 0,
   deduction: -1,
 };
 
@@ -173,17 +180,6 @@ export interface WorkEntry {
   updatedAt: string;
 }
 
-export interface Adjustment {
-  id: string;
-  contractId: string;
-  month: YearMonth;
-  kind: AdjustmentKind;
-  amountCents: number;
-  description: string | null;
-  createdBy: string;
-  createdAt: string;
-}
-
 export interface Receipt {
   mimeType: ReceiptMimeType;
   sizeBytes: number;
@@ -197,16 +193,23 @@ export interface Payment {
   referenceMonth: YearMonth;
   paidOn: IsoDate;
   amountCents: number;
-  method: PaymentMethod;
+  kind: PaymentKind;
+  /**
+   * How the money was handed. Null when no money changed hands in this entry: always
+   * for a desconto, and for gratificações migrated from the old Extras tab, whose
+   * money went out inside another payment.
+   */
+  method: PaymentMethod | null;
   note: string | null;
   receipt: Receipt | null;
   /** Set when the payment pays down an agreement (method = compensation). */
   agreementId: string | null;
-  /**
-   * Paid on top of the month's pay (a party, a Saturday). Counts as an extra in
-   * what is due and as paid, so it leaves the month's balance untouched.
-   */
-  isExtra: boolean;
+  /** Set when the payment abates work days from an adiantamento (method = compensation). */
+  advanceId: string | null;
+  /** Derived, adiantamentos only: sum of the payments that abate it; null for other kinds. */
+  settledCents: number | null;
+  /** Derived, adiantamentos only: max(0, amountCents - settledCents); null for other kinds. */
+  remainingCents: number | null;
   /** When the payment was confirmed: the worker's "recebi", or the employer closing it. */
   acknowledgedAt: string | null;
   acknowledgedBy: string | null;
@@ -273,7 +276,7 @@ export interface MonthSummary {
   grossCents: number;
   /** Subtracted from monthly pay for unjustified absences when deductAbsences is on. */
   absenceDeductionCents: number;
-  /** Signed adjustments plus extra payments (`Payment.isExtra`). */
+  /** Gratificações and vale-transporte minus descontos (`PAYMENT_KIND_DUE_SIGN`). */
   adjustmentsCents: number;
   dueCents: number;
   paidCents: number;
