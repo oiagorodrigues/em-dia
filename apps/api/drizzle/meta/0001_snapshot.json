@@ -1,5 +1,5 @@
 {
-  "id": "e9c24088-566b-41e5-b982-e9fa5058608e",
+  "id": "27585343-3682-4e1b-973d-bf2f81749ca8",
   "prevId": "17ef8496-5506-475c-b61a-c5dfe562b381",
   "version": "7",
   "dialect": "postgresql",
@@ -167,6 +167,12 @@
         },
         "cancelled_at": {
           "name": "cancelled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "archived_at": {
+          "name": "archived_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -864,25 +870,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "acknowledged_by": {
-          "name": "acknowledged_by",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "acknowledged_by_role": {
-          "name": "acknowledged_by_role",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_extra": {
-          "name": "is_extra",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
         "agreement_id": {
           "name": "agreement_id",
           "type": "text",
@@ -950,15 +937,6 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "payments_acknowledged_by_users_id_fk": {
-          "name": "payments_acknowledged_by_users_id_fk",
-          "tableFrom": "payments",
-          "tableTo": "users",
-          "columnsFrom": ["acknowledged_by"],
-          "columnsTo": ["id"],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "payments_agreement_id_agreements_id_fk": {
           "name": "payments_agreement_id_agreements_id_fk",
           "tableFrom": "payments",
@@ -989,10 +967,6 @@
         "payments_receipt_mime_check": {
           "name": "payments_receipt_mime_check",
           "value": "\"payments\".\"receipt_mime\" IN ('image/jpeg', 'image/png', 'image/webp', 'application/pdf')"
-        },
-        "payments_acknowledged_by_role_check": {
-          "name": "payments_acknowledged_by_role_check",
-          "value": "\"payments\".\"acknowledged_by_role\" IN ('employer', 'worker')"
         },
         "payments_amount_check": {
           "name": "payments_amount_check",

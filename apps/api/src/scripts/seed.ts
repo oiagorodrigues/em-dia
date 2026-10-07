@@ -502,6 +502,7 @@ async function seed(): Promise<void> {
         startMonth: a.startMonth,
         acceptedAt: a.acceptedAt,
         cancelledAt: null,
+        archivedAt: null,
         createdBy: anaId,
         createdAt: a.createdAt,
       });

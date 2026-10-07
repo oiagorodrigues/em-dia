@@ -30,8 +30,11 @@ const describedBy = computed(() => (error ? `${id}-err` : hint ? `${id}-hint` : 
 </template>
 
 <style scoped>
+/* A row stretches its fields to the tallest one; without this, the extra height of a sibling's
+   hint or error is spread between label and input and the inputs stop lining up. */
 .field {
   display: grid;
+  align-content: start;
   gap: var(--s-2);
 }
 

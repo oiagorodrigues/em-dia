@@ -31,14 +31,21 @@ export function agreementsRepo(db: Executor) {
       remainingCents: Math.max(0, r.totalCents - r.settledCents),
       acceptedAt: isoOrNull(r.acceptedAt),
       cancelledAt: isoOrNull(r.cancelledAt),
+      archivedAt: isoOrNull(r.archivedAt),
       createdAt: iso(r.createdAt),
     }));
   }
 
   return {
-    list: (contractId: string): Promise<Agreement[]> =>
-      select(eq(agreements.contractId, contractId)),
+    list: (contractId: string, includeArchived = false): Promise<Agreement[]> =>
+      select(
+        and(
+          eq(agreements.contractId, contractId),
+          includeArchived ? undefined : isNull(agreements.archivedAt),
+        ),
+      ),
 
+    /** Finds archived agreements too, so they can be restored. */
     async find(contractId: string, id: string): Promise<Agreement | undefined> {
       return (await select(and(eq(agreements.contractId, contractId), eq(agreements.id, id))))[0];
     },
@@ -48,6 +55,7 @@ export function agreementsRepo(db: Executor) {
         ...a,
         acceptedAt: dateOrNull(a.acceptedAt),
         cancelledAt: dateOrNull(a.cancelledAt),
+        archivedAt: dateOrNull(a.archivedAt),
         createdAt: date(a.createdAt),
       });
     },
@@ -64,6 +72,13 @@ export function agreementsRepo(db: Executor) {
         .update(agreements)
         .set({ cancelledAt: date(at) })
         .where(and(eq(agreements.id, id), isNull(agreements.cancelledAt)));
+    },
+
+    async setArchivedAt(id: string, archivedAt: string | null): Promise<void> {
+      await db
+        .update(agreements)
+        .set({ archivedAt: dateOrNull(archivedAt) })
+        .where(eq(agreements.id, id));
     },
   };
 }

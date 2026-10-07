@@ -3,7 +3,9 @@ import { describeSchedule, OCCUPATION_LABEL, type Contract } from "@emdia/shared
 import { computed, nextTick, onBeforeUnmount, reactive, useTemplateRef, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
 import { contractsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import ContactActions from "@/components/feature/ContactActions.vue";
+import ContractTabSkeleton from "@/components/feature/ContractTabSkeleton.vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import Button from "@/components/ui/Button.vue";
 import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
@@ -15,7 +17,7 @@ import Skeleton from "@/components/ui/Skeleton.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import { provideContract, useMonthQuery } from "@/composables/contractContext.ts";
 import { useContractRemoval } from "@/composables/contractRemoval.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { contactChannels, contractStatus, isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
@@ -29,17 +31,24 @@ const auth = useAuthStore();
 const route = useRoute();
 const { month, currentMonth, setMonth } = useMonthQuery();
 
-const { data, error, loading, reload, mutate } = useResource(
+const { data, error, loading, reload, mutate, key } = useResource(
   () => id,
+  queryKeys.contract,
   (cid) => contractsApi.get(cid).then((r) => r.contract),
 );
 
 // Tabs only render once `data` is loaded, so children always see a contract.
 const contract = computed(() => data.value as Contract);
 
+const invalidate = useInvalidate();
+function replaceContract(next: Contract): void {
+  mutate(next);
+  void invalidate.contract(next.id, { key });
+}
+
 const { confirmOpen, removing, restoring, askRemove, confirmRemove, restore } = useContractRemoval(
   data,
-  (next) => mutate(next),
+  replaceContract,
 );
 
 provideContract({
@@ -47,7 +56,7 @@ provideContract({
   month,
   currentMonth,
   setMonth,
-  replaceContract: (next) => mutate(next),
+  replaceContract,
   askRemove,
   restore,
   restoring,
@@ -125,10 +134,33 @@ onBeforeUnmount(() => resize.disconnect());
 <template>
   <div class="cv">
     <div v-if="loading && !data" class="cv__head" aria-busy="true">
-      <Skeleton w="30%" h="14px" />
-      <Skeleton w="60%" h="36px" gap="10px" />
-      <Skeleton h="44px" gap="24px" />
-      <Skeleton h="420px" gap="24px" />
+      <div class="pf">
+        <span class="cv__back"><Skeleton w="64px" h="14px" /></span>
+        <div class="pf__row">
+          <Skeleton :w="wide ? '64px' : '48px'" :h="wide ? '64px' : '48px'" round />
+          <div class="pf__id cv__skelid">
+            <Skeleton w="min(320px, 70%)" h="clamp(1.75rem, 3vw, 2.5rem)" />
+            <Skeleton w="min(240px, 50%)" h="14px" />
+          </div>
+          <div v-if="auth.isEmployer" class="pf__actions">
+            <Skeleton w="176px" h="44px" />
+            <Skeleton w="96px" h="44px" class="pf__edit" />
+            <Skeleton w="44px" h="44px" />
+          </div>
+        </div>
+      </div>
+      <div class="tabs-wrap" aria-hidden="true">
+        <div class="tabs">
+          <span
+            v-for="tab in tabs"
+            :key="tab.name"
+            class="tabs__item"
+            :class="{ 'is-active': route.name === tab.name }"
+            >{{ tab.label }}</span
+          >
+        </div>
+      </div>
+      <ContractTabSkeleton :tab="String(route.name ?? '')" :month="month" />
     </div>
 
     <EmptyState
@@ -257,7 +289,17 @@ onBeforeUnmount(() => resize.disconnect());
 
 .cv__head {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
+}
+
+.cv__skelid {
+  display: grid;
   gap: var(--s-2);
+}
+
+.cv__head .tabs__item.is-active {
+  box-shadow: inset 0 -3px 0 var(--brand);
 }
 
 .cv__back {

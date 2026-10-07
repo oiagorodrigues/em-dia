@@ -158,6 +158,10 @@ export function describeActivity(item: ActivityItem, meId: string | null): Activ
       return { actor, text: `concordou com o acordo${agreementName(m)}`, tone: "ok" };
     case "agreement.cancel":
       return { actor, text: `cancelou o acordo${agreementName(m)}`, tone: "alert" };
+    case "agreement.archive":
+      return { actor, text: `removeu o acordo${agreementName(m)}`, tone: "alert" };
+    case "agreement.restore":
+      return { actor, text: `restaurou o acordo${agreementName(m)}`, tone: "ok" };
     default:
       return { actor, text: "fez uma alteração", tone: "neutral" };
   }

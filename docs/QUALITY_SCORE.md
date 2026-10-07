@@ -27,7 +27,7 @@ List each gap under the grade that caused it. Keep entries short and link to the
 - Reliability tests (C): no backup or restore procedure is automated or tested. Planned in [0002](exec-plans/active/0002-next.md).
 - PWA tests (C): offline reads and the update prompt are checked by hand and by e2e navigation, with no unit tests for the service worker flow.
 - Activity tests (C): audit rows are asserted for some mutations, not every endpoint. Two controls stay at `implemented` in [SECURITY](SECURITY.md).
-- Web components (B): unit tests cover `DataTable` (including column fitting and truncation), `MoneyInput`, table state, `TimeCard`, the api client and the router guard; most forms, including the payment edit sheet and the "Novo lançamento" sheet, are covered only through the e2e journeys and API tests.
+- Web components (B): unit tests cover `DataTable` (including column fitting and truncation), `MoneyInput`, table state, `TimeCard`, `ReceiptDrop` (drag state), `ReceiptViewer` (zoom), the employer home KPIs, `SkeletonTable`, the api client, the query cache layer (`useResource`, invalidation) and the router guard; most forms, including the payment edit sheet and the "Novo lançamento" sheet, are covered only through the e2e journeys and API tests.
 - Payments (2026-10-07): edit, employer confirmation and extra payments have supertest and shared unit coverage, including audit rows for `payment.update` and `payment.confirm`; no e2e journey covers them yet.
 - Mail: SMTP transport exists but is only tested against the dev outbox, not a real server.
 - Accessibility: no automated audit (axe) yet; checked by design rules only.

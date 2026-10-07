@@ -191,6 +191,7 @@ export const agreements = pgTable(
     startMonth: text("start_month").notNull(),
     acceptedAt: timestamptz("accepted_at"),
     cancelledAt: timestamptz("cancelled_at"),
+    archivedAt: timestamptz("archived_at"),
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),

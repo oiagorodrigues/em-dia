@@ -2,7 +2,6 @@
 import {
   ADJUSTMENT_KIND_LABEL,
   ADJUSTMENT_KINDS,
-  ADJUSTMENT_SIGN,
   createAdjustmentSchema,
   formatCents,
   formatYearMonth,
@@ -13,6 +12,7 @@ import {
 } from "@emdia/shared";
 import { computed, ref } from "vue";
 import { adjustmentsApi, errorMessage, paymentsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import Button from "@/components/ui/Button.vue";
 import DataTable from "@/components/ui/DataTable.vue";
@@ -27,7 +27,7 @@ import TableActions from "@/components/ui/TableActions.vue";
 import type { InlineAction } from "@/components/ui/menu.ts";
 import { useContract } from "@/composables/contractContext.ts";
 import { useForm } from "@/composables/form.ts";
-import { useResource } from "@/composables/resource.ts";
+import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import { isWritable } from "@/lib/contract.ts";
 import { extraRows, extraSigned, type ExtraRow } from "@/lib/extras.ts";
@@ -47,15 +47,17 @@ const maxMonth = computed(() =>
 );
 
 const list = useResource(
-  () => `${contract.value.id}|${month.value}`,
-  () => adjustmentsApi.list(contract.value.id, month.value).then((r) => r.adjustments),
+  () => ({ id: contract.value.id, month: month.value }),
+  queryKeys.adjustments,
+  (s) => adjustmentsApi.list(s.id, s.month).then((r) => r.adjustments),
 );
 /** Payments flagged as extra count here too; the API lists payments by year. */
 const payments = useResource(
-  () => `${contract.value.id}|${parseYearMonth(month.value).year}`,
-  () =>
-    paymentsApi.list(contract.value.id, parseYearMonth(month.value).year).then((r) => r.payments),
+  () => ({ id: contract.value.id, year: parseYearMonth(month.value).year }),
+  queryKeys.payments,
+  (s) => paymentsApi.list(s.id, s.year).then((r) => r.payments),
 );
+const invalidate = useInvalidate();
 
 const rows = computed(() =>
   extraRows(list.data.value ?? [], payments.data.value ?? [], month.value),
@@ -159,6 +161,7 @@ function onAdd(): void {
   void submit(async (data) => {
     const { adjustment } = await adjustmentsApi.create(contract.value.id, data);
     list.mutate((l = []) => [...l, adjustment]);
+    void invalidate.records(contract.value.id, list);
     formOpen.value = false;
     toast.success(`${ADJUSTMENT_KIND_LABEL[adjustment.kind]} lançado.`);
   }, input);
@@ -170,6 +173,7 @@ async function remove(id: string): Promise<void> {
   try {
     await adjustmentsApi.remove(contract.value.id, id);
     list.mutate((l = []) => l.filter((x) => x.id !== id));
+    void invalidate.records(contract.value.id, list);
     toast.success("Lançamento removido.");
   } catch (e) {
     toast.error(errorMessage(e));
@@ -197,8 +201,8 @@ function actionsFor(r: ExtraRow): InlineAction[] {
       label: `Remover ${ADJUSTMENT_KIND_LABEL[r.adjustment.kind]} de ${formatCents(r.adjustment.amountCents)}`,
       icon: "trash",
       tone: "coral",
-      loading: removing.value === r.id,
-      onClick: () => void remove(r.id),
+      loading: removing.value === r.adjustment.id,
+      onClick: () => void remove(r.adjustment.id),
     },
   ];
 }

@@ -12,6 +12,7 @@ import {
 } from "@emdia/shared";
 import { computed, ref, watch } from "vue";
 import { agreementsApi, paymentsApi } from "@/api";
+import { queryKeys } from "@/api/keys.ts";
 import Button from "@/components/ui/Button.vue";
 import ChoiceField from "@/components/ui/ChoiceField.vue";
 import DateField from "@/components/ui/DateField.vue";
@@ -61,22 +62,18 @@ watch(
 /** Open agreements plus the one this payment already pays down (it may be settled by it). */
 const agreements = useResource(
   () => (open.value && payment && values.method === "compensation" ? payment.contractId : ""),
-  (id) =>
-    id
-      ? agreementsApi
-          .list(id)
-          .then((r) =>
-            r.agreements.filter((a) => isOpenAgreement(a) || a.id === payment?.agreementId),
-          )
-      : Promise.resolve([]),
+  (id) => (id ? queryKeys.agreements(id) : null),
+  (id) => agreementsApi.list(id).then((r) => r.agreements),
 );
 const agreementOptions = computed(() => [
   { value: "", label: "Nenhum: compensação avulsa" },
-  ...(agreements.data.value ?? []).map((a) => ({
-    value: a.id,
-    label: a.description,
-    description: `falta ${formatCents(a.remainingCents)} de ${formatCents(a.totalCents)}`,
-  })),
+  ...(agreements.data.value ?? [])
+    .filter((a) => isOpenAgreement(a) || a.id === payment?.agreementId)
+    .map((a) => ({
+      value: a.id,
+      label: a.description,
+      description: `falta ${formatCents(a.remainingCents)} de ${formatCents(a.totalCents)}`,
+    })),
 ]);
 
 const methodOptions = PAYMENT_METHODS.map((m) => ({ value: m, label: PAYMENT_METHOD_LABEL[m] }));

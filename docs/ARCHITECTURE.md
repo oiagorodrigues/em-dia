@@ -61,7 +61,7 @@ Source is under `apps/web/src`:
 
 `api -> stores -> composables -> components/{ui,feature} -> views`
 
-- `api`: typed fetch client. Holds nothing but request logic and the in-memory access token hook.
+- `api`: typed fetch client, plus the query client and query key factories (`query.ts`, `keys.ts`). Holds nothing but request and cache logic and the in-memory access token hook.
 - `stores`: Pinia stores. Call `api`, expose state and actions.
 - `composables`: reusable logic over stores (month navigation, clock, install prompt).
 - `components/ui`: presentational primitives (button, sheet, month switcher). Props in, events out. They never import `stores`, `api` or `pinia`.
