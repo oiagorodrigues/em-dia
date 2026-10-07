@@ -22,6 +22,13 @@
       "when": 1791344780634,
       "tag": "0002_payments_confirm_extra",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791378439507,
+      "tag": "0003_payment_kinds",
+      "breakpoints": true
     }
   ]
 }
