@@ -19,6 +19,7 @@ function contract(patch: Partial<Contract> = {}): Contract {
     employerName: "Ana",
     workerId: "u2",
     workerName: "Maria",
+    workerEmail: null,
     workerPhone: null,
     workerPixKey: null,
     contactEmail: null,
@@ -28,6 +29,7 @@ function contract(patch: Partial<Contract> = {}): Contract {
     rateCents: 18000,
     schedule: weekly,
     deductAbsences: false,
+    nightBonus: false,
     expectedStart: "08:00",
     expectedEnd: "17:00",
     startedOn: "2026-01-01",
@@ -70,12 +72,18 @@ describe("contactChannels", () => {
     });
   });
 
-  it("uses the worker's profile after, falling back to the typed phone", () => {
+  it("uses the worker's account after, falling back to what was typed", () => {
     expect(
       contactChannels(
-        contract({ workerPhone: "(11) 98765-4321", workerPixKey: "pix", contactPhone: "x" }),
+        contract({
+          workerEmail: "maria@exemplo.com",
+          workerPhone: "(11) 98765-4321",
+          workerPixKey: "pix",
+          contactEmail: "antigo@exemplo.com",
+          contactPhone: "x",
+        }),
       ),
-    ).toEqual({ phone: "(11) 98765-4321", email: null, pixKey: "pix" });
+    ).toEqual({ phone: "(11) 98765-4321", email: "maria@exemplo.com", pixKey: "pix" });
     expect(contactChannels(contract({ contactPhone: "(11) 1234-5678" })).phone).toBe(
       "(11) 1234-5678",
     );

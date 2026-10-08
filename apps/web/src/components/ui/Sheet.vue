@@ -3,7 +3,16 @@ import { nextTick, onBeforeUnmount, useId, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
 
 const open = defineModel<boolean>("open", { required: true });
-const { title, subtitle } = defineProps<{ title: string; subtitle?: string }>();
+const {
+  title,
+  subtitle,
+  wide = false,
+} = defineProps<{
+  title: string;
+  subtitle?: string;
+  /** Room for a full form (editing a contract) instead of a few fields. */
+  wide?: boolean;
+}>();
 const emit = defineEmits<{ closed: [] }>();
 
 const dialog = useTemplateRef<HTMLDialogElement>("dialog");
@@ -72,7 +81,7 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
     @pointerdown="onPointerDown"
     @pointerup="onPointerUp"
   >
-    <div class="sheet-dlg__panel">
+    <div class="sheet-dlg__panel" :class="{ 'is-wide': wide }">
       <header class="sheet-dlg__head">
         <div>
           <h2 :id="titleId" class="sheet-dlg__title">{{ title }}</h2>
@@ -125,6 +134,13 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
 .sheet-dlg__panel {
   width: 100%;
   max-width: 560px;
+}
+
+.sheet-dlg__panel.is-wide {
+  max-width: 760px;
+}
+
+.sheet-dlg__panel {
   max-height: min(92dvh, 100%);
   display: flex;
   flex-direction: column;

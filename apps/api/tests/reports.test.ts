@@ -60,12 +60,13 @@ describe("summary", () => {
       holidays: 1,
       expectedDays: 13,
       pendingConfirmation: 3,
-      grossCents: 36000,
+      // 08:00 to 16:00 less the break is the agreed 7h: the 8h day earns 8/7 of the diária.
+      grossCents: 18000 + 20571,
       adjustmentsCents: -5000,
-      dueCents: 31000,
+      dueCents: 33571,
       paidCents: 25000,
-      balanceCents: 6000,
-      avgPerDayCents: 18000,
+      balanceCents: 8571,
+      avgPerDayCents: 19286,
     });
     expect(res.body.summary.unrecordedDates).toHaveLength(9);
   });

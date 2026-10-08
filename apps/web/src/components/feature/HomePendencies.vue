@@ -43,6 +43,7 @@ const {
 <style scoped>
 .hp {
   display: grid;
+  align-content: start;
   gap: var(--s-3);
   padding: var(--s-5);
 }

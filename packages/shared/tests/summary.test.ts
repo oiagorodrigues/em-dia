@@ -16,6 +16,9 @@ const base: SummaryInput = {
     startedOn: "2026-01-01",
     endedOn: null,
     workerId: "w1",
+    expectedStart: null,
+    expectedEnd: null,
+    nightBonus: false,
   },
   month: "2026-09",
   entries: [],
@@ -28,8 +31,26 @@ describe("computeMonthSummary", () => {
     const s = computeMonthSummary({
       ...base,
       entries: [
-        { date: "2026-09-01", status: "worked", minutes: 480, confirmedAt: "x" },
-        { date: "2026-09-02", status: "worked", minutes: 90, confirmedAt: null },
+        {
+          date: "2026-09-01",
+          status: "worked",
+          minutes: 480,
+          breakMinutes: 0,
+          checkIn: null,
+          checkOut: null,
+          checkOutDate: null,
+          confirmedAt: "x",
+        },
+        {
+          date: "2026-09-02",
+          status: "worked",
+          minutes: 90,
+          breakMinutes: 0,
+          checkIn: null,
+          checkOut: null,
+          checkOutDate: null,
+          confirmedAt: null,
+        },
       ],
     });
     expect(s.totalMinutes).toBe(570);
@@ -45,9 +66,36 @@ describe("computeMonthSummary", () => {
       ...base,
       contract: { ...base.contract, payType: "daily", rateCents: 18000 },
       entries: [
-        { date: "2026-09-07", status: "worked", minutes: 0, confirmedAt: "x" },
-        { date: "2026-09-09", status: "absent", minutes: 0, confirmedAt: "x" },
-        { date: "2026-09-11", status: "worked", minutes: 0, confirmedAt: "x" },
+        {
+          date: "2026-09-07",
+          status: "worked",
+          minutes: 0,
+          breakMinutes: 0,
+          checkIn: null,
+          checkOut: null,
+          checkOutDate: null,
+          confirmedAt: "x",
+        },
+        {
+          date: "2026-09-09",
+          status: "absent",
+          minutes: 0,
+          breakMinutes: 0,
+          checkIn: null,
+          checkOut: null,
+          checkOutDate: null,
+          confirmedAt: "x",
+        },
+        {
+          date: "2026-09-11",
+          status: "worked",
+          minutes: 0,
+          breakMinutes: 0,
+          checkIn: null,
+          checkOut: null,
+          checkOutDate: null,
+          confirmedAt: "x",
+        },
       ],
       payments: [
         { kind: "pay", method: "pix", amountCents: 20000 },
@@ -62,12 +110,73 @@ describe("computeMonthSummary", () => {
     expect(s.absences).toBe(1);
   });
 
+  it("pays a diária in proportion when the day runs longer or shorter than the agreed times", () => {
+    const day = (date: string, minutes: number, breakMinutes = 60) => ({
+      date,
+      status: "worked" as const,
+      minutes,
+      breakMinutes,
+      checkIn: null,
+      checkOut: null,
+      checkOutDate: null,
+      confirmedAt: "x",
+    });
+    const s = computeMonthSummary({
+      ...base,
+      contract: {
+        ...base.contract,
+        payType: "daily",
+        rateCents: 15000,
+        expectedStart: "08:00",
+        expectedEnd: "17:00",
+      },
+      // 8h agreed (9h less the break): one diária, one and a half, a half, and a shorter break.
+      entries: [
+        day("2026-09-01", 480),
+        day("2026-09-02", 720),
+        day("2026-09-03", 240),
+        day("2026-09-04", 510, 30),
+      ],
+    });
+    expect(s.grossCents).toBe(15000 + 22500 + 7500 + 15000);
+    expect(s.daysWorked).toBe(4);
+  });
+
+  it("keeps a whole diária without agreed times or before the check-out", () => {
+    const s = computeMonthSummary({
+      ...base,
+      contract: { ...base.contract, payType: "daily", rateCents: 15000 },
+      entries: [
+        {
+          date: "2026-09-01",
+          status: "worked",
+          minutes: 720,
+          breakMinutes: 0,
+          checkIn: null,
+          checkOut: null,
+          checkOutDate: null,
+          confirmedAt: "x",
+        },
+      ],
+    });
+    expect(s.grossCents).toBe(15000);
+  });
+
   it("monthly pay is fixed", () => {
     const s = computeMonthSummary({
       ...base,
       contract: { ...base.contract, payType: "monthly", rateCents: 250000 },
     });
     expect(s.grossCents).toBe(250000);
+  });
+
+  it("quinzenal pay is two quinzenas a month, with absences off a thirtieth of the month", () => {
+    const s = computeMonthSummary({
+      ...base,
+      contract: { ...base.contract, payType: "biweekly", rateCents: 75000, deductAbsences: true },
+    });
+    expect(s.grossCents).toBe(150000);
+    expect(s.absenceDeductionCents).toBe(s.absences * 5000);
   });
 
   it("counts gratificação and vale-transporte as due and as paid, leaving the balance alone", () => {
@@ -114,8 +223,26 @@ describe("computeMonthSummary", () => {
   it("leaves the month alone when an adiantamento is handed, and pays the days it abates", () => {
     const contract = { ...base.contract, payType: "daily" as const, rateCents: 18000 };
     const entries = [
-      { date: "2026-09-07", status: "worked" as const, minutes: 0, confirmedAt: "x" },
-      { date: "2026-09-08", status: "worked" as const, minutes: 0, confirmedAt: "x" },
+      {
+        date: "2026-09-07",
+        status: "worked" as const,
+        minutes: 0,
+        breakMinutes: 0,
+        checkIn: null,
+        checkOut: null,
+        checkOutDate: null,
+        confirmedAt: "x",
+      },
+      {
+        date: "2026-09-08",
+        status: "worked" as const,
+        minutes: 0,
+        breakMinutes: 0,
+        checkIn: null,
+        checkOut: null,
+        checkOutDate: null,
+        confirmedAt: "x",
+      },
     ];
     const handed = computeMonthSummary({
       ...base,
@@ -145,7 +272,18 @@ describe("computeMonthSummary", () => {
     const s = computeMonthSummary({
       ...base,
       today: "2026-09-09",
-      entries: [{ date: "2026-09-02", status: "worked", minutes: 60, confirmedAt: "x" }],
+      entries: [
+        {
+          date: "2026-09-02",
+          status: "worked",
+          minutes: 60,
+          breakMinutes: 0,
+          checkIn: null,
+          checkOut: null,
+          checkOutDate: null,
+          confirmedAt: "x",
+        },
+      ],
     });
     expect(s.expectedDays).toBe(13);
     expect(s.unrecordedDates).toEqual(["2026-09-04", "2026-09-07", "2026-09-09"]);
@@ -163,8 +301,82 @@ describe("computeMonthSummary", () => {
     const s = computeMonthSummary({
       ...base,
       contract: { ...base.contract, workerId: null },
-      entries: [{ date: "2026-09-01", status: "worked", minutes: 60, confirmedAt: null }],
+      entries: [
+        {
+          date: "2026-09-01",
+          status: "worked",
+          minutes: 60,
+          breakMinutes: 0,
+          checkIn: null,
+          checkOut: null,
+          checkOutDate: null,
+          confirmedAt: null,
+        },
+      ],
     });
     expect(s.pendingConfirmation).toBe(0);
+  });
+});
+
+describe("plantão and adicional noturno", () => {
+  const worked = (
+    date: string,
+    checkIn: string,
+    checkOut: string,
+    checkOutDate: string | null,
+    minutes: number,
+  ) => ({
+    date,
+    status: "worked" as const,
+    minutes,
+    breakMinutes: 0,
+    checkIn,
+    checkOut,
+    checkOutDate,
+    confirmedAt: "x",
+  });
+  const shift = { ...base.contract, payType: "shift" as const, rateCents: 30000 };
+
+  it("pays a plantão per 24 hours, in proportion to the stay", () => {
+    const s = computeMonthSummary({
+      ...base,
+      contract: shift,
+      // Friday 08:00 to Monday 08:00: three plantões.
+      entries: [worked("2026-09-04", "08:00", "08:00", "2026-09-07", 72 * 60)],
+    });
+    expect(s.grossCents).toBe(90000);
+    expect(s.nightBonusCents).toBe(0);
+    expect(s.dueCents).toBe(90000);
+  });
+
+  it("adds 20% on the night hours when the contract has it on", () => {
+    const s = computeMonthSummary({
+      ...base,
+      contract: { ...shift, nightBonus: true },
+      entries: [worked("2026-09-04", "08:00", "08:00", "2026-09-07", 72 * 60)],
+    });
+    // 21 night hours at R$ 300 / 24h = R$ 12,50 an hour, plus 20%: R$ 52,50.
+    expect(s.nightMinutes).toBe(21 * 60);
+    expect(s.nightBonusCents).toBe(5250);
+    expect(s.dueCents).toBe(90000 + 5250);
+  });
+
+  it("prices the night of an hourly or salaried contract from its own hour", () => {
+    const night = worked("2026-09-02", "22:00", "06:00", null, 8 * 60);
+    const hourly = computeMonthSummary({
+      ...base,
+      contract: { ...base.contract, nightBonus: true },
+      entries: [night],
+    });
+    // 7 night hours × R$ 30 × 20%.
+    expect(hourly.nightBonusCents).toBe(4200);
+    const monthly = computeMonthSummary({
+      ...base,
+      contract: { ...base.contract, payType: "monthly", rateCents: 220000, nightBonus: true },
+      entries: [night],
+    });
+    // R$ 2.200 / 220h = R$ 10 an hour; 7h × R$ 10 × 20%.
+    expect(monthly.nightBonusCents).toBe(1400);
+    expect(monthly.dueCents).toBe(220000 + 1400);
   });
 });

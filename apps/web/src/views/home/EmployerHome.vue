@@ -218,7 +218,7 @@ const forecastCaption = computed(() => {
       <!-- On phones "hoje" is what you open the app for, so it comes before the team list. -->
       <aside
         v-if="!future"
-        class="order-1 col-span-12 grid content-start items-start gap-5 lg:order-none lg:grid-cols-2 2xl:col-span-4 2xl:grid-cols-1"
+        class="order-1 col-span-12 grid content-start gap-5 lg:order-none lg:grid-cols-2 2xl:col-span-4 2xl:grid-cols-1"
         aria-label="Hoje e pendências"
       >
         <HomeToday

@@ -136,16 +136,20 @@ describe("ownership", () => {
 });
 
 describe("contracts and invites", () => {
-  test("employer sees the linked worker's phone and pix key, live from their profile", async () => {
+  test("employer sees the linked worker's e-mail, phone and pix key, live from their account", async () => {
     const employer = await t.register("employer");
     const unlinked = await t.createContract(employer);
-    expect(unlinked).toMatchObject({ workerPhone: null, workerPixKey: null });
+    expect(unlinked).toMatchObject({ workerEmail: null, workerPhone: null, workerPixKey: null });
 
     const { contractId, worker, employer: owner } = await t.linkedPair();
     const as = { type: "bearer" } as const;
     const read = async () =>
       (await t.http().get(`/api/v1/contracts/${contractId}`).auth(owner.token, as)).body.contract;
-    expect(await read()).toMatchObject({ workerPhone: null, workerPixKey: null });
+    expect(await read()).toMatchObject({
+      workerEmail: worker.user.email,
+      workerPhone: null,
+      workerPixKey: null,
+    });
 
     const patch = await t
       .http()
@@ -165,6 +169,29 @@ describe("contracts and invites", () => {
 
     await t.http().patch("/api/v1/me").auth(worker.token, as).send({ pixKey: null });
     expect(await read()).toMatchObject({ workerPhone: "(11) 91234-5678", workerPixKey: null });
+  });
+
+  test("a worker already in one household joins a second one with its code", async () => {
+    const as = { type: "bearer" } as const;
+    const { worker } = await t.linkedPair();
+    const other = await t.register("employer", { name: "Bia Outra" });
+    const second = await t.createContract(other, { workerName: "Maria" });
+    const invite = await t
+      .http()
+      .post(`/api/v1/contracts/${second.id}/invite`)
+      .auth(other.token, as);
+    const join = await t
+      .http()
+      .post("/api/v1/contracts/join")
+      .auth(worker.token, as)
+      .send({ code: invite.body.invite.code });
+    expect(join.status).toBe(200);
+    expect(join.body.contract).toMatchObject({ id: second.id, workerId: worker.user.id });
+    const list = await t.http().get("/api/v1/contracts").auth(worker.token, as);
+    expect(list.body.contracts.map((c: { employerName: string }) => c.employerName)).toContain(
+      "Bia Outra",
+    );
+    expect(list.body.contracts).toHaveLength(2);
   });
 
   test("employer creates, updates and ends a contract", async () => {

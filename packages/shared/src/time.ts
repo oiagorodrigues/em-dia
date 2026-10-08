@@ -63,6 +63,69 @@ export function shiftMinutes(checkIn: ClockTime, checkOut: ClockTime, breakMinut
   return Math.max(0, span - breakMinutes);
 }
 
+/** The date `days` after (or before, when negative) `date`. */
+export function addDays(date: IsoDate, days: number): IsoDate {
+  const [y, m, d] = date.split("-").map(Number) as [number, number, number];
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/** Whole days from `from` to `to` (negative when `to` is earlier). */
+export function daysBetween(from: IsoDate, to: IsoDate): number {
+  const ms = (s: IsoDate) => {
+    const [y, m, d] = s.split("-").map(Number) as [number, number, number];
+    return Date.UTC(y, m - 1, d);
+  };
+  return Math.round((ms(to) - ms(from)) / 86_400_000);
+}
+
+/**
+ * A day's work that may end on a later date (a plantão). Without `checkOutDate`, a checkOut
+ * earlier than checkIn is the next morning, as in `shiftMinutes`.
+ */
+export interface Stay {
+  date: IsoDate;
+  checkIn: ClockTime;
+  checkOut: ClockTime;
+  checkOutDate: IsoDate | null;
+  breakMinutes: number;
+}
+
+/** Clock minutes from check-in to check-out, before the break. */
+function staySpan(stay: Stay): number {
+  if (!stay.checkOutDate) return shiftMinutes(stay.checkIn, stay.checkOut);
+  const span =
+    daysBetween(stay.date, stay.checkOutDate) * 24 * 60 +
+    clockToMinutes(stay.checkOut) -
+    clockToMinutes(stay.checkIn);
+  return Math.max(0, span);
+}
+
+/** Worked minutes of a stay: the span less the break. */
+export function stayMinutes(stay: Stay): number {
+  return Math.max(0, staySpan(stay) - stay.breakMinutes);
+}
+
+/** Night work for the adicional noturno: 22:00 to 05:00 (CLT art. 73, LC 150 art. 14). */
+export const NIGHT_START = 22 * 60;
+export const NIGHT_END = 5 * 60;
+
+/**
+ * Minutes of a stay between 22:00 and 05:00. The break has no clock time, so it isn't taken
+ * off; the result is capped at the worked minutes so a long break can't leave more night than work.
+ */
+export function nightMinutes(stay: Stay): number {
+  const start = clockToMinutes(stay.checkIn);
+  const end = start + staySpan(stay);
+  let night = 0;
+  // The night that ends on day k runs from 22:00 of day k-1 to 05:00 of day k.
+  for (let k = 0; k * 24 * 60 - (24 * 60 - NIGHT_START) < end; k++) {
+    const from = k * 24 * 60 - (24 * 60 - NIGHT_START);
+    const to = k * 24 * 60 + NIGHT_END;
+    night += Math.max(0, Math.min(end, to) - Math.max(start, from));
+  }
+  return Math.min(night, stayMinutes(stay));
+}
+
 /** "86h40" style; "0h" for zero. */
 export function formatDuration(totalMinutes: number): string {
   const h = Math.floor(totalMinutes / 60);

@@ -80,24 +80,30 @@ const title = computed(() => (tab === "card" ? "cartão" : "pagamentos"));
         <Button v-else to="/entrar-no-vinculo" variant="primary" icon="key">Tenho um código</Button>
       </template>
     </EmptyState>
-    <ul v-else class="pk__list">
-      <li v-for="c in sorted" :key="c.id">
-        <RouterLink
-          :to="{ name: routeName, params: { id: c.id } }"
-          class="pk__item"
-          :class="{ 'is-ended': c.status === 'ended' }"
-        >
-          <span class="pk__who">
-            <span class="pk__name">{{ auth.isEmployer ? c.workerName : c.employerName }}</span>
-            <span class="pk__sub"
-              >{{ OCCUPATION_LABEL[c.occupation] }} · {{ c.householdName }}</span
-            >
-          </span>
-          <Stamp v-if="c.status === 'ended'" text="Encerrado" tone="ink" size="sm" />
-          <Icon name="chevron-right" />
-        </RouterLink>
-      </li>
-    </ul>
+    <template v-else>
+      <ul class="pk__list">
+        <li v-for="c in sorted" :key="c.id">
+          <RouterLink
+            :to="{ name: routeName, params: { id: c.id } }"
+            class="pk__item"
+            :class="{ 'is-ended': c.status === 'ended' }"
+          >
+            <span class="pk__who">
+              <span class="pk__name">{{ auth.isEmployer ? c.workerName : c.employerName }}</span>
+              <span class="pk__sub"
+                >{{ OCCUPATION_LABEL[c.occupation] }} · {{ c.householdName }}</span
+              >
+            </span>
+            <Stamp v-if="c.status === 'ended'" text="Encerrado" tone="ink" size="sm" />
+            <Icon name="chevron-right" />
+          </RouterLink>
+        </li>
+      </ul>
+      <p v-if="auth.isWorker" class="pk__join">
+        Começou a trabalhar em outra casa?
+        <RouterLink to="/entrar-no-vinculo">Entrar com um código de convite</RouterLink>
+      </p>
+    </template>
   </div>
 </template>
 

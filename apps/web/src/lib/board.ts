@@ -1,4 +1,5 @@
 import {
+  addDays,
   datesOfMonth,
   formatCents,
   ENTRY_STATUS_LABEL,
@@ -69,6 +70,16 @@ export function cellKind(
   return "none";
 }
 
+/** The days after the first of each stay that ends on a later date, with the stay. */
+export function coveredDays(entries: readonly WorkEntry[]): Map<IsoDate, WorkEntry> {
+  const covers = new Map<IsoDate, WorkEntry>();
+  for (const e of entries) {
+    if (!e.checkOutDate) continue;
+    for (let d = addDays(e.date, 1); d <= e.checkOutDate; d = addDays(d, 1)) covers.set(d, e);
+  }
+  return covers;
+}
+
 /** Days that open the day editor from the board; outside the contract there is nothing to record. */
 export function dayOpens(cell: Pick<BoardCell, "kind">): boolean {
   return cell.kind !== "outside";
@@ -106,10 +117,13 @@ export function boardCells(
   today: IsoDate,
 ): BoardCell[] {
   const byDate = new Map(entries.map((e) => [e.date, e]));
+  const covers = coveredDays(entries);
   return datesOfMonth(month).map((date) => {
     const entry = byDate.get(date) ?? null;
     const weekday = weekdayOf(date);
-    const kind = cellKind(date, entry, summary, period);
+    const cover = entry ? undefined : covers.get(date);
+    const kind = cover ? "worked" : cellKind(date, entry, summary, period);
+    const day = `${WEEKDAY_SHORT[weekday]}, ${formatDayMonth(date)}`;
     return {
       date,
       day: Number(date.slice(8)),
@@ -118,8 +132,10 @@ export function boardCells(
       entry,
       isToday: date === today,
       isWeekend: weekday === 0 || weekday === 6,
-      tip: cellTip(kind, entry),
-      label: cellLabel(date, kind, entry),
+      tip: cover ? "em plantão" : cellTip(kind, entry),
+      label: cover
+        ? `${day}: em plantão desde ${WEEKDAY_SHORT[weekdayOf(cover.date)]}, ${formatDayMonth(cover.date)}`
+        : cellLabel(date, kind, entry),
     };
   });
 }

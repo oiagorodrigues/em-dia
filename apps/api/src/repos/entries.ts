@@ -1,5 +1,5 @@
 import type { IsoDate, WorkEntry, YearMonth } from "@emdia/shared";
-import { and, asc, eq, gte, lt } from "drizzle-orm";
+import { and, asc, eq, gte, lt, lte } from "drizzle-orm";
 import type { Executor } from "../db/index.ts";
 import { workEntries } from "../db/schema.ts";
 import { date, dateOrNull, iso, isoOrNull } from "./convert.ts";
@@ -23,6 +23,22 @@ export function entriesRepo(db: Executor) {
             eq(workEntries.contractId, contractId),
             gte(workEntries.date, from),
             lt(workEntries.date, to),
+          ),
+        )
+        .orderBy(asc(workEntries.date));
+      return rows.map(toEntry);
+    },
+
+    /** Entries dated from `from` to `to`, both included. */
+    async listBetween(contractId: string, from: IsoDate, to: IsoDate): Promise<WorkEntry[]> {
+      const rows = await db
+        .select()
+        .from(workEntries)
+        .where(
+          and(
+            eq(workEntries.contractId, contractId),
+            gte(workEntries.date, from),
+            lte(workEntries.date, to),
           ),
         )
         .orderBy(asc(workEntries.date));

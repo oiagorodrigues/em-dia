@@ -15,6 +15,9 @@ export function queryCacheOptions({ retry = true } = {}): PiniaColadaOptions {
   return {
     queryOptions: {
       staleTime: 30_000,
+      // Colada drops a screen's data 5 minutes after leaving it; keep it for the session's
+      // usual back-and-forth so coming back shows the last data instead of a skeleton.
+      gcTime: 30 * 60_000,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
     },

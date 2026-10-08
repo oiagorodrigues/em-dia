@@ -65,7 +65,10 @@ async function join(): Promise<void> {
     </template>
     <template v-else>
       <h1 class="page-title">Entrar no vínculo</h1>
-      <p class="muted">Digite o código de 8 caracteres que quem te contratou te passou.</p>
+      <p class="muted">
+        Digite ou cole o código de 8 caracteres que quem te contratou te passou. Se você já trabalha
+        com outra família pelo em dia, o novo vínculo fica junto dos outros.
+      </p>
       <InviteSignedInNotice
         v-if="fromLink"
         text="Se o convite é para você, entre no vínculo com esta conta. Se é para outra pessoa, saia e continue para essa pessoa criar a conta."

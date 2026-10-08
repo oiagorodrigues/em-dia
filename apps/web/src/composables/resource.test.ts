@@ -6,7 +6,7 @@ import { defineComponent, nextTick, ref } from "vue";
 import { ApiError } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
 import { clearQueryCache, queryCacheOptions } from "@/api/query.ts";
-import { useInvalidate, useResource } from "./resource.ts";
+import { useCachedRead, useInvalidate, useResource } from "./resource.ts";
 
 function testClient(): Pinia {
   return createPinia();
@@ -193,5 +193,50 @@ describe("useInvalidate", () => {
     expect(detail.fetcher).toHaveBeenCalledTimes(2);
     expect(entries.fetcher).toHaveBeenCalledTimes(2);
     expect(other.fetcher).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("useCachedRead", () => {
+  it("lets a combined read reuse a part another screen loaded, and leaves its parts cached", async () => {
+    const client = testClient();
+    const entries = vi.fn(async (m: string) => [`dia de ${m}`]);
+    const team = vi.fn(async () => ["Rosa"]);
+    host(client, () => useResource(() => "2026-10", entriesKey, entries));
+    await flushPromises();
+
+    const board = host(client, () => {
+      const read = useCachedRead();
+      return useResource(
+        () => "2026-10",
+        (m) => queryKeys.board(m),
+        async (m) => ({
+          people: await read(queryKeys.team(m), team),
+          days: await read(entriesKey(m), () => entries(m)),
+        }),
+      );
+    });
+    await flushPromises();
+    expect(board.data.value).toEqual({ people: ["Rosa"], days: ["dia de 2026-10"] });
+    expect(entries).toHaveBeenCalledTimes(1);
+
+    const home = host(client, () => useResource(() => "2026-10", queryKeys.team, team));
+    await flushPromises();
+    expect(home.data.value).toEqual(["Rosa"]);
+    expect(team).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails the combined read when a part fails", async () => {
+    const client = testClient();
+    const res = host(client, () => {
+      const read = useCachedRead();
+      return useResource(
+        () => "2026-10",
+        (m) => queryKeys.board(m),
+        () =>
+          read(queryKeys.team("2026-10"), () => Promise.reject(new ApiError(500, "INTERNAL", "x"))),
+      );
+    });
+    await flushPromises();
+    expect(res.error.value?.status).toBe(500);
   });
 });

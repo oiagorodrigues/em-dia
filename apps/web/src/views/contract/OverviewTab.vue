@@ -10,6 +10,7 @@ import {
   monthName,
   parseYearMonth,
   PAY_TYPE_LABEL,
+  salaryPerMonthCents,
   countsAsPaid,
   handsMoney,
   PAYMENT_KIND_LABEL,
@@ -23,6 +24,7 @@ import { RouterLink, useRoute } from "vue-router";
 import { contractsApi, entriesApi, paymentsApi } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
 import ContactActions from "@/components/feature/ContactActions.vue";
+import InviteSection from "@/components/feature/InviteSection.vue";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
 import KpiCard from "@/components/ui/KpiCard.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
@@ -38,7 +40,7 @@ import { useAuthStore } from "@/stores/auth.ts";
 
 const auth = useAuthStore();
 const route = useRoute();
-const { contract, month, currentMonth, setMonth } = useContract();
+const { contract, month, currentMonth, setMonth, edit } = useContract();
 
 const monthModel = computed({ get: () => month.value, set: setMonth });
 const minMonth = computed(() => toYearMonth(contract.value.startedOn));
@@ -185,6 +187,8 @@ const partial = computed(() => month.value === currentMonth);
 const rateUnit: Record<string, string> = {
   hourly: "por hora",
   daily: "por diária",
+  shift: "por plantão de 24h",
+  biweekly: "por quinzena",
   monthly: "por mês",
 };
 
@@ -206,13 +210,13 @@ const terms = computed(() => {
       mono: true,
     },
     { label: "Forma", value: PAY_TYPE_LABEL[c.payType] },
+    { label: "Adicional noturno", value: c.nightBonus ? "sim, 20% das 22h às 5h" : "não" },
   ];
-  if (c.payType === "monthly")
+  const salary = salaryPerMonthCents(c.payType, c.rateCents);
+  if (salary !== null)
     rows.push({
       label: "Desconto de faltas",
-      value: c.deductAbsences
-        ? `sim, ${formatCents(Math.round(c.rateCents / 30))} por falta`
-        : "não",
+      value: c.deductAbsences ? `sim, ${formatCents(Math.round(salary / 30))} por falta` : "não",
     });
   rows.push({ label: "Início", value: formatDateShort(c.startedOn), mono: true });
   if (c.endedOn) rows.push({ label: "Fim", value: formatDateShort(c.endedOn), mono: true });
@@ -236,6 +240,11 @@ function tabLink(name: string) {
 
 <template>
   <div class="ov">
+    <InviteSection
+      v-if="auth.isEmployer && !contract.workerId && isWritable(contract)"
+      :contract="contract"
+      @edit="edit"
+    />
     <MonthSwitcher v-model="monthModel" :min="minMonth" :max="maxMonth" prefix="resumo de" />
 
     <div v-if="future" class="kpi-grid" aria-label="Previsão do mês">
@@ -401,12 +410,14 @@ function tabLink(name: string) {
         <section class="sheet ov__box" aria-labelledby="ov-terms">
           <div class="ov__boxhead">
             <h2 id="ov-terms" class="ov__title">Combinado</h2>
-            <RouterLink
+            <button
               v-if="auth.isEmployer && isWritable(contract)"
-              :to="tabLink('contract-settings')"
-              class="ov__more"
-              >Editar</RouterLink
+              type="button"
+              class="ov__more link-btn"
+              @click="edit"
             >
+              Editar
+            </button>
           </div>
           <dl class="ov__terms">
             <div v-for="t in terms" :key="t.label">
@@ -439,7 +450,7 @@ function tabLink(name: string) {
             {{
               contract.workerId
                 ? `${contract.workerName} ainda não pôs telefone nem Pix no perfil.`
-                : "Sem contato. Coloque um e-mail ou telefone em Ajustes para mandar o convite."
+                : "Sem contato. Coloque um e-mail ou telefone em Editar para mandar o convite."
             }}
           </p>
           <p v-if="!contract.workerId && hasContact" class="ov__hint">

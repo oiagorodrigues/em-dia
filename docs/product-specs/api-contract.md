@@ -47,7 +47,7 @@ Refresh token: opaque random 256-bit, stored hashed (SHA-256) server-side, 30 da
 
 Employer sees contracts of households they own. Worker sees contracts where `workerId = me`.
 
-Every `Contract` carries `workerPhone` and `workerPixKey`, read live from the linked worker's profile (`PATCH /me`); both are `null` while no worker is linked.
+Every `Contract` carries `workerEmail`, `workerPhone` and `workerPixKey`, read live from the linked worker's account and profile (`PATCH /me`); all are `null` while no worker is linked. The employer sees them so they can reach the person they pay.
 
 Schedule (`Contract.schedule`, validated by `scheduleSchema`, helpers in `packages/shared/src/schedule.ts`) covers every arrangement a household has:
 
@@ -58,7 +58,7 @@ Schedule (`Contract.schedule`, validated by `scheduleSchema`, helpers in `packag
 | `per_month`  | `visitsPerMonth`         | 1x por mês, 2x por mês, no fixed date                              |
 | `on_demand`  | –                        | quando precisar; nothing is expected                               |
 
-`everyWeeks` counts from the Monday-starting week that contains the first scheduled weekday on or after `startedOn`. The schema drops fields that don't belong to the kind. Expected dates feed `MonthSummary.expectedDates`/`unrecordedDates`; `per_month` only sets `expectedDays` (a count). `deductAbsences` (monthly pay only) subtracts `round(rateCents / 30)` per unjustified absence (`MonthSummary.absenceDeductionCents`). A PATCH replaces `schedule` as a whole.
+`everyWeeks` counts from the Monday-starting week that contains the first scheduled weekday on or after `startedOn`. The schema drops fields that don't belong to the kind. Expected dates feed `MonthSummary.expectedDates`/`unrecordedDates`; `per_month` only sets `expectedDays` (a count). `payType` is `hourly`, `daily`, `shift` (rate per 24h plantão, each stay paid as minutes ÷ 1440 × rate), `biweekly` (rate per quinzena, 2 × rate a month) or `monthly`. With daily pay each worked day earns the diária in proportion to its minutes over the agreed times less the same break (`workedDayCents`); without agreed times, or before the check-out, it earns one whole diária. `deductAbsences` (salaried pay only: `monthly`, `biweekly`) subtracts `round(monthly salary / 30)` per unjustified absence (`MonthSummary.absenceDeductionCents`). A PATCH replaces `schedule` as a whole.
 
 | Method | Path                    | Who      | Body                                                             | Response                                                                                                                                                                            |
 | ------ | ----------------------- | -------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -81,6 +81,8 @@ One entry per contract per date. Either party can create/edit. The entry is conf
 | DELETE | `/contracts/:id/entries/:date`         | –                   | 204. Only creator, and only if not confirmed (employer may always delete).                                                                                                     |
 | POST   | `/contracts/:id/entries/:date/confirm` | –                   | `{ entry }`. 403 if caller created it.                                                                                                                                         |
 | POST   | `/contracts/:id/clock`                 | `clockSchema`       | `{ entry }`. `in`: creates/updates today's entry status `worked`, `checkIn = now`. 409 if already checked in. `out`: sets `checkOut = now`. 409 if no check-in or already out. |
+
+`checkOutDate` (optional, `YYYY-MM-DD`) marks a stay that ends on a later date: it must be after the entry's date, at most `MAX_STAY_DAYS` (7) later and not after today, and needs `checkOut`. `minutes` counts the whole stay less the break. An entry can't start on a day another stay runs through, and a stay can't run over a day that has its own entry (400 on `date` or `checkOutDate`). `POST /clock` with `out` closes the latest open entry from the last 7 days, setting `checkOutDate` when it started on an earlier day; `in` is refused while one is open. Contracts carry `nightBonus` (default `true` on create): the summary adds `nightMinutes` and `nightBonusCents` (20% of the minute rate on minutes between 22:00 and 05:00) to what is earned.
 
 ## Payments + receipts
 
@@ -152,7 +154,7 @@ Additions to `Contract`: `contactEmail`, `contactPhone` (typed by the employer b
 
 Archived contracts are read-only: writes to entries, clock and payments return 409 `CONFLICT` ("Este vínculo foi removido"). The worker keeps read access to history and sees the contract as removed. `/dashboard` never includes archived contracts.
 
-Shared estimate helpers (`packages/shared/src/estimate.ts`): `estimateMonthCost` (rate × expected days, × hours per day for hourly, fixed for monthly) and `estimateAverageMonthlyCost` (12-month average). Both return `null` when the schedule can't be priced (on demand, or hourly without expected times).
+Shared estimate helpers (`packages/shared/src/estimate.ts`): `estimateMonthCost` (rate × expected days, × hours per day for hourly, fixed for monthly, 2 × rate for biweekly), `estimateAverageMonthlyCost` (12-month average) and `derivedRates` (the rate per month, quinzena, expected day and hour; null where times or fixed days are missing). Both return `null` when the schedule can't be priced (on demand, or hourly without expected times).
 
 ## Agreements, compensation, account deletion, projections (v3)
 

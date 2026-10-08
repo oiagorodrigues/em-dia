@@ -90,9 +90,13 @@ export const routes: RouteRecordRaw[] = [
         component: () => import("@/views/contract/HistoryTab.vue"),
       },
       {
+        // Ajustes became the edit sheet; old links open it on the overview.
         path: "ajustes",
-        name: "contract-settings",
-        component: () => import("@/views/contract/SettingsTab.vue"),
+        redirect: (to) => ({
+          name: "contract-overview",
+          params: to.params,
+          query: { ...to.query, editar: "1" },
+        }),
         meta: { roles: ["employer"] },
       },
     ],

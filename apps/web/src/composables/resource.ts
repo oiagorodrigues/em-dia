@@ -71,6 +71,21 @@ export function useResource<T, S>(
   };
 }
 
+/**
+ * Reads one key through the cache from inside another fetcher. A screen that combines several
+ * reads (the board, the payments of the year) reuses what other screens already loaded and
+ * leaves each part cached for them. The fetcher must return what every other reader of the key
+ * stores there.
+ */
+export function useCachedRead() {
+  const cache = useQueryCache();
+  return async <T>(key: EntryKey, query: () => Promise<T>): Promise<T> => {
+    const state = await cache.refresh(cache.ensure<T, unknown>({ key, query }));
+    if (state.status === "error") throw state.error;
+    return state.data as T;
+  };
+}
+
 type Cached = Pick<Resource<unknown>, "key">;
 
 /**

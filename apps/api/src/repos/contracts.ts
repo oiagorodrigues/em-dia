@@ -20,6 +20,7 @@ export interface ContractFields {
   rateCents: number;
   schedule: Schedule;
   deductAbsences: boolean;
+  nightBonus: boolean;
   contactEmail: string | null;
   contactPhone: string | null;
   expectedStart: ClockTime | null;
@@ -48,6 +49,7 @@ function columnsOf(f: ContractFields) {
     monthDays: f.schedule.monthDays,
     visitsPerMonth: f.schedule.visitsPerMonth,
     deductAbsences: f.deductAbsences,
+    nightBonus: f.nightBonus,
     contactEmail: f.contactEmail,
     contactPhone: f.contactPhone,
     expectedStart: f.expectedStart,
@@ -65,6 +67,7 @@ export function contractsRepo(db: Executor) {
         timezone: households.timezone,
         employerId: owner.id,
         employerName: owner.name,
+        workerEmail: worker.email,
         workerPhone: worker.phone,
         workerPixKey: worker.pixKey,
       })
@@ -87,6 +90,7 @@ export function contractsRepo(db: Executor) {
           employerName: joined.employerName,
           workerId: c.workerId,
           workerName: c.workerName,
+          workerEmail: joined.workerEmail,
           workerPhone: joined.workerPhone,
           workerPixKey: joined.workerPixKey,
           contactEmail: c.contactEmail,
@@ -102,6 +106,7 @@ export function contractsRepo(db: Executor) {
             visitsPerMonth: c.visitsPerMonth,
           },
           deductAbsences: c.deductAbsences,
+          nightBonus: c.nightBonus,
           expectedStart: c.expectedStart,
           expectedEnd: c.expectedEnd,
           startedOn: c.startedOn,

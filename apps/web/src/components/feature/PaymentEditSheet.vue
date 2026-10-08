@@ -94,7 +94,7 @@ watch(
 const agreements = useResource(
   () => (open.value && payment && compensation.value ? payment.contractId : ""),
   (id) => (id ? queryKeys.agreements(id) : null),
-  (id) => agreementsApi.list(id).then((r) => r.agreements),
+  (id) => agreementsApi.list(id, { archived: true }).then((r) => r.agreements),
 );
 const agreementOptions = computed(() => [
   { value: "", label: "Nenhum: compensação avulsa" },

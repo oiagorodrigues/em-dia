@@ -17,6 +17,8 @@ export interface ContractContext {
   replaceContract: (next: Contract) => void;
   /** Opens the removal confirmation owned by ContractView. */
   askRemove: () => void;
+  /** Opens the edit sheet owned by ContractView. */
+  edit: () => void;
   restore: () => Promise<void>;
   restoring: Readonly<Ref<boolean>>;
 }

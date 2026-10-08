@@ -43,14 +43,14 @@ export interface ContactChannels {
 export function contactChannels(
   contract: Pick<
     Contract,
-    "workerId" | "contactEmail" | "contactPhone" | "workerPhone" | "workerPixKey"
+    "workerId" | "contactEmail" | "contactPhone" | "workerEmail" | "workerPhone" | "workerPixKey"
   >,
 ): ContactChannels {
   if (!contract.workerId)
     return { phone: contract.contactPhone, email: contract.contactEmail, pixKey: null };
   return {
     phone: contract.workerPhone ?? contract.contactPhone,
-    email: null,
+    email: contract.workerEmail ?? contract.contactEmail,
     pixKey: contract.workerPixKey,
   };
 }
@@ -58,6 +58,8 @@ export function contactChannels(
 const UNIT: Record<PayType, [string, string]> = {
   daily: ["diária", "diárias"],
   hourly: ["dia", "dias"],
+  shift: ["plantão", "plantões"],
+  biweekly: ["dia", "dias"],
   monthly: ["dia", "dias"],
 };
 
@@ -67,6 +69,7 @@ export function describeEstimate(
   contract: Pick<Contract, "payType" | "rateCents" | "schedule">,
 ): string | null {
   if (estimate.cents === null) return null;
+  if (contract.payType === "biweekly") return `2 quinzenas × ${formatCents(contract.rateCents)}`;
   if (contract.payType === "monthly") return "salário fixo";
   const [one, many] =
     contract.schedule.kind === "per_month" ? ["visita", "visitas"] : UNIT[contract.payType];

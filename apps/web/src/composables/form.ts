@@ -1,4 +1,4 @@
-import { reactive, ref, type UnwrapRef } from "vue";
+import { reactive, ref, toRaw, type UnwrapRef } from "vue";
 import { ApiError } from "@/api";
 
 interface Issue {
@@ -13,8 +13,17 @@ export interface Parser<Out> {
   ): { success: true; data: Out } | { success: false; error: { issues: Issue[] } };
 }
 
+/** A deep copy that also accepts reactive objects (a prop's contract), which structuredClone rejects. */
+function plainCopy<T>(value: T): T {
+  const raw = toRaw(value);
+  if (Array.isArray(raw)) return raw.map(plainCopy) as T;
+  if (raw && typeof raw === "object" && Object.getPrototypeOf(raw) === Object.prototype)
+    return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, plainCopy(v)])) as T;
+  return raw;
+}
+
 export function useForm<V extends object, Out>(schema: Parser<Out>, initial: V) {
-  const values = reactive(structuredClone(initial)) as UnwrapRef<V>;
+  const values = reactive(plainCopy(initial)) as UnwrapRef<V>;
   const errors = ref<Record<string, string>>({});
   const formError = ref<string | null>(null);
   const submitting = ref(false);

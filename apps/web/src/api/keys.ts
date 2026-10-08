@@ -7,8 +7,10 @@ import type { EntryKey, UseQueryEntry } from "@pinia/colada";
  */
 export const queryKeys = {
   contracts: () => ["contracts"] as const,
+  contractsWithArchived: () => ["contracts", "archived"] as const,
   contract: (id: string) => ["contract", id] as const,
   activity: (id: string) => ["contract", id, "activity"] as const,
+  /** Removed agreements included: every reader filters what it shows. */
   agreements: (id: string) => ["contract", id, "agreements"] as const,
   summary: (p: { id: string; month: YearMonth }) => ["contract", p.id, "summary", p.month] as const,
   entries: (p: { id: string; month: YearMonth }) => ["contract", p.id, "entries", p.month] as const,

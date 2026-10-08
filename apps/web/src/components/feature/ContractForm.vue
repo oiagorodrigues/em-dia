@@ -5,6 +5,7 @@ import {
   nowInZone,
   OCCUPATION_LABEL,
   OCCUPATIONS,
+  isSalaried,
   PAY_TYPE_LABEL,
   PAY_TYPES,
   type CreateContractInput,
@@ -35,6 +36,7 @@ interface FormValues {
   rateCents: number | null;
   schedule: Schedule;
   deductAbsences: boolean;
+  nightBonus: boolean;
   expectedStart: string;
   expectedEnd: string;
   startedOn: string;
@@ -49,6 +51,7 @@ const {
   lockStart = false,
   contact = false,
   summary = false,
+  summaryTerms = true,
 } = defineProps<{
   initial?: Partial<CreateContractInput>;
   submitLabel: string;
@@ -59,6 +62,8 @@ const {
   contact?: boolean;
   /** Live "resumo" panel with the estimated cost: beside the form on lg, under it below. */
   summary?: boolean;
+  /** Frequency and hours in the resumo; off where the form beside it already shows them. */
+  summaryTerms?: boolean;
 }>();
 
 const defaults: FormValues = {
@@ -66,8 +71,9 @@ const defaults: FormValues = {
   occupation: initial?.occupation ?? "diarista",
   payType: initial?.payType ?? "daily",
   rateCents: initial?.rateCents ?? null,
-  schedule: structuredClone(initial?.schedule ?? DEFAULT_SCHEDULE),
+  schedule: initial?.schedule ?? DEFAULT_SCHEDULE,
   deductAbsences: initial?.deductAbsences ?? false,
+  nightBonus: initial?.nightBonus ?? true,
   expectedStart: initial?.expectedStart ?? "08:00",
   expectedEnd: initial?.expectedEnd ?? "17:00",
   startedOn: initial?.startedOn ?? nowInZone(DEFAULT_TIMEZONE).date,
@@ -87,6 +93,8 @@ const payOptions = PAY_TYPES.map((p) => ({ value: p, label: PAY_TYPE_LABEL[p] })
 const RATE_LABEL: Record<PayType, string> = {
   hourly: "Valor da hora",
   daily: "Valor da diária",
+  shift: "Valor do plantão (24h)",
+  biweekly: "Valor da quinzena",
   monthly: "Salário mensal",
 };
 
@@ -118,7 +126,7 @@ function onSubmit(): void {
   const input = {
     ...rest,
     ...(contact ? { contactEmail: contactEmail.trim(), contactPhone } : {}),
-    deductAbsences: values.payType === "monthly" && values.deductAbsences,
+    deductAbsences: isSalaried(values.payType) && values.deductAbsences,
     rateCents: values.rateCents ?? 0,
     expectedStart: values.expectedStart || null,
     expectedEnd: values.expectedEnd || null,
@@ -239,11 +247,20 @@ function onSubmit(): void {
           </Field>
         </div>
         <Toggle
-          v-if="values.payType === 'monthly'"
+          v-if="isSalaried(values.payType)"
           v-model="values.deductAbsences"
           label="Descontar faltas sem justificativa"
-          hint="Cada falta sem justificativa desconta 1/30 do salário. Ex.: salário de R$ 3.000 → R$ 100 por falta."
+          hint="Cada falta sem justificativa desconta 1/30 do salário do mês."
         />
+        <Toggle
+          v-model="values.nightBonus"
+          label="Adicional noturno"
+          hint="As horas entre 22h e 5h valem 20% a mais. Desligue se combinaram outra coisa com a pessoa."
+        />
+        <p v-if="values.payType === 'shift'" class="cf__desc">
+          Cada 24h valem um plantão. Quem entra sexta às 8h e sai segunda às 8h fez 3 plantões; no
+          cartão, anote a entrada no primeiro dia e a saída no dia em que foi embora.
+        </p>
       </section>
 
       <section class="cf__sec" :aria-labelledby="`${formId}-freq`">
@@ -326,6 +343,7 @@ function onSubmit(): void {
       v-if="summary"
       class="cf-wrap__panel"
       :draft="draft"
+      :terms="summaryTerms"
       :month="previewMonth"
       :today="today"
     />
@@ -429,10 +447,6 @@ function onSubmit(): void {
 }
 
 @media (min-width: 600px) {
-  .cf__pay {
-    grid-template-columns: 1.3fr 1fr;
-    align-items: start;
-  }
   .cf__two--wide {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--s-3);

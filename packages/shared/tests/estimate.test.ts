@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 import {
   createContractSchema,
+  derivedRates,
   estimateAverageMonthlyCost,
   estimateMonthCost,
   updateContractSchema,
@@ -51,6 +52,12 @@ describe("estimateMonthCost", () => {
     const hourly = { ...base, payType: "hourly" as const, rateCents: 2500 };
     expect(estimateMonthCost(hourly, "2026-10").cents).toBe(9 * 8 * 2500);
     expect(estimateMonthCost({ ...hourly, expectedEnd: null }, "2026-10").cents).toBeNull();
+  });
+
+  it("quinzenal: two quinzenas while the contract is active", () => {
+    const biweekly = { ...base, payType: "biweekly" as const, rateCents: 150000 };
+    expect(estimateMonthCost(biweekly, "2026-10").cents).toBe(300000);
+    expect(estimateMonthCost(biweekly, "2026-09").cents).toBe(0);
   });
 
   it("monthly: fixed while the contract is active", () => {
@@ -117,5 +124,48 @@ describe("contact fields", () => {
     const parsed = updateContractSchema.parse({ rateCents: 200 });
     expect(parsed.contactEmail).toBeUndefined();
     expect(parsed.contactPhone).toBeUndefined();
+  });
+});
+
+describe("derivedRates", () => {
+  // Every weekday: 5 days a week, 8h a day; 2027 has 261 weekdays, so 21.75 a month.
+  const everyWeekday = { ...base, schedule: weekly([1, 2, 3, 4, 5]), startedOn: "2027-01-01" };
+
+  it("splits a salary over the expected days and hours", () => {
+    expect(
+      derivedRates({ ...everyWeekday, payType: "monthly", rateCents: 261000 }, "2027-01"),
+    ).toEqual({ monthCents: 261000, fortnightCents: 130500, dayCents: 12000, hourCents: 1500 });
+  });
+
+  it("treats a quinzenal rate as half the month", () => {
+    expect(
+      derivedRates({ ...everyWeekday, payType: "biweekly", rateCents: 130500 }, "2027-01"),
+    ).toMatchObject({ monthCents: 261000, dayCents: 12000 });
+  });
+
+  it("builds the month up from a diária or an hour", () => {
+    expect(derivedRates({ ...everyWeekday, rateCents: 12000 }, "2027-01")).toEqual({
+      monthCents: 261000,
+      fortnightCents: 130500,
+      dayCents: 12000,
+      hourCents: 1500,
+    });
+    expect(
+      derivedRates({ ...everyWeekday, payType: "hourly", rateCents: 1500 }, "2027-01"),
+    ).toMatchObject({ dayCents: 12000, monthCents: 261000 });
+  });
+
+  it("leaves out what needs times or fixed days", () => {
+    const noTimes = { ...everyWeekday, expectedStart: null, expectedEnd: null };
+    expect(derivedRates({ ...noTimes, rateCents: 12000 }, "2027-01")).toMatchObject({
+      hourCents: null,
+      monthCents: 261000,
+    });
+    const onDemand: Schedule = { ...weekly([]), kind: "on_demand" };
+    expect(derivedRates({ ...base, schedule: onDemand }, "2027-01")).toMatchObject({
+      dayCents: 18000,
+      monthCents: null,
+      fortnightCents: null,
+    });
   });
 });

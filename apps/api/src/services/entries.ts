@@ -1,5 +1,5 @@
 import type { EntryStatus, IsoDate, UpsertEntryInput, WorkEntry, YearMonth } from "@emdia/shared";
-import { nowInZone, shiftMinutes } from "@emdia/shared";
+import { addDays, MAX_STAY_DAYS, nowInZone, stayMinutes } from "@emdia/shared";
 import { AppError, fieldError, forbidden, notFound } from "../lib/errors.ts";
 import { newId } from "../lib/ids.ts";
 import type { LocatedContract, TxRepos } from "../repos/index.ts";
@@ -8,12 +8,54 @@ import { audit, nowIso, requirePermission, type Actor, type ServiceDeps } from "
 
 const FUTURE_ALLOWED = new Set<EntryStatus>(["day_off", "holiday", "excused"]);
 
-type EntryFields = Pick<WorkEntry, "status" | "checkIn" | "checkOut" | "breakMinutes" | "note">;
+type EntryFields = Pick<
+  WorkEntry,
+  "status" | "checkIn" | "checkOut" | "checkOutDate" | "breakMinutes" | "note"
+>;
 
-function computeMinutes(f: EntryFields): number {
+function computeMinutes(date: IsoDate, f: EntryFields): number {
   return f.status === "worked" && f.checkIn && f.checkOut
-    ? shiftMinutes(f.checkIn, f.checkOut, f.breakMinutes)
+    ? stayMinutes({
+        date,
+        checkIn: f.checkIn,
+        checkOut: f.checkOut,
+        checkOutDate: f.checkOutDate,
+        breakMinutes: f.breakMinutes,
+      })
     : 0;
+}
+
+/**
+ * A stay that ends on a later date covers the days in between: none of them may hold its own
+ * entry, and a new entry may not start inside someone else's stay.
+ */
+async function assertNoOverlap(
+  r: TxRepos,
+  contractId: string,
+  date: IsoDate,
+  checkOutDate: IsoDate | null,
+): Promise<void> {
+  const nearby = await r.entries.listBetween(
+    contractId,
+    addDays(date, -MAX_STAY_DAYS),
+    checkOutDate ?? date,
+  );
+  const covering = nearby.find(
+    (e) => e.date < date && e.checkOutDate !== null && e.checkOutDate > date,
+  );
+  if (covering)
+    throw fieldError(
+      "date",
+      `Este dia faz parte do plantão de ${covering.date.split("-").reverse().join("/")}. Edite aquele registro.`,
+    );
+  const inside = checkOutDate
+    ? nearby.find((e) => e.date > date && e.date < checkOutDate)
+    : undefined;
+  if (inside)
+    throw fieldError(
+      "checkOutDate",
+      `Já tem registro em ${inside.date.split("-").reverse().join("/")}, no meio deste plantão`,
+    );
 }
 
 function assertWithinContract({ contract }: LocatedContract, date: IsoDate): void {
@@ -42,7 +84,7 @@ export function entriesService(deps: ServiceDeps) {
       contractId,
       date,
       ...fields,
-      minutes: computeMinutes(fields),
+      minutes: computeMinutes(date, fields),
       createdBy: actor.id,
       createdByRole: actor.role,
       confirmedBy: null,
@@ -74,14 +116,26 @@ export function entriesService(deps: ServiceDeps) {
         throw fieldError("date", "Datas futuras só aceitam folga, feriado ou falta justificada");
       }
 
+      const checkOutDate = input.checkOutDate ?? null;
+      if (checkOutDate !== null) {
+        if (checkOutDate <= date)
+          throw fieldError("checkOutDate", "A saída tem que ser depois do dia da entrada");
+        if (checkOutDate > addDays(date, MAX_STAY_DAYS))
+          throw fieldError("checkOutDate", `Um registro cobre no máximo ${MAX_STAY_DAYS} dias`);
+        if (checkOutDate > today)
+          throw fieldError("checkOutDate", "A saída não pode ser no futuro");
+      }
+
       const fields: EntryFields = {
         status: input.status,
         checkIn: input.checkIn,
         checkOut: input.checkOut,
+        checkOutDate,
         breakMinutes: input.breakMinutes,
         note: input.note || null,
       };
       return repos.tx(async (r) => {
+        await assertNoOverlap(r, contractId, date, checkOutDate);
         const existing = await r.entries.find(contractId, date);
         const entry = await write(r, actor, contractId, date, fields, existing);
         await audit(
@@ -159,33 +213,49 @@ export function entriesService(deps: ServiceDeps) {
       assertWithinContract(located, date);
 
       return repos.tx(async (r) => {
-        const existing = await r.entries.find(contractId, date);
-        const checkedIn = existing?.status === "worked" && existing.checkIn !== null;
+        const today = await r.entries.find(contractId, date);
+        // A plantão checked in on an earlier day is still open: clocking out closes it today.
+        const open = (await r.entries.listBetween(contractId, addDays(date, -MAX_STAY_DAYS), date))
+          .filter((e) => e.status === "worked" && e.checkIn !== null && e.checkOut === null)
+          .at(-1);
+        let entryDate = date;
+        let existing = today;
         let fields: EntryFields;
         if (action === "in") {
-          if (checkedIn) throw new AppError("CONFLICT", "A entrada de hoje já foi registrada");
+          if (today?.status === "worked" && today.checkIn !== null)
+            throw new AppError("CONFLICT", "A entrada de hoje já foi registrada");
+          if (open)
+            throw new AppError(
+              "CONFLICT",
+              `A entrada de ${open.date.split("-").reverse().join("/")} ainda está aberta. Registre a saída antes.`,
+            );
           fields = {
             status: "worked",
             checkIn: time,
             checkOut: null,
+            checkOutDate: null,
             breakMinutes: 0,
-            note: existing?.note ?? null,
+            note: today?.note ?? null,
           };
         } else {
-          if (!existing || !checkedIn)
+          if (!open) {
+            if (today?.checkOut)
+              throw new AppError("CONFLICT", "A saída de hoje já foi registrada");
             throw new AppError("CONFLICT", "Nenhuma entrada registrada hoje");
-          if (existing.checkOut)
-            throw new AppError("CONFLICT", "A saída de hoje já foi registrada");
+          }
+          entryDate = open.date;
+          existing = open;
           fields = {
-            status: existing.status,
-            checkIn: existing.checkIn,
+            status: open.status,
+            checkIn: open.checkIn,
             checkOut: time,
-            breakMinutes: existing.breakMinutes,
-            note: existing.note,
+            checkOutDate: open.date === date ? null : date,
+            breakMinutes: open.breakMinutes,
+            note: open.note,
           };
         }
 
-        const entry = await write(r, actor, contractId, date, fields, existing);
+        const entry = await write(r, actor, contractId, entryDate, fields, existing);
         await audit(
           deps,
           {
@@ -194,7 +264,7 @@ export function entriesService(deps: ServiceDeps) {
             action: action === "in" ? "entry.clock_in" : "entry.clock_out",
             entity: "entry",
             entityId: entry.id,
-            meta: { date, time },
+            meta: { date: entryDate, time },
           },
           r,
         );

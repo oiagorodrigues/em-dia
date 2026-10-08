@@ -17,6 +17,7 @@ const contract = {
   rateCents: 18000,
   expectedStart: "08:00",
   expectedEnd: "16:00",
+  nightBonus: false,
   status: "active",
   archivedAt: null,
   startedOn: "2026-08-01",
@@ -25,12 +26,19 @@ const contract = {
 
 const savedEntry = { date: "2026-09-30", status: "worked" } as WorkEntry;
 
-function setup(role: "employer" | "worker" = "employer", entry: WorkEntry | null = null) {
+const TODAY = "2026-10-07";
+
+function setup(
+  role: "employer" | "worker" = "employer",
+  entry: WorkEntry | null = null,
+  date = TODAY,
+  c: Contract = contract,
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
   useAuthStore().user = { id: "u1", role } as PublicUser;
   return mount(DayEditor, {
-    props: { open: true, date: "2026-09-30", entry, contract, today: "2026-10-07" },
+    props: { open: true, date, entry, contract: c, today: TODAY },
     attachTo: document.body,
     global: { plugins: [pinia, [PiniaColada, queryCacheOptions({ retry: false })]] },
   });
@@ -61,7 +69,11 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-const payToggle = () => document.querySelector<HTMLInputElement>('input[role="switch"]');
+const toggle = (label: string) =>
+  [...document.querySelectorAll<HTMLInputElement>('input[role="switch"]')].find((el) =>
+    el.closest("label")?.textContent?.includes(label),
+  ) ?? null;
+const payToggle = () => toggle("Pagar este dia");
 const moneyInput = () => document.querySelector<HTMLInputElement>("input.money__input");
 const submit = () => document.querySelector<HTMLFormElement>("#day-editor")!;
 
@@ -78,12 +90,13 @@ describe("DayEditor payment section", () => {
     wrapper.unmount();
   });
 
-  it("registers the day and its payment, in the day's month, with the diária prefilled", async () => {
+  it("registers the day and its payment, paid today, with the diária prefilled", async () => {
     const wrapper = setup();
     await flushPromises();
     payToggle()!.click();
     await flushPromises();
     expect(moneyInput()!.value).toBe("180,00");
+    expect(document.querySelector<HTMLInputElement>("#day-editor .df__input")!.disabled).toBe(true);
     submit().dispatchEvent(new Event("submit"));
     await flushPromises();
 
@@ -92,7 +105,7 @@ describe("DayEditor payment section", () => {
     expect(upsert.mock.invocationCallOrder[0]!).toBeLessThan(create.mock.invocationCallOrder[0]!);
     const [contractId, form] = create.mock.calls[0] as [string, FormData];
     expect(contractId).toBe("c1");
-    expect(form.get("referenceMonth")).toBe("2026-09");
+    expect(form.get("referenceMonth")).toBe("2026-10");
     expect(form.get("paidOn")).toBe("2026-10-07");
     expect(form.get("amountCents")).toBe("18000");
     expect(form.get("method")).toBe("pix");
@@ -118,12 +131,46 @@ describe("DayEditor payment section", () => {
     wrapper.unmount();
   });
 
+  it("prices a longer day in proportion to the diária", async () => {
+    const long = {
+      date: TODAY,
+      status: "worked",
+      checkIn: "08:00",
+      checkOut: "19:00",
+      checkOutDate: null,
+      breakMinutes: 60,
+      minutes: 600,
+      note: null,
+      createdBy: "u1",
+      createdByRole: "employer",
+      confirmedAt: null,
+      updatedAt: "2026-10-07T20:00:00Z",
+    } as WorkEntry;
+    const wrapper = setup("employer", long);
+    await flushPromises();
+    payToggle()!.click();
+    await flushPromises();
+    // 08:00 to 16:00 less the 1h break is the agreed 7h; this day is 10h: 10/7 of R$ 180.
+    expect(moneyInput()!.value).toBe("257,14");
+    expect(document.body.textContent).toContain("em proporção");
+    wrapper.unmount();
+  });
+
+  it("is offered only on the day itself", async () => {
+    const wrapper = setup("employer", null, "2026-09-30");
+    await flushPromises();
+    expect(payToggle()).toBeNull();
+    expect(document.body.textContent).not.toContain("Pagar este dia");
+    wrapper.unmount();
+  });
+
   it("pays a day already recorded without saving it again, so its confirmation stays", async () => {
     const confirmed = {
-      date: "2026-09-30",
+      date: TODAY,
       status: "worked",
       checkIn: "08:00",
       checkOut: "16:00",
+      checkOutDate: null,
       breakMinutes: 60,
       minutes: 420,
       note: null,
@@ -154,14 +201,28 @@ describe("DayEditor payment section", () => {
 });
 
 describe("DayEditor abate from an adiantamento", () => {
-  const switches = () => [...document.querySelectorAll<HTMLInputElement>('input[role="switch"]')];
-  const abateToggle = () => switches()[1];
+  /** The payment switches: pagar and abater, not "saiu em outro dia". */
+  const switches = () =>
+    [...document.querySelectorAll<HTMLInputElement>('input[role="switch"]')].filter(
+      (el) => !el.closest("label")?.textContent?.includes("Saiu em outro dia"),
+    );
+  const abateToggle = () => toggle("Abater do adiantamento");
 
   it("is offered only while an adiantamento is open", async () => {
     advances.mockResolvedValue({ advances: [advance("a0", "2026-09-01", 10000, 0)] });
     const wrapper = setup();
     await flushPromises();
     expect(switches()).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("is offered on a past day, where paying is not", async () => {
+    advances.mockResolvedValue({ advances: [advance("a1", "2026-09-10", 36000, 36000)] });
+    const wrapper = setup("employer", null, "2026-09-30");
+    await flushPromises();
+    expect(switches()).toHaveLength(1);
+    expect(document.body.textContent).toContain("Abater do adiantamento");
+    expect(document.body.textContent).not.toContain("Pagar este dia");
     wrapper.unmount();
   });
 
@@ -172,7 +233,7 @@ describe("DayEditor abate from an adiantamento", () => {
         advance("old", "2026-09-10", 36000, 10000),
       ],
     });
-    const wrapper = setup();
+    const wrapper = setup("employer", null, "2026-09-30");
     await flushPromises();
     expect(document.body.textContent).toContain("Abater do adiantamento");
     abateToggle()!.click();
@@ -200,7 +261,7 @@ describe("DayEditor abate from an adiantamento", () => {
 
   it("does not save the day when the amount passes what remains", async () => {
     advances.mockResolvedValue({ advances: [advance("a1", "2026-09-10", 36000, 10000)] });
-    const wrapper = setup();
+    const wrapper = setup("employer", null, "2026-09-30");
     await flushPromises();
     abateToggle()!.click();
     await flushPromises();
@@ -226,6 +287,45 @@ describe("DayEditor abate from an adiantamento", () => {
     await flushPromises();
     expect(switches()[0]!.checked).toBe(false);
     expect(moneyInput()!.value).toBe("180,00");
+    wrapper.unmount();
+  });
+});
+
+describe("DayEditor plantão", () => {
+  const shift = {
+    ...contract,
+    payType: "shift",
+    rateCents: 30000,
+    expectedStart: "08:00",
+    expectedEnd: "08:00",
+    nightBonus: true,
+  } as Contract;
+
+  it("opens a past plantão as 24h, out the next day, and saves the check-out date", async () => {
+    const wrapper = setup("employer", null, "2026-10-02", shift);
+    await flushPromises();
+    expect(document.body.textContent).toContain("Saiu em outro dia");
+    expect(document.body.textContent).toContain("24h");
+    submit().dispatchEvent(new Event("submit"));
+    await flushPromises();
+    const [, date, body] = upsert.mock.calls[0] as [string, string, Record<string, unknown>];
+    expect(date).toBe("2026-10-02");
+    expect(body).toMatchObject({
+      checkIn: "08:00",
+      checkOut: "08:00",
+      checkOutDate: "2026-10-03",
+      breakMinutes: 0,
+    });
+    wrapper.unmount();
+  });
+
+  it("leaves a plantão started today open, without a check-out", async () => {
+    const wrapper = setup("employer", null, TODAY, shift);
+    await flushPromises();
+    submit().dispatchEvent(new Event("submit"));
+    await flushPromises();
+    const [, , body] = upsert.mock.calls[0] as [string, string, Record<string, unknown>];
+    expect(body).toMatchObject({ checkIn: "08:00", checkOut: null, checkOutDate: null });
     wrapper.unmount();
   });
 });

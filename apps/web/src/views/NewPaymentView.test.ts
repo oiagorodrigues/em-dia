@@ -52,7 +52,9 @@ async function setup(query: string, cached: boolean) {
   vi.spyOn(contractsApi, "summary").mockResolvedValue({ summary } as never);
   vi.spyOn(agreementsApi, "list").mockResolvedValue({ agreements: [mesa] });
   vi.spyOn(paymentsApi, "advances").mockResolvedValue({ advances: [] });
-  const client = createApp({}).runWithContext(() => useQueryCache(pinia));
+  const client = createApp({})
+    .use(pinia)
+    .runWithContext(() => useQueryCache(pinia));
   if (cached) {
     client.setQueryData(queryKeys.contracts(), [contract]);
     client.setQueryData(queryKeys.summary({ id: "c1", month }), summary);
