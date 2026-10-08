@@ -125,7 +125,7 @@ Content uses the screen. Max content width is 1440px with a fluid gutter `clamp(
 
 ### Navigation
 
-- `lg`+: fixed left sidebar 264px on `--sidebar`, wordmark on top, nav items (icon + label, 44px tall, active item on `--sidebar-active` with a sliding brand-green indicator), and at the bottom a "Recolher menu" toggle and a user card (avatar, name, role) with a **Sair** button. Employer items: Início, Equipe, Cartão, Pagamentos, Perfil. Worker items: Início, Cartão, Pagamentos, Perfil.
+- `lg`+: fixed left sidebar 264px on `--sidebar`, wordmark on top with an icon-only "Recolher menu" toggle at its right (outside the logo link, tooltip with the shortcut, ⌘B / Ctrl+B outside text fields; collapsed, it sits under the mark), nav items (icon + label, 44px tall, active item on `--sidebar-active` with a sliding brand-green indicator), and at the bottom a user card (avatar, name, role) with a **Sair** button. Employer items: Início, Equipe, Cartão, Pagamentos, Perfil. Worker items: Início, Cartão, Pagamentos, Perfil.
 - Collapsed sidebar: the toggle shrinks it to 76px (`--sidebar-w-collapsed`), icons only. The mark replaces the wordmark, labels stay in the DOM visually hidden (accessible names), and every item, the avatar and Sair show their label as a tooltip on the right. The toggle is a button with `aria-expanded`; the choice is remembered per browser in `localStorage` (`emdia:sidebar`) and mirrored on `<html data-sidebar="collapsed">`, so the shell, the offline banner and toasts follow `--sidebar-w`. The width animates only when toggled, never on first paint.
 - below `lg`: bottom bar with the same items (employer gets 5), safe-area aware; **Sair** lives in Perfil and in the account menu of the top bar.
 

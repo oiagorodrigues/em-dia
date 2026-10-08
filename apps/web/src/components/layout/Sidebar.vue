@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ROLE_LABEL } from "@emdia/shared";
-import { computed, ref, useTemplateRef } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import { errorMessage } from "@/api";
 import Avatar from "@/components/ui/Avatar.vue";
@@ -21,6 +21,19 @@ const router = useRouter();
 
 const { collapsed, toggle } = useSidebarCollapse();
 const toggleLabel = computed(() => (collapsed.value ? "Expandir menu" : "Recolher menu"));
+const shortcut = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘B" : "Ctrl+B";
+
+/** ⌘B / Ctrl+B toggles the menu, except while typing, where it may mean bold. */
+function onKey(e: KeyboardEvent): void {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "b") return;
+  const el = e.target;
+  if (el instanceof Element && el.closest("input, textarea, select, [contenteditable='true']"))
+    return;
+  e.preventDefault();
+  toggle();
+}
+onMounted(() => window.addEventListener("keydown", onKey));
+onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
 
 const items = computed(() => navItems(auth.role));
 const active = computed(() => items.value.find((i) => i.match(route))?.to ?? null);
@@ -48,10 +61,25 @@ async function logout(): Promise<void> {
     :class="{ 'is-collapsed': collapsed }"
     aria-label="Menu lateral"
   >
-    <RouterLink to="/" class="side__brand" aria-label="em dia, início">
-      <Mark v-if="collapsed" :size="26" />
-      <Wordmark v-else :size="30" />
-    </RouterLink>
+    <div class="side__head">
+      <RouterLink to="/" class="side__brand" aria-label="em dia, início">
+        <Mark v-if="collapsed" :size="26" />
+        <Wordmark v-else :size="30" />
+      </RouterLink>
+      <Tooltip :text="`${toggleLabel} (${shortcut})`" :side="collapsed ? 'right' : 'bottom'">
+        <button
+          type="button"
+          class="side__toggle"
+          :aria-label="toggleLabel"
+          :aria-expanded="!collapsed"
+          aria-controls="menu-lateral"
+          :aria-keyshortcuts="shortcut === '⌘B' ? 'Meta+B' : 'Control+B'"
+          @click="toggle"
+        >
+          <Icon :name="collapsed ? 'sidebar-expand' : 'sidebar-collapse'" :size="20" />
+        </button>
+      </Tooltip>
+    </div>
     <nav aria-label="Principal">
       <ul ref="list" class="side__list">
         <li class="side__indicator" aria-hidden="true" :style="indicator" />
@@ -71,18 +99,6 @@ async function logout(): Promise<void> {
       </ul>
     </nav>
     <div class="side__foot">
-      <Tooltip :text="toggleLabel" side="right" :disabled="!collapsed">
-        <button
-          type="button"
-          class="side__item side__toggle"
-          :aria-expanded="!collapsed"
-          aria-controls="menu-lateral"
-          @click="toggle"
-        >
-          <Icon :name="collapsed ? 'sidebar-expand' : 'sidebar-collapse'" :size="22" />
-          <span class="side__label">{{ toggleLabel }}</span>
-        </button>
-      </Tooltip>
       <div v-if="auth.user" class="side__user">
         <Tooltip :text="auth.user.name" side="right" :disabled="!collapsed">
           <RouterLink to="/perfil" class="side__who">
@@ -190,18 +206,33 @@ html[data-sidebar-moving] .side {
   gap: var(--s-3);
 }
 
+/* The toggle sits beside the logo, not inside its link, so it can't be hit for "início". */
+.side__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
 .side__toggle {
-  width: 100%;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
   color: var(--sidebar-ink);
-  font-size: var(--t-14);
-  font-weight: 600;
-  opacity: 0.85;
+  opacity: 0.7;
+  cursor: pointer;
 }
 
 .side__toggle:hover {
   opacity: 1;
+  background: color-mix(in srgb, var(--sidebar-ink) 8%, transparent);
 }
 
+.side__toggle:focus-visible,
 .side__item:focus-visible,
 .side__who:focus-visible,
 .side__logout:focus-visible {
@@ -299,6 +330,11 @@ html[data-sidebar-moving] .side {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+.is-collapsed .side__head {
+  flex-direction: column;
+  gap: var(--s-3);
 }
 
 .is-collapsed .side__brand {
