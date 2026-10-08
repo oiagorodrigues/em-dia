@@ -18,6 +18,7 @@ function entry(date: string, status: EntryStatus, minutes = 0): WorkEntry {
     status,
     checkIn: status === "worked" ? "08:00" : null,
     checkOut: status === "worked" && minutes ? "16:00" : null,
+    checkOutDate: null,
     breakMinutes: 0,
     minutes,
     note: null,

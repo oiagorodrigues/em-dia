@@ -30,6 +30,7 @@ const base = {
     visitsPerMonth: null,
   },
   deductAbsences: false,
+  nightBonus: false,
   expectedStart: "08:00",
   expectedEnd: "16:00",
   startedOn: "2026-08-01",

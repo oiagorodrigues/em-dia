@@ -73,6 +73,9 @@ export function describeEstimate(draft: Draft, month: YearMonth): EstimateText {
     case "daily":
       breakdown = `${plural(est.days, "diária", "diárias")} × ${rate}`;
       break;
+    case "shift":
+      breakdown = `${plural(est.days, "plantão", "plantões")} de 24h × ${rate}`;
+      break;
     case "hourly":
       breakdown = `${plural(est.days, unit[0]!, unit[1]!)} × ${formatDuration(est.minutesPerDay ?? 0)} × ${rate}`;
       break;

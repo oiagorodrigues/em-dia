@@ -111,7 +111,11 @@ export function reportsService(deps: ServiceDeps) {
           expected.has(date) ? "Sim" : "",
           status,
           e?.checkIn ?? "",
-          e?.checkOut ?? "",
+          e?.checkOut
+            ? e.checkOutDate
+              ? `${e.checkOutDate.split("-").reverse().join("/")} ${e.checkOut}`
+              : e.checkOut
+            : "",
           e && e.status === "worked" ? e.breakMinutes : "",
           e && e.minutes > 0 ? formatDuration(e.minutes) : "",
           e ? (e.confirmedAt ? "Sim" : "Não") : "",
@@ -147,6 +151,7 @@ export function reportsService(deps: ServiceDeps) {
         ["Faltas justificadas", summary.excused],
         ["Valor bruto (R$)", centsToDecimal(summary.grossCents)],
         ["Desconto por faltas (R$)", centsToDecimal(summary.absenceDeductionCents)],
+        ["Adicional noturno (R$)", centsToDecimal(summary.nightBonusCents)],
         [
           "Gratificações, vale-transporte e descontos (R$)",
           centsToDecimal(summary.adjustmentsCents),

@@ -32,8 +32,15 @@ describe("dayPaymentDraft", () => {
 });
 
 describe("dayValueCents", () => {
-  const times = { expectedStart: "08:00", expectedEnd: "17:00" };
-  const day = (minutes: number, breakMinutes = 60) => ({ minutes, breakMinutes });
+  const times = { expectedStart: "08:00", expectedEnd: "17:00", nightBonus: false };
+  const day = (minutes: number, breakMinutes = 60) => ({
+    minutes,
+    breakMinutes,
+    date: "2026-10-05",
+    checkIn: null,
+    checkOut: null,
+    checkOutDate: null,
+  });
 
   it("is the diária, the hours times the rate, or a thirtieth of the salary", () => {
     const rate = (payType: "daily" | "hourly" | "biweekly" | "monthly", rateCents: number) => ({
@@ -46,6 +53,20 @@ describe("dayValueCents", () => {
     expect(dayValueCents(rate("hourly", 3000), day(0))).toBeNull();
     expect(dayValueCents(rate("monthly", 240000), day(0))).toBe(8000);
     expect(dayValueCents(rate("biweekly", 120000), day(0))).toBe(8000);
+  });
+
+  it("prices a plantão per 24h and adds the night when the contract has it", () => {
+    const shift = { ...times, payType: "shift" as const, rateCents: 30000 };
+    const weekend = {
+      ...day(72 * 60, 0),
+      date: "2026-10-02",
+      checkIn: "08:00",
+      checkOut: "08:00",
+      checkOutDate: "2026-10-05",
+    };
+    expect(dayValueCents(shift, weekend)).toBe(90000);
+    expect(dayValueCents({ ...shift, nightBonus: true }, weekend)).toBe(90000 + 5250);
+    expect(dayValueCents(shift, day(0))).toBeNull();
   });
 
   it("prices a longer or shorter day in proportion to the diária", () => {

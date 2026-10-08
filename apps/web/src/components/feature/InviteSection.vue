@@ -94,6 +94,12 @@ const label = computed(() => {
   gap: var(--s-2);
 }
 
+/* Inline in the sentence: the 44px tap height would push the line apart. */
+.iv__head .link-btn {
+  display: inline;
+  min-height: 0;
+}
+
 @media (min-width: 960px) {
   .iv {
     grid-template-columns: minmax(0, 1fr) auto;

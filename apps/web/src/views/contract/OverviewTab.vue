@@ -187,6 +187,7 @@ const partial = computed(() => month.value === currentMonth);
 const rateUnit: Record<string, string> = {
   hourly: "por hora",
   daily: "por diária",
+  shift: "por plantão de 24h",
   biweekly: "por quinzena",
   monthly: "por mês",
 };
@@ -209,6 +210,7 @@ const terms = computed(() => {
       mono: true,
     },
     { label: "Forma", value: PAY_TYPE_LABEL[c.payType] },
+    { label: "Adicional noturno", value: c.nightBonus ? "sim, 20% das 22h às 5h" : "não" },
   ];
   const salary = salaryPerMonthCents(c.payType, c.rateCents);
   if (salary !== null)

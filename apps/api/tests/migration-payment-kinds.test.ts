@@ -2,7 +2,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PGlite } from "@electric-sql/pglite";
-import { computeMonthSummary, EMPTY_SCHEDULE, type YearMonth } from "@emdia/shared";
+import { computeMonthSummary, type YearMonth } from "@emdia/shared";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
@@ -52,22 +52,13 @@ test("0003 turns adjustments and extra payments into payment kinds without movin
       timezone: "America/Sao_Paulo",
       createdAt: at,
     });
-    await contractsRepo(db).insert({
-      id: "c1",
-      householdId: "h1",
-      createdAt: at,
-      workerName: "Maria",
-      occupation: "diarista",
-      payType: "monthly",
-      rateCents: 150000,
-      schedule: { ...EMPTY_SCHEDULE, kind: "on_demand" },
-      deductAbsences: false,
-      contactEmail: null,
-      contactPhone: null,
-      expectedStart: null,
-      expectedEnd: null,
-      startedOn: "2026-08-01",
-    });
+    // Raw SQL: the repository writes today's columns, which a 0002 database doesn't have yet.
+    await db.execute(sql`
+      INSERT INTO contracts (id, household_id, worker_name, occupation, pay_type, rate_cents,
+        schedule_kind, deduct_absences, started_on, status, created_at)
+      VALUES ('c1', 'h1', 'Maria', 'diarista', 'monthly', 150000, 'on_demand', false,
+        '2026-08-01', 'active', ${at})
+    `);
     await db.execute(sql`
       INSERT INTO adjustments (id, contract_id, month, kind, amount_cents, description, created_by, created_at) VALUES
         ('a1', 'c1', '2026-08', 'bonus', 10000, 'Festa', 'u1', '2026-08-20T02:00:00Z'),

@@ -29,6 +29,7 @@ function contract(patch: Partial<Contract> = {}): Contract {
     rateCents: 18000,
     schedule: weekly,
     deductAbsences: false,
+    nightBonus: false,
     expectedStart: "08:00",
     expectedEnd: "17:00",
     startedOn: "2026-01-01",

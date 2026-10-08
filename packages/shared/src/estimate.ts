@@ -46,6 +46,7 @@ export function estimateMonthCost(input: EstimateInput, month: YearMonth): Month
         : 0;
       break;
     case "daily":
+    case "shift":
       cents = input.schedule.kind === "on_demand" ? null : days * input.rateCents;
       break;
     case "hourly":
@@ -117,6 +118,12 @@ export function derivedRates(input: EstimateInput, from: YearMonth, months = 12)
       day = input.rateCents;
       month = daysPerMonth ? day * daysPerMonth : null;
       hour = hoursPerDay ? day / hoursPerDay : null;
+      break;
+    case "shift":
+      // A plantão is 24h whatever the agreed times say; each expected day starts one.
+      day = input.rateCents;
+      month = daysPerMonth ? day * daysPerMonth : null;
+      hour = day / 24;
       break;
     case "hourly":
       hour = input.rateCents;

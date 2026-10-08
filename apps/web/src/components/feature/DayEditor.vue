@@ -10,7 +10,10 @@ import {
   isSalaried,
   monthName,
   parseYearMonth,
-  shiftMinutes,
+  addDays,
+  MAX_STAY_DAYS,
+  nightMinutes,
+  stayMinutes,
   toYearMonth,
   upsertEntrySchema,
   weekdayOf,
@@ -25,6 +28,7 @@ import { computed, ref, watch } from "vue";
 import { entriesApi, errorMessage, paymentsApi } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
 import Button from "@/components/ui/Button.vue";
+import DateField from "@/components/ui/DateField.vue";
 import Field from "@/components/ui/Field.vue";
 import ChoiceField from "@/components/ui/ChoiceField.vue";
 import MoneyInput from "@/components/ui/MoneyInput.vue";
@@ -67,6 +71,9 @@ interface Values {
   status: EntryStatus;
   checkIn: string;
   checkOut: string;
+  /** The stay ends on a later date (a plantão); checkOutDate holds that date. */
+  laterDay: boolean;
+  checkOutDate: string;
   breakMinutes: number;
   note: string;
 }
@@ -75,9 +82,19 @@ const { values, errors, formError, submitting, submit, clearError } = useForm(up
   status: "worked",
   checkIn: "",
   checkOut: "",
+  laterDay: false,
+  checkOutDate: "",
   breakMinutes: 0,
   note: "",
 } as Values);
+
+const shiftPay = contract.payType === "shift";
+/** The latest check-out day a stay starting on `date` can have: a week later, never past today. */
+const lastCheckOutDay = computed(() => {
+  if (!date) return today;
+  const week = addDays(date, MAX_STAY_DAYS);
+  return week < today ? week : today;
+});
 
 const isFuture = computed(() => !!date && date > today);
 const statusOptions = computed(() =>
@@ -97,7 +114,13 @@ watch(
     values.status = entry?.status ?? fallbackStatus;
     values.checkIn = entry?.checkIn ?? (entry ? "" : (contract.expectedStart ?? ""));
     values.checkOut = entry?.checkOut ?? (entry ? "" : (contract.expectedEnd ?? ""));
-    values.breakMinutes = entry?.breakMinutes ?? (entry ? 0 : 60);
+    // A new plantão that started before today defaults to 24h: out the next day at the same time.
+    const nextDay = addDays(date, 1);
+    const fullShift = !entry && shiftPay && nextDay <= today;
+    values.laterDay = entry ? entry.checkOutDate !== null : fullShift;
+    values.checkOutDate = entry?.checkOutDate ?? (nextDay <= today ? nextDay : "");
+    if (!entry && shiftPay && !fullShift) values.checkOut = "";
+    values.breakMinutes = entry?.breakMinutes ?? (entry || shiftPay ? 0 : 60);
     values.note = entry?.note ?? "";
     errors.value = {};
     formError.value = null;
@@ -106,13 +129,33 @@ watch(
 );
 
 const worked = computed(() => values.status === "worked");
-const preview = computed(() =>
-  worked.value && values.checkIn && values.checkOut
-    ? formatDuration(shiftMinutes(values.checkIn, values.checkOut, values.breakMinutes))
+const checkOutDate = computed(() =>
+  worked.value && values.laterDay && values.checkOutDate ? values.checkOutDate : null,
+);
+const stay = computed(() =>
+  date && values.checkIn && values.checkOut
+    ? {
+        date,
+        checkIn: values.checkIn,
+        checkOut: values.checkOut,
+        checkOutDate: checkOutDate.value,
+        breakMinutes: values.breakMinutes,
+      }
     : null,
 );
+const preview = computed(() =>
+  worked.value && stay.value ? formatDuration(stayMinutes(stay.value)) : null,
+);
 const overnight = computed(
-  () => worked.value && values.checkIn && values.checkOut && values.checkOut < values.checkIn,
+  () =>
+    worked.value &&
+    !checkOutDate.value &&
+    values.checkIn &&
+    values.checkOut &&
+    values.checkOut < values.checkIn,
+);
+const night = computed(() =>
+  worked.value && stay.value && contract.nightBonus ? nightMinutes(stay.value) : 0,
 );
 
 const mine = computed(() => !!entry && entry.createdBy === auth.user?.id);
@@ -162,20 +205,32 @@ const payHint = computed(() =>
   date ? `Entra na conta de ${monthName(parseYearMonth(date.slice(0, 7)).month)}.` : undefined,
 );
 
-const dayMinutes = computed(() =>
-  values.checkIn && values.checkOut
-    ? shiftMinutes(values.checkIn, values.checkOut, values.breakMinutes)
-    : 0,
-);
+const dayMinutes = computed(() => (stay.value ? stayMinutes(stay.value) : 0));
 const dayValue = computed(() =>
-  dayValueCents(contract, { minutes: dayMinutes.value, breakMinutes: values.breakMinutes }),
+  date
+    ? dayValueCents(contract, {
+        date,
+        checkIn: values.checkIn || null,
+        checkOut: values.checkOut || null,
+        checkOutDate: checkOutDate.value,
+        breakMinutes: values.breakMinutes,
+        minutes: dayMinutes.value,
+      })
+    : null,
 );
-/** A diária in proportion: the day ran longer or shorter than the agreed times. */
+/** How the amount was reached, when it isn't simply the rate. */
 const amountHint = computed(() => {
-  if (contract.payType !== "daily" || dayValue.value === contract.rateCents) return undefined;
-  const expected = expectedDayMinutes(contract, values.breakMinutes);
-  if (!expected || dayMinutes.value <= 0) return undefined;
-  return `${formatDuration(dayMinutes.value)} em vez de ${formatDuration(expected)}: diária de ${formatCents(contract.rateCents)} em proporção.`;
+  const nightNote = night.value > 0 ? `, mais 20% em ${formatDuration(night.value)} de noite` : "";
+  if (contract.payType === "shift" && dayMinutes.value > 0)
+    return `${formatDuration(dayMinutes.value)} ÷ 24h × ${formatCents(contract.rateCents)}${nightNote}.`;
+  if (contract.payType === "daily" && dayMinutes.value > 0) {
+    const expected = expectedDayMinutes(contract, values.breakMinutes);
+    if (expected && dayMinutes.value !== expected)
+      return `${formatDuration(dayMinutes.value)} em vez de ${formatDuration(expected)}: diária de ${formatCents(contract.rateCents)} em proporção${nightNote}.`;
+  }
+  return nightNote
+    ? `Inclui o adicional noturno: 20% em ${formatDuration(night.value)}.`
+    : undefined;
 });
 
 /** The amount follows the hours until the employer types one. */
@@ -307,6 +362,7 @@ const entryInput = computed(() => ({
   status: values.status,
   checkIn: worked.value ? values.checkIn || null : null,
   checkOut: worked.value ? values.checkOut || null : null,
+  checkOutDate: checkOutDate.value,
   breakMinutes: worked.value ? values.breakMinutes : 0,
   note: values.note.trim() || null,
 }));
@@ -318,6 +374,7 @@ const unchanged = computed(() => {
     entry.status === input.status &&
     entry.checkIn === input.checkIn &&
     entry.checkOut === input.checkOut &&
+    entry.checkOutDate === input.checkOutDate &&
     entry.breakMinutes === input.breakMinutes &&
     entry.note === input.note
   );
@@ -471,12 +528,43 @@ async function onRemove(): Promise<void> {
             />
           </Field>
         </div>
+        <Toggle
+          v-model="values.laterDay"
+          :disabled="ended || !values.checkOutDate"
+          label="Saiu em outro dia"
+          :hint="
+            values.checkOutDate
+              ? 'Plantão ou dias seguidos: um registro só, da entrada até a saída.'
+              : 'Só depois de amanhecer o dia seguinte.'
+          "
+        />
+        <Field
+          v-if="values.laterDay"
+          v-slot="{ id, invalid, describedBy }"
+          label="Dia da saída"
+          :error="errors.checkOutDate"
+        >
+          <DateField
+            :id="id"
+            v-model="values.checkOutDate"
+            label="Dia da saída"
+            :min="date ? addDays(date, 1) : undefined"
+            :max="lastCheckOutDay"
+            :disabled="ended"
+            :invalid="invalid"
+            :described-by="describedBy"
+            @update:model-value="clearError('checkOutDate')"
+          />
+        </Field>
         <Field v-slot="{ id }" label="Pausa em minutos (almoço, descanso)">
           <Stepper :id="id" v-model="values.breakMinutes" label="Pausa" />
         </Field>
         <p v-if="preview" class="de__preview">
-          Total do dia <strong class="mono">{{ preview }}</strong>
+          {{ checkOutDate ? "Total" : "Total do dia" }} <strong class="mono">{{ preview }}</strong>
           <span v-if="overnight" class="de__night">· passou da meia-noite</span>
+          <span v-if="night > 0" class="de__night"
+            >· {{ formatDuration(night) }} entre 22h e 5h</span
+          >
         </p>
       </template>
 
@@ -636,6 +724,7 @@ async function onRemove(): Promise<void> {
 }
 
 .de__night {
+  margin-left: var(--s-1);
   color: var(--brand);
 }
 

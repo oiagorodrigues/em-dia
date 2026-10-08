@@ -221,13 +221,19 @@ const ledger = computed(() => {
                 : `${s.daysWorked} diárias, em proporção às horas`,
             value: formatCents(s.grossCents),
           }
-        : s.payType === "biweekly"
+        : s.payType === "shift"
           ? {
-              label: "Salário",
-              hint: `2 × ${formatCents(s.rateCents)}`,
+              label: "Plantões",
+              hint: `${formatDuration(s.totalMinutes)} ÷ 24h`,
               value: formatCents(s.grossCents),
             }
-          : { label: "Salário", value: formatCents(s.grossCents) };
+          : s.payType === "biweekly"
+            ? {
+                label: "Salário",
+                hint: `2 × ${formatCents(s.rateCents)}`,
+                value: formatCents(s.grossCents),
+              }
+            : { label: "Salário", value: formatCents(s.grossCents) };
   const lines = [
     { label: "Horas", value: formatDuration(s.totalMinutes) },
     { label: attendanceLabel(kind.value), value: attendanceText(s, kind.value) },
@@ -244,6 +250,15 @@ const ledger = computed(() => {
             hint: `${s.absences} × ${formatCents(Math.round(s.grossCents / 30))}`,
             value: `− ${formatCents(s.absenceDeductionCents)}`,
             tone: "red" as const,
+          },
+        ]
+      : []),
+    ...(s.nightBonusCents > 0
+      ? [
+          {
+            label: "Adicional noturno",
+            hint: `${formatDuration(s.nightMinutes)} × 20%`,
+            value: `+ ${formatCents(s.nightBonusCents)}`,
           },
         ]
       : []),

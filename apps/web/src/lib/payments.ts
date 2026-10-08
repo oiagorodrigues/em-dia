@@ -7,12 +7,14 @@ import {
   PAYMENT_KIND_LABEL,
   PAYMENT_KINDS,
   salaryPerMonthCents,
+  nightBonusCents,
   toYearMonth,
   workedDayCents,
   type Contract,
   type CreatePaymentInput,
   type IsoDate,
   type Payment,
+  type WorkEntry,
   type PaymentKind,
   type PaymentMethod,
   type YearMonth,
@@ -191,19 +193,27 @@ export function dayPaymentDraft(
   };
 }
 
+export type DayValueContract = Pick<
+  Contract,
+  "payType" | "rateCents" | "expectedStart" | "expectedEnd" | "nightBonus"
+>;
+export type WorkedDay = Pick<
+  WorkEntry,
+  "date" | "checkIn" | "checkOut" | "checkOutDate" | "breakMinutes" | "minutes"
+>;
+
 /**
- * What one worked day is worth: what it adds to the month (see `workedDayCents`), or for a
- * salary a thirtieth of the month (the same rate absences use). Null for an hourly day with
- * no hours yet.
+ * What one worked day is worth: what it adds to the month (see `workedDayCents`) plus its
+ * adicional noturno, or for a salary a thirtieth of the month (the same rate absences use).
+ * Null for an hourly or plantão day with no hours yet.
  */
-export function dayValueCents(
-  contract: Pick<Contract, "payType" | "rateCents" | "expectedStart" | "expectedEnd">,
-  day: { minutes: number; breakMinutes: number },
-): number | null {
+export function dayValueCents(contract: DayValueContract, day: WorkedDay): number | null {
+  const night = nightBonusCents(contract, { ...day, status: "worked" });
   const salary = salaryPerMonthCents(contract.payType, contract.rateCents);
-  if (salary !== null) return Math.round(salary / 30);
-  if (contract.payType === "hourly" && day.minutes <= 0) return null;
-  return workedDayCents(contract, day);
+  if (salary !== null) return Math.round(salary / 30) + night;
+  if ((contract.payType === "hourly" || contract.payType === "shift") && day.minutes <= 0)
+    return null;
+  return workedDayCents(contract, day)! + night;
 }
 
 /** Years with possible payments, newest first: from the oldest contract start up to this year. */

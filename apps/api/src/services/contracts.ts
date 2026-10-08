@@ -70,6 +70,7 @@ export function contractsService(deps: ServiceDeps) {
           rateCents: input.rateCents,
           schedule: input.schedule,
           deductAbsences: input.deductAbsences,
+          nightBonus: input.nightBonus,
           contactEmail,
           contactPhone,
           expectedStart: input.expectedStart,
@@ -94,6 +95,7 @@ export function contractsService(deps: ServiceDeps) {
         rateCents: input.rateCents ?? contract.rateCents,
         schedule: input.schedule ?? contract.schedule,
         deductAbsences: input.deductAbsences ?? contract.deductAbsences,
+        nightBonus: input.nightBonus ?? contract.nightBonus,
         contactEmail: input.contactEmail === undefined ? contract.contactEmail : input.contactEmail,
         contactPhone: input.contactPhone === undefined ? contract.contactPhone : input.contactPhone,
         expectedStart:

@@ -58,6 +58,7 @@ export function contactChannels(
 const UNIT: Record<PayType, [string, string]> = {
   daily: ["diária", "diárias"],
   hourly: ["dia", "dias"],
+  shift: ["plantão", "plantões"],
   biweekly: ["dia", "dias"],
   monthly: ["dia", "dias"],
 };

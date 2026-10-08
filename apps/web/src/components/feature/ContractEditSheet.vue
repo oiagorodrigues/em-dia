@@ -64,6 +64,7 @@ async function save(data: CreateContractInput): Promise<void> {
           rateCents: contract.rateCents,
           schedule: contract.schedule,
           deductAbsences: contract.deductAbsences,
+          nightBonus: contract.nightBonus,
           expectedStart: contract.expectedStart,
           expectedEnd: contract.expectedEnd,
           startedOn: contract.startedOn,

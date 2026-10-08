@@ -108,6 +108,7 @@ const contractBase = z.object({
   rateCents: cents.min(1, "Informe o valor"),
   schedule: scheduleSchema,
   deductAbsences: z.boolean(),
+  nightBonus: z.boolean(),
   expectedStart: clockTime.nullable(),
   expectedEnd: clockTime.nullable(),
   startedOn: isoDate,
@@ -129,6 +130,7 @@ const optionalPhone = z
 
 export const createContractSchema = contractBase.extend({
   deductAbsences: z.boolean().default(false),
+  nightBonus: z.boolean().default(true),
   contactEmail: optionalEmail,
   contactPhone: optionalPhone,
   householdId: z.string().min(1).optional(),
@@ -152,6 +154,8 @@ export const upsertEntrySchema = z
     status: z.enum(ENTRY_STATUSES),
     checkIn: clockTime.nullable(),
     checkOut: clockTime.nullable(),
+    /** A later date when the stay runs past the next morning (a plantão); see MAX_STAY_DAYS. */
+    checkOutDate: isoDate.nullable().optional(),
     breakMinutes: z.number().int().min(0).max(720).default(0),
     note: shortText.nullable().optional(),
   })
@@ -162,8 +166,18 @@ export const upsertEntrySchema = z
     if (v.status === "worked" && !v.checkIn) {
       ctx.addIssue({ code: "custom", path: ["checkIn"], message: "Informe a entrada" });
     }
+    if (v.checkOutDate && (v.status !== "worked" || !v.checkOut)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["checkOutDate"],
+        message: "Informe a hora de saída",
+      });
+    }
   });
 export type UpsertEntryInput = z.infer<typeof upsertEntrySchema>;
+
+/** The longest stay one entry can hold: a weekend plantão fits, a forgotten check-out doesn't. */
+export const MAX_STAY_DAYS = 7;
 
 export const clockSchema = z.object({ action: z.enum(["in", "out"]) });
 

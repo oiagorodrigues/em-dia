@@ -60,7 +60,11 @@ const { lines, total, caption } = defineProps<{
   font-size: var(--t-14);
 }
 
+/* A long hint gives way (ellipsis) so the amount on the right is never cut. */
 .ledger__line dt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--ink-2);
   white-space: nowrap;
 }
@@ -69,6 +73,10 @@ const { lines, total, caption } = defineProps<{
   margin-left: var(--s-1);
   color: var(--ink-3);
   font-size: var(--t-12);
+}
+
+.ledger__line dd {
+  flex-shrink: 0;
 }
 
 .ledger__lead {

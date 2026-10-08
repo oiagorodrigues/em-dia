@@ -1153,11 +1153,11 @@ async function securityChecks(state: State): Promise<void> {
   const id = need(state.contractId, 1);
   const worker = need(state.worker, 2).page;
 
-  // Workers cannot reach employer-only settings.
+  // The old employer-only Ajustes link never opens the edit sheet for a worker.
   await worker.goto(`${BASE}/equipe/${id}/ajustes`);
   await worker.waitForURL((url) => !url.pathname.endsWith("/ajustes"));
-  if (new URL(worker.url()).pathname !== "/")
-    throw new Error(`worker ended on ${worker.url()}, expected /`);
+  await worker.waitForURL((url) => !url.searchParams.has("editar"));
+  await absent("the edit sheet for the worker", worker.getByRole("dialog"));
 
   // Anonymous visitors are sent to the login.
   const anon = await openSession(state, "anonymous");

@@ -20,8 +20,10 @@ import {
   formatDayMonth,
   STATUS_STAMP,
   WEEKDAY_LETTER,
+  WEEKDAY_SHORT,
   WEEKDAY_LONG,
 } from "@/lib/format.ts";
+import { coveredDays } from "@/lib/board.ts";
 import { ENTRY_TONE } from "@/lib/entry.ts";
 import Typewriter from "./Typewriter.vue";
 
@@ -50,13 +52,15 @@ const {
 
 const emit = defineEmits<{ select: [date: IsoDate] }>();
 
-type RowKind = "entry" | "missing" | "idle" | "outside";
+type RowKind = "entry" | "covered" | "missing" | "idle" | "outside";
 
 interface Row {
   date: IsoDate;
   day: number;
   weekday: number;
   entry: WorkEntry | null;
+  /** The stay that runs through this day (a plantão that started earlier). */
+  cover: WorkEntry | null;
   kind: RowKind;
   scheduled: boolean;
   weekend: boolean;
@@ -67,16 +71,19 @@ interface Row {
 
 const rows = computed<Row[]>(() => {
   const byDate = new Map(entries.map((e) => [e.date, e]));
+  const covers = coveredDays(entries);
   const expected = new Set(expectedDates);
   return datesOfMonth(month).map((date) => {
     const weekday = weekdayOf(date);
     const entry = byDate.get(date) ?? null;
+    const cover = entry ? null : (covers.get(date) ?? null);
     const inside =
       date >= contract.startedOn && (contract.endedOn === null || date <= contract.endedOn);
     const scheduled = expected.has(date);
     const future = date > today;
     let kind: RowKind;
     if (entry) kind = "entry";
+    else if (cover) kind = "covered";
     else if (!inside) kind = "outside";
     else if (scheduled && !future) kind = "missing";
     else kind = "idle";
@@ -85,15 +92,26 @@ const rows = computed<Row[]>(() => {
       day: Number(date.slice(8)),
       weekday,
       entry,
+      cover,
       kind,
       scheduled,
       weekend: weekday === 0 || weekday === 6,
       isToday: date === today,
       future,
-      label: describe(date, weekday, entry, kind, scheduled),
+      label: cover
+        ? `${WEEKDAY_LONG[weekday]}, ${formatDayMonth(date)}: ${coverText(date, cover)}`
+        : describe(date, weekday, entry, kind, scheduled),
     };
   });
 });
+
+/** "em plantão desde sex 02" or, on the last day, "saída às 08:00 do plantão de sex 02". */
+function coverText(date: IsoDate, cover: WorkEntry): string {
+  const since = `${WEEKDAY_SHORT[weekdayOf(cover.date)]} ${cover.date.slice(8)}`;
+  return date === cover.checkOutDate
+    ? `saída às ${cover.checkOut} do plantão de ${since}`
+    : `em plantão desde ${since}`;
+}
 
 function stampText(status: EntryStatus): string {
   return status === "worked" ? "" : STATUS_STAMP[status];
@@ -160,7 +178,12 @@ function describe(
           :disabled="row.kind === 'outside' || readonly"
           :aria-label="row.label"
           :aria-current="row.isToday ? 'date' : undefined"
-          @click="emit('select', row.date)"
+          @click="
+            emit(
+              'select',
+              row.cover && row.cover.date.startsWith(month) ? row.cover.date : row.date,
+            )
+          "
         >
           <span class="row__day">
             <span class="row__wd">{{ WEEKDAY_LETTER[row.weekday] }}</span>
@@ -180,6 +203,10 @@ function describe(
               <template v-else>{{
                 row.entry.checkOut ?? (row.isToday ? "em curso" : "--:--")
               }}</template>
+              <span v-if="row.entry.checkOutDate" class="row__outday"
+                >{{ WEEKDAY_LETTER[weekdayOf(row.entry.checkOutDate)]
+                }}{{ row.entry.checkOutDate.slice(8) }}</span
+              >
             </span>
             <span class="row__t mono col-break is-ink">{{
               formatBreak(row.entry.breakMinutes)
@@ -206,6 +233,7 @@ function describe(
             </span>
           </span>
 
+          <span v-else-if="row.cover" class="row__cover">{{ coverText(row.date, row.cover) }}</span>
           <span v-else-if="row.kind === 'missing'" class="row__missing">— registrar</span>
           <span v-else-if="row.scheduled && row.future" class="row__expected">Previsto</span>
           <span v-else class="row__blank" />
@@ -391,6 +419,25 @@ function describe(
   color: var(--ink-2);
 }
 
+.row__outday {
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--brand-wash);
+  color: var(--brand-ink);
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+.row__cover {
+  grid-column: 2 / span 4;
+  justify-self: start;
+  font-size: var(--t-12);
+  color: var(--brand-ink);
+  line-height: 1.4;
+}
+
 .row__missing {
   grid-column: 2 / span 4;
   color: var(--brand);
@@ -443,6 +490,7 @@ function describe(
     display: none;
   }
   .row__stamp,
+  .row__cover,
   .row__missing,
   .row__expected,
   .row__blank {

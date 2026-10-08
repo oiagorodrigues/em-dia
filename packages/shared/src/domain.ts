@@ -35,15 +35,17 @@ export const OCCUPATION_LABEL: Record<Occupation, string> = {
 };
 
 /**
- * hourly: rate per hour · daily: rate per day worked · biweekly: fixed rate per quinzena
- * (two per month) · monthly: fixed rate per month
+ * hourly: rate per hour · daily: rate per day worked · shift: rate per 24h plantão, counted in
+ * proportion to the hours of each stay · biweekly: fixed rate per quinzena (two per month) ·
+ * monthly: fixed rate per month
  */
-export const PAY_TYPES = ["hourly", "daily", "biweekly", "monthly"] as const;
+export const PAY_TYPES = ["hourly", "daily", "shift", "biweekly", "monthly"] as const;
 export type PayType = (typeof PAY_TYPES)[number];
 
 export const PAY_TYPE_LABEL: Record<PayType, string> = {
   hourly: "Por hora",
   daily: "Por diária",
+  shift: "Por plantão",
   biweekly: "Quinzenal",
   monthly: "Mensal",
 };
@@ -169,6 +171,8 @@ export interface Contract {
   schedule: Schedule;
   /** Salaried pay only: unjustified absences are deducted at a thirtieth of the month each. */
   deductAbsences: boolean;
+  /** Hours between 22:00 and 05:00 earn 20% more (LC 150 art. 14); off when both agree otherwise. */
+  nightBonus: boolean;
   expectedStart: ClockTime | null;
   expectedEnd: ClockTime | null;
   startedOn: IsoDate;
@@ -186,6 +190,8 @@ export interface WorkEntry {
   status: EntryStatus;
   checkIn: ClockTime | null;
   checkOut: ClockTime | null;
+  /** Set when the stay ends on a later date (a plantão from Friday to Monday); null otherwise. */
+  checkOutDate: IsoDate | null;
   breakMinutes: number;
   /** Derived: worked minutes (0 unless status = worked with both times). */
   minutes: number;
@@ -293,6 +299,9 @@ export interface MonthSummary {
   grossCents: number;
   /** Subtracted from salaried pay for unjustified absences when deductAbsences is on. */
   absenceDeductionCents: number;
+  /** 20% on the minutes worked between 22:00 and 05:00, when the contract has nightBonus. */
+  nightBonusCents: number;
+  nightMinutes: number;
   /** Gratificações and vale-transporte minus descontos (`PAYMENT_KIND_DUE_SIGN`). */
   adjustmentsCents: number;
   dueCents: number;

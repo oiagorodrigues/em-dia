@@ -31,7 +31,9 @@ Acceptance criteria:
 - Expected days with no entry appear as "registrar" placeholders on the card and count in the unrecorded warning on the dashboard. Days that are not expected can still be recorded.
 - Editing the schedule replaces it as a whole, clears fields that do not belong to the new kind, and does not touch entries already recorded.
 - Bulk fill (most useful for mensalista): when expected days in the past have no entry, E sees a notice with the count and a "marcar como trabalhados" button. It opens the sheet "marcar dias previstos", with entrada and saída prefilled from the contract's expected times, an editable pausa, and the per-day total times the number of days. Confirming creates one `worked` entry per day, one request each, so the activity log shows each day. Existing entries are never overwritten, so absences and days off must be marked before. Progress is shown and can be stopped; if some days fail, the count saved and the count failed are reported. W sees the new entries as unconfirmed and can confirm them.
-- Pay types: por hora, por diária, quinzenal (a fixed amount per quinzena, two per month) and mensal. Quinzenal counts in the month as 2 × the quinzena, like a salary.
+- Pay types: por hora, por diária, por plantão, quinzenal (a fixed amount per quinzena, two per month) and mensal. Quinzenal counts in the month as 2 × the quinzena, like a salary.
+- Por plantão: the rate is per 24h. A stay is one entry from the check-in day to the check-out day ("saiu em outro dia" in the day editor, up to 7 days, never in the future): Friday 08:00 to Monday 08:00 is 72h, three plantões. The days in between show "em plantão desde sex 02" on the card and the board, can't hold their own entry, and don't count as unrecorded. A worker who clocks in on Friday clocks out on Monday and the open entry closes with Monday's date. The estimate counts one plantão per expected day.
+- Adicional noturno: a per-contract switch, on for new contracts and off for those created before it. Minutes worked between 22:00 and 05:00 earn 20% more (LC 150 art. 14, no reduced night hour), priced from the contract's own hour: the hourly rate, the diária over the agreed minutes (8h without times), the plantão over 24h, or the salary over 220h. It shows as its own line in the month and in the CSV, and the day editor's amount includes it.
 - Mensalista or quinzenalista with "descontar faltas": each unjustified absence (`absent`) subtracts the month's salary ÷ 30 (rounded to cents) in the summary and statement, shown as its own line. Excused, day off and holiday never deduct. With the switch off, absences do not change the amount.
 - The switch is only available for salaried pay (mensal, quinzenal).
 
@@ -110,10 +112,11 @@ Layout and columns: [DESIGN](../DESIGN.md#screens).
 
 ## Profissional page (/equipe/:id)
 
-- Header: avatar, name, função and frequência, status chip, WhatsApp, ligar and copiar Pix (when known), registrar pagamento, editar, remover. `/vinculos/:id` redirects here.
-- Tabs: Visão geral, Cartão, Pagamentos, Acordos, Histórico, Ajustes.
-- Visão geral: month KPIs, estimated vs. actual cost, the agreement (frequência, horários, valor, desconto de faltas), contact, latest entries and payments.
-- W sees the same page without employer-only actions and without Ajustes.
+- Header: avatar, name, função and frequência, status chip, WhatsApp, ligar and copiar Pix (when known), registrar pagamento, editar and a `⋯` menu with encerrar vínculo and remover. `/vinculos/:id` redirects here.
+- Tabs: Visão geral, Cartão, Pagamentos, Acordos, Histórico.
+- Editar opens a sheet with the combinado (the contract form) and, once the worker has joined, "Contato de {nome}" with the e-mail and phone from the worker's own account; the typed contact fields only show before that. `/equipe/:id/ajustes` and `?editar=1` open the sheet.
+- Visão geral: the invite (generate or resend the code) while nobody has joined, month KPIs, estimated vs. actual cost, the agreement (frequência, horários, valor, desconto de faltas, adicional noturno), contact, latest entries and payments.
+- W sees the same page without employer-only actions.
 
 ## Quadro do mês (/cartao)
 

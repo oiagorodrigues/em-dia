@@ -11,6 +11,7 @@ function entry(date: string, patch: Partial<WorkEntry> = {}): WorkEntry {
     status: "worked",
     checkIn: "08:00",
     checkOut: "17:00",
+    checkOutDate: null,
     breakMinutes: 60,
     minutes: 480,
     note: null,
@@ -146,5 +147,28 @@ describe("TimeCard", () => {
     const absent = card.findAll(".row")[4]!;
     expect(absent.find(".row__status").text()).toBe("faltou");
     expect(absent.find(".row__conf").text()).toBe("confirmado");
+  });
+
+  it("shows a plantão on its first day and marks the days it runs through", async () => {
+    // Friday 10-02 08:00 to Monday 10-05 08:00.
+    const card = render([
+      entry("2026-10-02", {
+        checkIn: "08:00",
+        checkOut: "08:00",
+        checkOutDate: "2026-10-05",
+        breakMinutes: 0,
+        minutes: 72 * 60,
+      }),
+    ]);
+    const rows = card.findAll(".row");
+    const friday = rows[1]!;
+    expect(friday.find(".row__outday").text()).toBe("S05");
+    expect(friday.find(".row__total").text()).toBe("72h");
+    expect(rows[2]!.find(".row__cover").text()).toBe("em plantão desde sex 02");
+    expect(rows[4]!.find(".row__cover").text()).toBe("saída às 08:00 do plantão de sex 02");
+    // Monday 10-05 is expected by the schedule but covered, so it isn't "registrar".
+    expect(rows[4]!.find(".row__missing").exists()).toBe(false);
+    await rows[3]!.trigger("click");
+    expect(card.emitted("select")).toEqual([["2026-10-02"]]);
   });
 });

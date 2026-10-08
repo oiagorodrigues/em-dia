@@ -11,7 +11,7 @@ import {
 } from "./domain.ts";
 import { countsAsPaid } from "./payment.ts";
 import { expectedCountInMonth, expectedDatesInMonth } from "./schedule.ts";
-import { shiftMinutes } from "./time.ts";
+import { addDays, nightMinutes, shiftMinutes } from "./time.ts";
 
 type DayContract = Pick<Contract, "payType" | "rateCents" | "expectedStart" | "expectedEnd">;
 
@@ -43,10 +43,57 @@ export function workedDayCents(
         ? Math.round((day.minutes * contract.rateCents) / expected)
         : contract.rateCents;
     }
+    case "shift":
+      return Math.round((day.minutes * contract.rateCents) / (24 * 60));
     case "biweekly":
     case "monthly":
       return null;
   }
+}
+
+/** Monthly hours of a domestic worker's full week (44h): the CLT divisor for an hourly rate. */
+export const SALARY_MONTH_HOURS = 220;
+export const NIGHT_BONUS_RATE = 0.2;
+
+type NightContract = DayContract & Pick<Contract, "nightBonus">;
+type NightEntry = Pick<
+  WorkEntry,
+  "date" | "status" | "checkIn" | "checkOut" | "checkOutDate" | "breakMinutes"
+>;
+
+/** What a minute of work is worth, to price the adicional noturno on top of it. */
+function minuteCents(contract: DayContract, breakMinutes: number): number {
+  switch (contract.payType) {
+    case "hourly":
+      return contract.rateCents / 60;
+    case "daily":
+      return contract.rateCents / (expectedDayMinutes(contract, breakMinutes) ?? 8 * 60);
+    case "shift":
+      return contract.rateCents / (24 * 60);
+    case "biweekly":
+    case "monthly":
+      return salaryPerMonthCents(contract.payType, contract.rateCents)! / (SALARY_MONTH_HOURS * 60);
+  }
+}
+
+/** Night minutes of a worked entry with both times; 0 otherwise. */
+export function entryNightMinutes(e: NightEntry): number {
+  if (e.status !== "worked" || !e.checkIn || !e.checkOut) return 0;
+  return nightMinutes({
+    date: e.date,
+    checkIn: e.checkIn,
+    checkOut: e.checkOut,
+    checkOutDate: e.checkOutDate,
+    breakMinutes: e.breakMinutes,
+  });
+}
+
+/** 20% on the entry's minutes between 22:00 and 05:00; 0 when the contract has it off. */
+export function nightBonusCents(contract: NightContract, e: NightEntry): number {
+  if (!contract.nightBonus) return 0;
+  return Math.round(
+    entryNightMinutes(e) * minuteCents(contract, e.breakMinutes) * NIGHT_BONUS_RATE,
+  );
 }
 
 export interface SummaryInput {
@@ -61,9 +108,20 @@ export interface SummaryInput {
     | "workerId"
     | "expectedStart"
     | "expectedEnd"
+    | "nightBonus"
   >;
   month: YearMonth;
-  entries: Pick<WorkEntry, "date" | "status" | "minutes" | "breakMinutes" | "confirmedAt">[];
+  entries: Pick<
+    WorkEntry,
+    | "date"
+    | "status"
+    | "minutes"
+    | "breakMinutes"
+    | "checkIn"
+    | "checkOut"
+    | "checkOutDate"
+    | "confirmedAt"
+  >[];
   /** Payments-list entries whose referenceMonth equals `month`, of every kind. */
   payments: Pick<Payment, "amountCents" | "kind" | "method">[];
   /** Local "today" of the household; days after it never count as unrecorded. */
@@ -82,6 +140,8 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
   let holidays = 0;
   let pendingConfirmation = 0;
   let diariasCents = 0;
+  let nightBonus = 0;
+  let night = 0;
 
   for (const e of entries) {
     if (!e.date.startsWith(month)) continue;
@@ -91,7 +151,10 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
       case "worked":
         daysWorked++;
         totalMinutes += e.minutes;
-        if (contract.payType === "daily") diariasCents += workedDayCents(contract, e)!;
+        if (contract.payType === "daily" || contract.payType === "shift")
+          diariasCents += workedDayCents(contract, e)!;
+        night += entryNightMinutes(e);
+        nightBonus += nightBonusCents(contract, e);
         break;
       case "absent":
         absences++;
@@ -111,7 +174,14 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
   const period = { startedOn: contract.startedOn, endedOn: contract.endedOn };
   const expectedDates = expectedDatesInMonth(contract.schedule, month, period);
   const expectedDays = expectedCountInMonth(contract.schedule, month, period);
-  const unrecordedDates = expectedDates.filter((date) => date <= today && !byDate.has(date));
+  // Days inside a plantão that started earlier are worked, not missing.
+  const covered = new Set<IsoDate>();
+  for (const e of entries)
+    if (e.checkOutDate)
+      for (let d = addDays(e.date, 1); d <= e.checkOutDate; d = addDays(d, 1)) covered.add(d);
+  const unrecordedDates = expectedDates.filter(
+    (date) => date <= today && !byDate.has(date) && !covered.has(date),
+  );
 
   let grossCents: number;
   switch (contract.payType) {
@@ -119,6 +189,7 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
       grossCents = Math.round((totalMinutes * contract.rateCents) / 60);
       break;
     case "daily":
+    case "shift":
       grossCents = diariasCents;
       break;
     case "biweekly":
@@ -131,7 +202,7 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
     isSalaried(contract.payType) && contract.deductAbsences
       ? Math.min(grossCents, absences * Math.round(grossCents / 30))
       : 0;
-  const earnedCents = grossCents - absenceDeductionCents;
+  const earnedCents = grossCents - absenceDeductionCents + nightBonus;
 
   const adjustmentsCents = payments.reduce(
     (sum, p) => sum + PAYMENT_KIND_DUE_SIGN[p.kind] * p.amountCents,
@@ -156,6 +227,8 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
     pendingConfirmation,
     grossCents,
     absenceDeductionCents,
+    nightBonusCents: nightBonus,
+    nightMinutes: night,
     adjustmentsCents,
     dueCents,
     paidCents,

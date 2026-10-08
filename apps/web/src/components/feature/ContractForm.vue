@@ -36,6 +36,7 @@ interface FormValues {
   rateCents: number | null;
   schedule: Schedule;
   deductAbsences: boolean;
+  nightBonus: boolean;
   expectedStart: string;
   expectedEnd: string;
   startedOn: string;
@@ -72,6 +73,7 @@ const defaults: FormValues = {
   rateCents: initial?.rateCents ?? null,
   schedule: initial?.schedule ?? DEFAULT_SCHEDULE,
   deductAbsences: initial?.deductAbsences ?? false,
+  nightBonus: initial?.nightBonus ?? true,
   expectedStart: initial?.expectedStart ?? "08:00",
   expectedEnd: initial?.expectedEnd ?? "17:00",
   startedOn: initial?.startedOn ?? nowInZone(DEFAULT_TIMEZONE).date,
@@ -91,6 +93,7 @@ const payOptions = PAY_TYPES.map((p) => ({ value: p, label: PAY_TYPE_LABEL[p] })
 const RATE_LABEL: Record<PayType, string> = {
   hourly: "Valor da hora",
   daily: "Valor da diária",
+  shift: "Valor do plantão (24h)",
   biweekly: "Valor da quinzena",
   monthly: "Salário mensal",
 };
@@ -249,6 +252,15 @@ function onSubmit(): void {
           label="Descontar faltas sem justificativa"
           hint="Cada falta sem justificativa desconta 1/30 do salário do mês."
         />
+        <Toggle
+          v-model="values.nightBonus"
+          label="Adicional noturno"
+          hint="As horas entre 22h e 5h valem 20% a mais. Desligue se combinaram outra coisa com a pessoa."
+        />
+        <p v-if="values.payType === 'shift'" class="cf__desc">
+          Cada 24h valem um plantão. Quem entra sexta às 8h e sai segunda às 8h fez 3 plantões; no
+          cartão, anote a entrada no primeiro dia e a saída no dia em que foi embora.
+        </p>
       </section>
 
       <section class="cf__sec" :aria-labelledby="`${formId}-freq`">
