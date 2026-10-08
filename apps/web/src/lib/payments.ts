@@ -2,9 +2,12 @@ import {
   countsAsPaid,
   formatCents,
   handsMoney,
+  isSalaried,
   PAYMENT_KIND_DUE_SIGN,
   PAYMENT_KIND_LABEL,
   PAYMENT_KINDS,
+  salaryPerMonthCents,
+  shiftMinutes,
   toYearMonth,
   type Contract,
   type CreatePaymentInput,
@@ -169,36 +172,58 @@ export interface DayPaymentDraft {
   method: PaymentMethod;
 }
 
-/** Paying a day from the day editor: it counts in that day's month, is paid today, one diária. */
+/**
+ * Paying a day from the day editor: it counts in that day's month, is paid today, and comes
+ * with what the day is worth. A salary isn't paid by the day, so its amount starts empty.
+ */
 export function dayPaymentDraft(
-  contract: Pick<Contract, "payType" | "rateCents">,
+  contract: Pick<Contract, "payType">,
   date: IsoDate,
   today: IsoDate,
+  dayValue: number | null,
 ): DayPaymentDraft {
   return {
     kind: "pay",
     referenceMonth: toYearMonth(date),
     paidOn: today,
-    amountCents: contract.payType === "daily" ? contract.rateCents : null,
+    amountCents: isSalaried(contract.payType) ? null : dayValue,
     method: "pix",
   };
 }
 
+type DayContract = Pick<Contract, "payType" | "rateCents" | "expectedStart" | "expectedEnd">;
+
 /**
- * What one worked day is worth, to abate it from an adiantamento: the diária, the hours
- * worked times the rate, or a thirtieth of the salary (the same rate absences use).
+ * The minutes the contract's times add up to, with the day's own break, so a day that keeps
+ * the agreed times is worth exactly one diária. Null when the contract has no times.
+ */
+export function expectedDayMinutes(contract: DayContract, breakMinutes: number): number | null {
+  if (!contract.expectedStart || !contract.expectedEnd) return null;
+  const minutes = shiftMinutes(contract.expectedStart, contract.expectedEnd, breakMinutes);
+  return minutes > 0 ? minutes : null;
+}
+
+/**
+ * What one worked day is worth: the diária (in proportion when the day ran longer or shorter
+ * than the agreed times), the hours worked times the rate, or a thirtieth of the salary (the
+ * same rate absences use).
  */
 export function dayValueCents(
-  contract: Pick<Contract, "payType" | "rateCents">,
-  minutes: number,
+  contract: DayContract,
+  day: { minutes: number; breakMinutes: number },
 ): number | null {
   switch (contract.payType) {
-    case "daily":
-      return contract.rateCents;
+    case "daily": {
+      const expected = expectedDayMinutes(contract, day.breakMinutes);
+      return expected && day.minutes > 0 && day.minutes !== expected
+        ? Math.round((day.minutes * contract.rateCents) / expected)
+        : contract.rateCents;
+    }
     case "hourly":
-      return minutes > 0 ? Math.round((minutes * contract.rateCents) / 60) : null;
+      return day.minutes > 0 ? Math.round((day.minutes * contract.rateCents) / 60) : null;
+    case "biweekly":
     case "monthly":
-      return Math.round(contract.rateCents / 30);
+      return Math.round(salaryPerMonthCents(contract.payType, contract.rateCents)! / 30);
   }
 }
 

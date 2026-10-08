@@ -1,8 +1,10 @@
 import {
+  derivedRates,
   estimateAverageMonthlyCost,
   estimateMonthCost,
   formatCents,
   formatDuration,
+  isSalaried,
   monthName,
   parseYearMonth,
   shiftMinutes,
@@ -48,9 +50,9 @@ export function describeEstimate(draft: Draft, month: YearMonth): EstimateText {
     reason,
   });
 
-  if (draft.schedule.kind === "on_demand" && draft.payType !== "monthly")
+  if (draft.schedule.kind === "on_demand" && !isSalaried(draft.payType))
     return none("quando precisar não tem custo fixo: entra o que for anotado");
-  if (scheduleIsEmpty(draft.schedule) && draft.payType !== "monthly")
+  if (scheduleIsEmpty(draft.schedule) && !isSalaried(draft.payType))
     return none("escolha os dias para estimar");
   if (!draft.rateCents) return none("informe o valor para estimar");
 
@@ -74,6 +76,9 @@ export function describeEstimate(draft: Draft, month: YearMonth): EstimateText {
     case "hourly":
       breakdown = `${plural(est.days, unit[0]!, unit[1]!)} × ${formatDuration(est.minutesPerDay ?? 0)} × ${rate}`;
       break;
+    case "biweekly":
+      breakdown = est.cents > 0 ? `2 quinzenas × ${rate}` : "fora do período do combinado";
+      break;
     case "monthly":
       breakdown = est.cents > 0 ? "salário fixo do mês" : "fora do período do combinado";
       break;
@@ -87,6 +92,28 @@ export function describeEstimate(draft: Draft, month: YearMonth): EstimateText {
     average: avg !== null && avg !== est.cents ? `média de ${formatCents(avg)} por mês` : null,
     reason: null,
   };
+}
+
+export interface RateLine {
+  label: string;
+  value: string;
+  /** The unit the rate was typed in. */
+  base: boolean;
+}
+
+/** The rate restated per month, quinzena, day and hour, for what can be worked out. */
+export function describeRates(draft: Draft, month: YearMonth): RateLine[] {
+  if (!draft.rateCents) return [];
+  const r = derivedRates({ ...draft, rateCents: draft.rateCents }, month);
+  const lines: [string, number | null, boolean][] = [
+    ["Por mês", r.monthCents, draft.payType === "monthly"],
+    ["Por quinzena", r.fortnightCents, draft.payType === "biweekly"],
+    ["Por dia", r.dayCents, draft.payType === "daily"],
+    ["Por hora", r.hourCents, draft.payType === "hourly"],
+  ];
+  return lines
+    .filter(([, cents]) => cents !== null)
+    .map(([label, cents, base]) => ({ label, value: formatCents(cents!), base }));
 }
 
 /** "das 08:00 às 17:00 · 9h por dia" */

@@ -218,7 +218,13 @@ const ledger = computed(() => {
             hint: `${s.daysWorked} × ${formatCents(s.rateCents)}`,
             value: formatCents(s.grossCents),
           }
-        : { label: "Salário", value: formatCents(s.grossCents) };
+        : s.payType === "biweekly"
+          ? {
+              label: "Salário",
+              hint: `2 × ${formatCents(s.rateCents)}`,
+              value: formatCents(s.grossCents),
+            }
+          : { label: "Salário", value: formatCents(s.grossCents) };
   const lines = [
     { label: "Horas", value: formatDuration(s.totalMinutes) },
     { label: attendanceLabel(kind.value), value: attendanceText(s, kind.value) },

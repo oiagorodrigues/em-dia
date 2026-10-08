@@ -6,6 +6,7 @@ import {
   formatCents,
   formatDuration,
   isOpenAdvance,
+  isSalaried,
   monthName,
   parseYearMonth,
   shiftMinutes,
@@ -38,6 +39,7 @@ import {
   advanceProgress,
   dayPaymentDraft,
   dayValueCents,
+  expectedDayMinutes,
   paymentFormData,
 } from "@/lib/payments.ts";
 import { useAuthStore } from "@/stores/auth.ts";
@@ -136,8 +138,10 @@ const title = computed(() =>
   date ? `${WEEKDAY_LONG[weekdayOf(date)]}, ${formatDayMonth(date)}` : "",
 );
 
-/** The employer can pay a worked day in the same step; the payment counts in that day's month. */
-const canPay = computed(() => auth.isEmployer && !ended.value && !isFuture.value);
+/** The employer can abate any worked day up to today from an open adiantamento. */
+const canAbate = computed(() => auth.isEmployer && !ended.value && !isFuture.value);
+/** Paying in the same step is for the day being worked: it is paid today, on the day. */
+const canPay = computed(() => canAbate.value && date === today);
 const payNow = ref(false);
 const {
   values: payValues,
@@ -154,19 +158,34 @@ const {
 });
 const receipt = ref<File | null>(null);
 const paying = computed(() => payNow.value && worked.value && canPay.value);
-const payHint = computed(() => {
-  if (!date) return undefined;
-  const month = monthName(parseYearMonth(date.slice(0, 7)).month);
-  return contract.payType === "daily"
-    ? `Vem com o valor da diária e entra na conta de ${month}.`
-    : `Entra na conta de ${month}.`;
+const payHint = computed(() =>
+  date ? `Entra na conta de ${monthName(parseYearMonth(date.slice(0, 7)).month)}.` : undefined,
+);
+
+const dayMinutes = computed(() =>
+  values.checkIn && values.checkOut
+    ? shiftMinutes(values.checkIn, values.checkOut, values.breakMinutes)
+    : 0,
+);
+const dayValue = computed(() =>
+  dayValueCents(contract, { minutes: dayMinutes.value, breakMinutes: values.breakMinutes }),
+);
+/** A diária in proportion: the day ran longer or shorter than the agreed times. */
+const amountHint = computed(() => {
+  if (contract.payType !== "daily" || dayValue.value === contract.rateCents) return undefined;
+  const expected = expectedDayMinutes(contract, values.breakMinutes);
+  if (!expected || dayMinutes.value <= 0) return undefined;
+  return `${formatDuration(dayMinutes.value)} em vez de ${formatDuration(expected)}: diária de ${formatCents(contract.rateCents)} em proporção.`;
 });
 
+/** The amount follows the hours until the employer types one. */
+const amountTyped = ref(false);
 watch(
   () => [open.value, date] as const,
   ([isOpen]) => {
     if (!isOpen || !date) return;
-    Object.assign(payValues, dayPaymentDraft(contract, date, today));
+    Object.assign(payValues, dayPaymentDraft(contract, date, today, dayValue.value));
+    amountTyped.value = false;
     receipt.value = null;
     payNow.value = false;
     payErrors.value = {};
@@ -174,13 +193,16 @@ watch(
   },
   { immediate: true },
 );
+watch(dayValue, (cents) => {
+  if (!amountTyped.value && !isSalaried(contract.payType)) payValues.amountCents = cents;
+});
 
 /**
  * Instead of paying, the employer can abate the day from an open adiantamento: a compensation
  * payment linked to it, in the day's month, so the day counts as paid and the advance shrinks.
  */
 const advances = useResource(
-  () => (open.value && canPay.value ? contract.id : ""),
+  () => (open.value && canAbate.value ? contract.id : ""),
   (id) => (id ? queryKeys.advances(id) : null),
   (id) => paymentsApi.advances(id).then((r) => r.advances),
 );
@@ -202,13 +224,7 @@ const advanceOptions = computed(() =>
     description: advanceProgress(a).toLowerCase(),
   })),
 );
-const dayMinutes = computed(() =>
-  values.checkIn && values.checkOut
-    ? shiftMinutes(values.checkIn, values.checkOut, values.breakMinutes)
-    : 0,
-);
-const dayValue = computed(() => dayValueCents(contract, dayMinutes.value));
-const abating = computed(() => abateNow.value && worked.value && canPay.value && !!advance.value);
+const abating = computed(() => abateNow.value && worked.value && canAbate.value && !!advance.value);
 const abateHint = computed(() => {
   const a = advance.value;
   if (!a) return undefined;
@@ -478,20 +494,29 @@ async function onRemove(): Promise<void> {
         />
       </Field>
 
-      <section v-if="worked && canPay" class="de__pay" aria-label="Pagamento do dia">
-        <Toggle v-model="payNow" label="Pagar este dia agora" :hint="payHint" />
-        <div v-if="payNow" class="de__payfields">
-          <p v-if="payError" class="form-error" role="alert">{{ payError }}</p>
-          <PaymentFields
-            v-model:paid-on="payValues.paidOn"
-            v-model:amount-cents="payValues.amountCents"
-            v-model:method="payValues.method"
-            v-model:receipt="receipt"
-            :errors="payErrors"
-            :today="today"
-            @clear="clearPayError"
-          />
-        </div>
+      <section
+        v-if="worked && (canPay || openAdvances.length > 0)"
+        class="de__pay"
+        aria-label="Pagamento do dia"
+      >
+        <template v-if="canPay">
+          <Toggle v-model="payNow" label="Pagar este dia agora" :hint="payHint" />
+          <div v-if="payNow" class="de__payfields">
+            <p v-if="payError" class="form-error" role="alert">{{ payError }}</p>
+            <PaymentFields
+              v-model:paid-on="payValues.paidOn"
+              v-model:amount-cents="payValues.amountCents"
+              v-model:method="payValues.method"
+              v-model:receipt="receipt"
+              :errors="payErrors"
+              :today="today"
+              :amount-hint="amountHint"
+              date-locked
+              @clear="clearPayError"
+              @amount-input="amountTyped = true"
+            />
+          </div>
+        </template>
         <template v-if="openAdvances.length > 0">
           <Toggle v-model="abateNow" label="Abater do adiantamento" :hint="abateHint" />
           <div v-if="abateNow" class="de__payfields">
@@ -526,21 +551,26 @@ async function onRemove(): Promise<void> {
           </div>
         </template>
       </section>
-
-      <div v-if="canDelete && !ended" class="de__danger">
-        <Button variant="danger" icon="trash" :loading="removing" @click="onRemove">
-          {{ confirmRemove ? "Toque de novo para apagar" : "Apagar registro" }}
-        </Button>
-      </div>
     </form>
 
     <template v-if="!ended" #footer>
-      <Button v-if="canConfirm" icon="check" :loading="confirming" @click="onConfirm"
-        >Confirmar</Button
-      >
-      <Button type="submit" form="day-editor" variant="primary" :loading="submitting">
-        {{ saveLabel }}
-      </Button>
+      <div class="de__foot">
+        <Button
+          v-if="canDelete"
+          variant="danger"
+          icon="trash"
+          :loading="removing"
+          @click="onRemove"
+        >
+          {{ confirmRemove ? "Toque de novo para apagar" : "Apagar registro" }}
+        </Button>
+        <Button v-if="canConfirm" icon="check" :loading="confirming" @click="onConfirm"
+          >Confirmar</Button
+        >
+        <Button type="submit" form="day-editor" variant="primary" :loading="submitting">
+          {{ saveLabel }}
+        </Button>
+      </div>
     </template>
   </Sheet>
 </template>
@@ -622,7 +652,20 @@ async function onRemove(): Promise<void> {
   gap: var(--s-5);
 }
 
-.de__danger {
-  padding-top: var(--s-2);
+/* Small screens stack the actions with Salvar on top; wider ones line them up, Salvar last. */
+.de__foot {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--s-3);
+}
+
+.de__foot > * {
+  flex: 1;
+}
+
+@media (min-width: 520px) {
+  .de__foot {
+    flex-direction: row;
+  }
 }
 </style>

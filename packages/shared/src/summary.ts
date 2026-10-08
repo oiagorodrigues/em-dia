@@ -1,5 +1,7 @@
 import {
+  isSalaried,
   PAYMENT_KIND_DUE_SIGN,
+  salaryPerMonthCents,
   type Contract,
   type IsoDate,
   type MonthSummary,
@@ -72,14 +74,15 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
     case "daily":
       grossCents = daysWorked * contract.rateCents;
       break;
+    case "biweekly":
     case "monthly":
-      grossCents = contract.rateCents;
+      grossCents = salaryPerMonthCents(contract.payType, contract.rateCents)!;
       break;
   }
 
   const absenceDeductionCents =
-    contract.payType === "monthly" && contract.deductAbsences
-      ? Math.min(grossCents, absences * Math.round(contract.rateCents / 30))
+    isSalaried(contract.payType) && contract.deductAbsences
+      ? Math.min(grossCents, absences * Math.round(grossCents / 30))
       : 0;
   const earnedCents = grossCents - absenceDeductionCents;
 

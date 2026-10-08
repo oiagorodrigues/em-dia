@@ -70,6 +70,15 @@ describe("computeMonthSummary", () => {
     expect(s.grossCents).toBe(250000);
   });
 
+  it("quinzenal pay is two quinzenas a month, with absences off a thirtieth of the month", () => {
+    const s = computeMonthSummary({
+      ...base,
+      contract: { ...base.contract, payType: "biweekly", rateCents: 75000, deductAbsences: true },
+    });
+    expect(s.grossCents).toBe(150000);
+    expect(s.absenceDeductionCents).toBe(s.absences * 5000);
+  });
+
   it("counts gratificação and vale-transporte as due and as paid, leaving the balance alone", () => {
     const s = computeMonthSummary({
       ...base,

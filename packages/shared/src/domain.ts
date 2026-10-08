@@ -34,15 +34,31 @@ export const OCCUPATION_LABEL: Record<Occupation, string> = {
   outro: "Outro",
 };
 
-/** hourly: rate per hour · daily: rate per day worked · monthly: fixed rate per month */
-export const PAY_TYPES = ["hourly", "daily", "monthly"] as const;
+/**
+ * hourly: rate per hour · daily: rate per day worked · biweekly: fixed rate per quinzena
+ * (two per month) · monthly: fixed rate per month
+ */
+export const PAY_TYPES = ["hourly", "daily", "biweekly", "monthly"] as const;
 export type PayType = (typeof PAY_TYPES)[number];
 
 export const PAY_TYPE_LABEL: Record<PayType, string> = {
   hourly: "Por hora",
   daily: "Por diária",
+  biweekly: "Quinzenal",
   monthly: "Mensal",
 };
+
+/** Pay that does not depend on the days worked: the month costs the same either way. */
+export function isSalaried(payType: PayType): payType is "biweekly" | "monthly" {
+  return payType === "biweekly" || payType === "monthly";
+}
+
+/** What a salaried contract costs per month; null for pay counted by day or hour. */
+export function salaryPerMonthCents(payType: PayType, rateCents: number): number | null {
+  if (payType === "monthly") return rateCents;
+  if (payType === "biweekly") return rateCents * 2;
+  return null;
+}
 
 export const ENTRY_STATUSES = ["worked", "absent", "excused", "day_off", "holiday"] as const;
 export type EntryStatus = (typeof ENTRY_STATUSES)[number];
@@ -150,7 +166,7 @@ export interface Contract {
   rateCents: number;
   /** When the worker is expected to come (see schedule.ts). */
   schedule: Schedule;
-  /** monthly pay only: unjustified absences are deducted at rate / 30 each. */
+  /** Salaried pay only: unjustified absences are deducted at a thirtieth of the month each. */
   deductAbsences: boolean;
   expectedStart: ClockTime | null;
   expectedEnd: ClockTime | null;
@@ -274,7 +290,7 @@ export interface MonthSummary {
   /** Entries awaiting the other party's confirmation. */
   pendingConfirmation: number;
   grossCents: number;
-  /** Subtracted from monthly pay for unjustified absences when deductAbsences is on. */
+  /** Subtracted from salaried pay for unjustified absences when deductAbsences is on. */
   absenceDeductionCents: number;
   /** Gratificações and vale-transporte minus descontos (`PAYMENT_KIND_DUE_SIGN`). */
   adjustmentsCents: number;

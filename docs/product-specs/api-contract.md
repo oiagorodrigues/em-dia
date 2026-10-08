@@ -58,7 +58,7 @@ Schedule (`Contract.schedule`, validated by `scheduleSchema`, helpers in `packag
 | `per_month`  | `visitsPerMonth`         | 1x por mês, 2x por mês, no fixed date                              |
 | `on_demand`  | –                        | quando precisar; nothing is expected                               |
 
-`everyWeeks` counts from the Monday-starting week that contains the first scheduled weekday on or after `startedOn`. The schema drops fields that don't belong to the kind. Expected dates feed `MonthSummary.expectedDates`/`unrecordedDates`; `per_month` only sets `expectedDays` (a count). `deductAbsences` (monthly pay only) subtracts `round(rateCents / 30)` per unjustified absence (`MonthSummary.absenceDeductionCents`). A PATCH replaces `schedule` as a whole.
+`everyWeeks` counts from the Monday-starting week that contains the first scheduled weekday on or after `startedOn`. The schema drops fields that don't belong to the kind. Expected dates feed `MonthSummary.expectedDates`/`unrecordedDates`; `per_month` only sets `expectedDays` (a count). `payType` is `hourly`, `daily`, `biweekly` (rate per quinzena, 2 × rate a month) or `monthly`. `deductAbsences` (salaried pay only: `monthly`, `biweekly`) subtracts `round(monthly salary / 30)` per unjustified absence (`MonthSummary.absenceDeductionCents`). A PATCH replaces `schedule` as a whole.
 
 | Method | Path                    | Who      | Body                                                             | Response                                                                                                                                                                            |
 | ------ | ----------------------- | -------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -152,7 +152,7 @@ Additions to `Contract`: `contactEmail`, `contactPhone` (typed by the employer b
 
 Archived contracts are read-only: writes to entries, clock and payments return 409 `CONFLICT` ("Este vínculo foi removido"). The worker keeps read access to history and sees the contract as removed. `/dashboard` never includes archived contracts.
 
-Shared estimate helpers (`packages/shared/src/estimate.ts`): `estimateMonthCost` (rate × expected days, × hours per day for hourly, fixed for monthly) and `estimateAverageMonthlyCost` (12-month average). Both return `null` when the schedule can't be priced (on demand, or hourly without expected times).
+Shared estimate helpers (`packages/shared/src/estimate.ts`): `estimateMonthCost` (rate × expected days, × hours per day for hourly, fixed for monthly, 2 × rate for biweekly), `estimateAverageMonthlyCost` (12-month average) and `derivedRates` (the rate per month, quinzena, expected day and hour; null where times or fixed days are missing). Both return `null` when the schedule can't be priced (on demand, or hourly without expected times).
 
 ## Agreements, compensation, account deletion, projections (v3)
 

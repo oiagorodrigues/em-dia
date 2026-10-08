@@ -13,7 +13,7 @@ import {
 import { computed } from "vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
-import { describeEstimate, describeHours } from "@/lib/estimate.ts";
+import { describeEstimate, describeHours, describeRates } from "@/lib/estimate.ts";
 import { formatDayMonth } from "@/lib/format.ts";
 
 export interface EstimateDraft {
@@ -37,19 +37,16 @@ const { draft, month, today } = defineProps<{
 }>();
 
 const name = computed(() => draft.workerName.trim());
-const estimate = computed(() =>
-  describeEstimate(
-    {
-      payType: draft.payType,
-      rateCents: draft.rateCents,
-      schedule: draft.schedule,
-      expectedStart: draft.expectedStart || null,
-      expectedEnd: draft.expectedEnd || null,
-      startedOn: draft.startedOn || today,
-    },
-    month,
-  ),
-);
+const input = computed(() => ({
+  payType: draft.payType,
+  rateCents: draft.rateCents,
+  schedule: draft.schedule,
+  expectedStart: draft.expectedStart || null,
+  expectedEnd: draft.expectedEnd || null,
+  startedOn: draft.startedOn || today,
+}));
+const estimate = computed(() => describeEstimate(input.value, month));
+const rates = computed(() => describeRates(input.value, month));
 const frequency = computed(() => {
   const s = draft.schedule;
   const empty =
@@ -123,6 +120,15 @@ const invite = computed(() => {
         <p v-if="estimate.average" class="ep__avg">{{ estimate.average }}</p>
       </template>
       <p v-else class="ep__reason">{{ estimate.reason }}</p>
+    </section>
+    <section v-if="rates.length > 1" class="ep__rates" aria-labelledby="ep-rates">
+      <h3 id="ep-rates" class="label">Equivale a</h3>
+      <dl>
+        <div v-for="r in rates" :key="r.label" :class="{ 'is-base': r.base }">
+          <dt>{{ r.label }}</dt>
+          <dd class="mono">{{ r.value }}</dd>
+        </div>
+      </dl>
     </section>
     <p class="ep__foot">
       Conta feita com os dias previstos. Faltas, gratificações e descontos mudam o valor do mês.
@@ -244,6 +250,29 @@ const invite = computed(() => {
 
 .ep__reason {
   font-size: var(--t-14);
+  font-weight: 600;
+}
+
+.ep__rates {
+  display: grid;
+  gap: var(--s-2);
+}
+
+.ep__rates dl {
+  display: grid;
+  gap: var(--s-1);
+}
+
+.ep__rates dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  font-size: var(--t-14);
+  color: var(--ink-2);
+}
+
+.ep__rates dl > div.is-base {
+  color: var(--ink);
   font-weight: 600;
 }
 

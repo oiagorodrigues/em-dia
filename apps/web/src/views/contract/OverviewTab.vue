@@ -10,6 +10,7 @@ import {
   monthName,
   parseYearMonth,
   PAY_TYPE_LABEL,
+  salaryPerMonthCents,
   countsAsPaid,
   handsMoney,
   PAYMENT_KIND_LABEL,
@@ -185,6 +186,7 @@ const partial = computed(() => month.value === currentMonth);
 const rateUnit: Record<string, string> = {
   hourly: "por hora",
   daily: "por diária",
+  biweekly: "por quinzena",
   monthly: "por mês",
 };
 
@@ -207,12 +209,11 @@ const terms = computed(() => {
     },
     { label: "Forma", value: PAY_TYPE_LABEL[c.payType] },
   ];
-  if (c.payType === "monthly")
+  const salary = salaryPerMonthCents(c.payType, c.rateCents);
+  if (salary !== null)
     rows.push({
       label: "Desconto de faltas",
-      value: c.deductAbsences
-        ? `sim, ${formatCents(Math.round(c.rateCents / 30))} por falta`
-        : "não",
+      value: c.deductAbsences ? `sim, ${formatCents(Math.round(salary / 30))} por falta` : "não",
     });
   rows.push({ label: "Início", value: formatDateShort(c.startedOn), mono: true });
   if (c.endedOn) rows.push({ label: "Fim", value: formatDateShort(c.endedOn), mono: true });

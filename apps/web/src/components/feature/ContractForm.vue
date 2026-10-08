@@ -5,6 +5,7 @@ import {
   nowInZone,
   OCCUPATION_LABEL,
   OCCUPATIONS,
+  isSalaried,
   PAY_TYPE_LABEL,
   PAY_TYPES,
   type CreateContractInput,
@@ -87,6 +88,7 @@ const payOptions = PAY_TYPES.map((p) => ({ value: p, label: PAY_TYPE_LABEL[p] })
 const RATE_LABEL: Record<PayType, string> = {
   hourly: "Valor da hora",
   daily: "Valor da diária",
+  biweekly: "Valor da quinzena",
   monthly: "Salário mensal",
 };
 
@@ -118,7 +120,7 @@ function onSubmit(): void {
   const input = {
     ...rest,
     ...(contact ? { contactEmail: contactEmail.trim(), contactPhone } : {}),
-    deductAbsences: values.payType === "monthly" && values.deductAbsences,
+    deductAbsences: isSalaried(values.payType) && values.deductAbsences,
     rateCents: values.rateCents ?? 0,
     expectedStart: values.expectedStart || null,
     expectedEnd: values.expectedEnd || null,
@@ -239,10 +241,10 @@ function onSubmit(): void {
           </Field>
         </div>
         <Toggle
-          v-if="values.payType === 'monthly'"
+          v-if="isSalaried(values.payType)"
           v-model="values.deductAbsences"
           label="Descontar faltas sem justificativa"
-          hint="Cada falta sem justificativa desconta 1/30 do salário. Ex.: salário de R$ 3.000 → R$ 100 por falta."
+          hint="Cada falta sem justificativa desconta 1/30 do salário do mês. Ex.: R$ 3.000 por mês → R$ 100 por falta."
         />
       </section>
 
@@ -429,10 +431,6 @@ function onSubmit(): void {
 }
 
 @media (min-width: 600px) {
-  .cf__pay {
-    grid-template-columns: 1.3fr 1fr;
-    align-items: start;
-  }
   .cf__two--wide {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--s-3);

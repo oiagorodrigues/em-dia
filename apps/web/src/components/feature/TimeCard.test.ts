@@ -140,7 +140,8 @@ describe("TimeCard", () => {
     ]);
     const worked = card.findAll(".row")[1]!;
     expect(worked.find(".row__status").text()).toBe("trabalhou");
-    expect(worked.find(".row__notecol").text()).toBe("saiu mais cedo");
+    expect(worked.find(".row__notecol .icon").exists()).toBe(true);
+    expect(worked.attributes("aria-label")).toContain("Observação: saiu mais cedo");
     expect(worked.find(".row__conf").text()).toBe("aguardando");
     const absent = card.findAll(".row")[4]!;
     expect(absent.find(".row__status").text()).toBe("faltou");

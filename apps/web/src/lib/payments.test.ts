@@ -15,10 +15,8 @@ import {
 } from "./payments.ts";
 
 describe("dayPaymentDraft", () => {
-  it("refers to the worked day's month and prefills one diária", () => {
-    expect(
-      dayPaymentDraft({ payType: "daily", rateCents: 18000 }, "2026-09-30", "2026-10-07"),
-    ).toEqual({
+  it("refers to the worked day's month and prefills what the day is worth", () => {
+    expect(dayPaymentDraft({ payType: "daily" }, "2026-09-30", "2026-10-07", 18000)).toEqual({
       kind: "pay",
       referenceMonth: "2026-09",
       paidOn: "2026-10-07",
@@ -27,20 +25,39 @@ describe("dayPaymentDraft", () => {
     });
   });
 
-  it("leaves the amount empty for hourly and monthly pay", () => {
-    for (const payType of ["hourly", "monthly"] as const)
-      expect(
-        dayPaymentDraft({ payType, rateCents: 2500 }, "2026-10-06", "2026-10-07").amountCents,
-      ).toBeNull();
+  it("leaves the amount empty for a salary", () => {
+    for (const payType of ["biweekly", "monthly"] as const)
+      expect(dayPaymentDraft({ payType }, "2026-10-06", "2026-10-07", 8000).amountCents).toBeNull();
   });
 });
 
 describe("dayValueCents", () => {
+  const times = { expectedStart: "08:00", expectedEnd: "17:00" };
+  const day = (minutes: number, breakMinutes = 60) => ({ minutes, breakMinutes });
+
   it("is the diária, the hours times the rate, or a thirtieth of the salary", () => {
-    expect(dayValueCents({ payType: "daily", rateCents: 18000 }, 0)).toBe(18000);
-    expect(dayValueCents({ payType: "hourly", rateCents: 3000 }, 450)).toBe(22500);
-    expect(dayValueCents({ payType: "hourly", rateCents: 3000 }, 0)).toBeNull();
-    expect(dayValueCents({ payType: "monthly", rateCents: 240000 }, 0)).toBe(8000);
+    const rate = (payType: "daily" | "hourly" | "biweekly" | "monthly", rateCents: number) => ({
+      payType,
+      rateCents,
+      ...times,
+    });
+    expect(dayValueCents(rate("daily", 18000), day(480))).toBe(18000);
+    expect(dayValueCents(rate("hourly", 3000), day(450))).toBe(22500);
+    expect(dayValueCents(rate("hourly", 3000), day(0))).toBeNull();
+    expect(dayValueCents(rate("monthly", 240000), day(0))).toBe(8000);
+    expect(dayValueCents(rate("biweekly", 120000), day(0))).toBe(8000);
+  });
+
+  it("prices a longer or shorter day in proportion to the diária", () => {
+    const daily = { payType: "daily" as const, rateCents: 15000, ...times };
+    // 08:00 to 17:00 less 1h of break is the agreed 8h: 12h is one and a half diárias.
+    expect(dayValueCents(daily, day(720))).toBe(22500);
+    expect(dayValueCents(daily, day(240))).toBe(7500);
+    // The same break comes off the agreed times, so a shorter break is a longer day.
+    expect(dayValueCents(daily, day(510, 30))).toBe(15000);
+    expect(dayValueCents({ ...daily, expectedStart: null, expectedEnd: null }, day(720))).toBe(
+      15000,
+    );
   });
 });
 

@@ -11,8 +11,10 @@ import {
   type YearMonth,
 } from "@emdia/shared";
 import { computed } from "vue";
+import Icon from "@/components/ui/Icon.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import Stamp from "@/components/ui/Stamp.vue";
+import Tooltip from "@/components/ui/Tooltip.vue";
 import {
   formatBreak,
   formatDayMonth,
@@ -110,11 +112,12 @@ function describe(
     return kind === "missing"
       ? `${head}: dia previsto sem registro. Registrar`
       : `${head}: ${scheduled ? "dia previsto" : "sem registro"}`;
-  const confirmed = !confirmable
+  const status = !confirmable
     ? ""
     : entry.confirmedAt
       ? ", confirmado"
       : ", aguardando confirmação";
+  const confirmed = entry.note ? `${status}. Observação: ${entry.note}` : status;
   if (entry.status !== "worked") return `${head}: ${ENTRY_STATUS_LABEL[entry.status]}${confirmed}`;
   const times = [
     entry.checkIn ? `entrada ${entry.checkIn}` : null,
@@ -196,7 +199,11 @@ function describe(
               :tilt="row.day % 2 ? -4 : -2.5"
               size="sm"
             />
-            <span v-if="row.entry.note" class="row__note col-narrow">{{ row.entry.note }}</span>
+            <span v-if="row.entry.note" class="col-narrow row__notecol">
+              <Tooltip :text="row.entry.note">
+                <Icon name="message" :size="16" class="row__note" />
+              </Tooltip>
+            </span>
           </span>
 
           <span v-else-if="row.kind === 'missing'" class="row__missing">— registrar</span>
@@ -208,7 +215,11 @@ function describe(
               ENTRY_STATUS_LABEL[row.entry.status].toLowerCase()
             }}</StatusChip>
           </span>
-          <span class="col-wide row__notecol">{{ row.entry?.note ?? "" }}</span>
+          <span class="col-wide row__notecol">
+            <Tooltip v-if="row.entry?.note" :text="row.entry.note">
+              <Icon name="message" :size="16" class="row__note" />
+            </Tooltip>
+          </span>
           <span class="col-wide row__conf">
             <template v-if="row.entry && confirmable">
               <span class="dot" :class="row.entry.confirmedAt ? 'dot--ok' : 'dot--open'" />
@@ -377,14 +388,7 @@ function describe(
 }
 
 .row__note {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--t-12);
   color: var(--ink-2);
-  font-style: italic;
 }
 
 .row__missing {
@@ -451,13 +455,9 @@ function describe(
 }
 
 .row__notecol {
+  display: flex;
+  align-items: center;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--t-12);
-  color: var(--ink-2);
-  font-style: italic;
 }
 
 .row__conf {
@@ -472,7 +472,7 @@ function describe(
 @container card (min-width: 640px) {
   .card__head,
   .row {
-    grid-template-columns: 60px 1fr 1fr 0.8fr 0.9fr 132px minmax(0, 1.6fr) 112px;
+    grid-template-columns: 60px 1fr 1fr 0.8fr 0.9fr 132px 40px 112px;
     padding-left: var(--s-5);
     padding-right: var(--s-4);
     column-gap: var(--s-3);
@@ -485,6 +485,9 @@ function describe(
   }
   .col-wide {
     display: block;
+  }
+  .row__notecol.col-wide {
+    display: flex;
   }
   .row__conf {
     display: flex;

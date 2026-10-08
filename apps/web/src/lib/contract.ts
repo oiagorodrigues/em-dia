@@ -58,6 +58,7 @@ export function contactChannels(
 const UNIT: Record<PayType, [string, string]> = {
   daily: ["diária", "diárias"],
   hourly: ["dia", "dias"],
+  biweekly: ["dia", "dias"],
   monthly: ["dia", "dias"],
 };
 
@@ -67,6 +68,7 @@ export function describeEstimate(
   contract: Pick<Contract, "payType" | "rateCents" | "schedule">,
 ): string | null {
   if (estimate.cents === null) return null;
+  if (contract.payType === "biweekly") return `2 quinzenas × ${formatCents(contract.rateCents)}`;
   if (contract.payType === "monthly") return "salário fixo";
   const [one, many] =
     contract.schedule.kind === "per_month" ? ["visita", "visitas"] : UNIT[contract.payType];

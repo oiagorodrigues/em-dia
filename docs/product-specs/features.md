@@ -19,7 +19,7 @@ Acceptance criteria per role. Endpoints are in [api-contract](api-contract.md); 
 
 ## Frequência e combinado
 
-The contract carries an agreed schedule (`weekly`, `month_days`, `per_month` or `on_demand`) and, for monthly pay, a "descontar faltas" switch. Rules and field shapes: [api-contract](api-contract.md#contracts-vínculos). Counting and wording come from `schedule.ts` in `@emdia/shared`; api and web never reimplement them.
+The contract carries an agreed schedule (`weekly`, `month_days`, `per_month` or `on_demand`) and, for salaried pay (mensal or quinzenal), a "descontar faltas" switch. Rules and field shapes: [api-contract](api-contract.md#contracts-vínculos). Counting and wording come from `schedule.ts` in `@emdia/shared`; api and web never reimplement them.
 
 Acceptance criteria:
 
@@ -31,8 +31,9 @@ Acceptance criteria:
 - Expected days with no entry appear as "registrar" placeholders on the card and count in the unrecorded warning on the dashboard. Days that are not expected can still be recorded.
 - Editing the schedule replaces it as a whole, clears fields that do not belong to the new kind, and does not touch entries already recorded.
 - Bulk fill (most useful for mensalista): when expected days in the past have no entry, E sees a notice with the count and a "marcar como trabalhados" button. It opens the sheet "marcar dias previstos", with entrada and saída prefilled from the contract's expected times, an editable pausa, and the per-day total times the number of days. Confirming creates one `worked` entry per day, one request each, so the activity log shows each day. Existing entries are never overwritten, so absences and days off must be marked before. Progress is shown and can be stopped; if some days fail, the count saved and the count failed are reported. W sees the new entries as unconfirmed and can confirm them.
-- Mensalista with "descontar faltas": each unjustified absence (`absent`) subtracts salário ÷ 30 (rounded to cents) in the summary and statement, shown as its own line. Excused, day off and holiday never deduct. With the switch off, absences do not change the amount.
-- The switch is only available for monthly pay.
+- Pay types: por hora, por diária, quinzenal (a fixed amount per quinzena, two per month) and mensal. Quinzenal counts in the month as 2 × the quinzena, like a salary.
+- Mensalista or quinzenalista with "descontar faltas": each unjustified absence (`absent`) subtracts the month's salary ÷ 30 (rounded to cents) in the summary and statement, shown as its own line. Excused, day off and holiday never deduct. With the switch off, absences do not change the amount.
+- The switch is only available for salaried pay (mensal, quinzenal).
 
 ## Time card with dual confirmation
 
@@ -41,7 +42,7 @@ Acceptance criteria:
 - Editing a confirmed entry clears the confirmation.
 - Dates before the start date or after the end date are rejected. Future dates accept only day off, holiday and excused.
 - W can delete their own unconfirmed entry; E can delete any entry.
-- Pay the day: when E marks a past or current day as worked, the day editor offers "pagar este dia agora". It is off by default; turned on, it shows the same pago em, valor, como pagou and comprovante fields as "novo pagamento". Valor is prefilled with the diária for daily pay and empty otherwise; pago em defaults to today. The payment's reference month is the worked day's month, not the month it is paid in. The payment is validated before the day is saved, so an invalid amount saves nothing. If the day is already recorded and E changed nothing, only the payment is sent, so W's confirmation stays. If the day saves and the payment fails, E is told and the sheet stays open to retry. With an open adiantamento, E can abate the day instead (see [Payment types](#payment-types)). W never sees the payment section in the day editor.
+- Pay the day: when E marks today as worked, the day editor offers "pagar este dia agora"; past days don't offer it (pay them in "novo pagamento"). It is off by default; turned on, it shows the same pago em, valor, como pagou and comprovante fields as "novo pagamento". Pago em is locked on today. Valor follows what the day is worth until E types one: the diária, in proportion when the day's hours differ from the agreed times (12h on an 8h diária of R$ 150 is R$ 225, and the hint says so), hours × rate for hourly pay, and empty for a salary. The day's minutes and the agreed times are compared with the same break, so keeping the agreed times is exactly one diária. The month's due amount still counts one diária per day worked; paying more shows as credit. The payment's reference month is the worked day's month, not the month it is paid in. The payment is validated before the day is saved, so an invalid amount saves nothing. If the day is already recorded and E changed nothing, only the payment is sent, so W's confirmation stays. If the day saves and the payment fails, E is told and the sheet stays open to retry. With an open adiantamento, E can abate the day instead (see [Payment types](#payment-types)). W never sees the payment section in the day editor.
 
 ## Clock in and out
 
@@ -63,7 +64,7 @@ Acceptance criteria:
 - "Novo pagamento" and the edit sheet have a "Tipo" field with a one-line explanation of the chosen type. The amount is prefilled with the month's balance only for diárias/salário. `?tipo=` opens the form on a type; the old `?extra=1` link opens it on gratificação.
 - Compensation is offered only for diárias/salário.
 - Payment tables have a Tipo column and a type filter, for both roles. Totals ("total pago") count only what counts as paid; "com recebi" and "aguardando recebi" count only entries where money changed hands.
-- Abate a day (E): when E marks a past or current day as worked and the person has an open adiantamento, the day editor offers "abater do adiantamento" next to "pagar este dia agora" (turning one on turns the other off). It shows what remains ("restam R$ 180,00 de R$ 360,00"), picks the oldest open adiantamento (a select appears when there are several) and prefills the day's value (the diária, hours × rate, or salário ÷ 30) capped at what remains; when the day is worth more, the hint says the rest stays to be paid. An amount over what remains is blocked with a message and the day is not saved. Abating creates a compensation payment for the worked day's month, dated the worked day and linked to the adiantamento, so the day counts as paid and the adiantamento's balance drops. Days of any later month can be abated.
+- Abate a day (E): when E marks a past or current day as worked and the person has an open adiantamento, the day editor offers "abater do adiantamento" (next to "pagar este dia agora" on today; turning one on turns the other off). It shows what remains ("restam R$ 180,00 de R$ 360,00"), picks the oldest open adiantamento (a select appears when there are several) and prefills the day's value (the diária, hours × rate, or salário ÷ 30) capped at what remains; when the day is worth more, the hint says the rest stays to be paid. An amount over what remains is blocked with a message and the day is not saved. Abating creates a compensation payment for the worked day's month, dated the worked day and linked to the adiantamento, so the day counts as paid and the adiantamento's balance drops. Days of any later month can be abated.
 - Pagamentos (the person's tab and /pagamentos) shows "Adiantamentos em aberto" with what remains and a progress bar, for E and W. Each abatement names its adiantamento ("Adiantamento de 15/09/2026").
 - An adiantamento with abated days cannot be removed (409 with the abated amount), retyped, or lowered below what was abated. Removing an abatement gives its amount back to the adiantamento.
 - Data from before this change was migrated so every month keeps its amount due and amount paid; see the decision log in [0002](../exec-plans/active/0002-next.md).
@@ -143,7 +144,7 @@ Layout and columns: [DESIGN](../DESIGN.md#screens).
 
 ## Cost estimate in the form
 
-- While E fills the "adicionar profissional" form, a resumo panel shows the schedule in words and the estimated cost for the month (daily: days × rate; hourly: days × hours × rate; monthly: the salary) plus the 12-month average.
+- While E fills the "adicionar profissional" form, a resumo panel shows the schedule in words and the estimated cost for the month (daily: days × rate; hourly: days × hours × rate; monthly: the salary; quinzenal: 2 × the quinzena) plus the 12-month average, and "equivale a": the rate restated por mês, por quinzena, por dia and por hora (`derivedRates`). A day becomes a month with the average expected days over 12 months, and an hour comes from the agreed times; a unit that needs what isn't known (no times, quando precisar) is left out. Nothing of this is stored.
 - When it cannot be priced (on demand, or hourly without times) the panel says what to fill in.
 
 ## Agreements and compensation

@@ -1,0 +1,2 @@
+ALTER TABLE "contracts" DROP CONSTRAINT "contracts_pay_type_check";--> statement-breakpoint
+ALTER TABLE "contracts" ADD CONSTRAINT "contracts_pay_type_check" CHECK ("contracts"."pay_type" IN ('hourly', 'daily', 'biweekly', 'monthly'));

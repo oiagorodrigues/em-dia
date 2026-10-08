@@ -220,4 +220,21 @@ describe("absence deduction", () => {
     await put(daily, "2026-09-16", "absent");
     expect((await summary(daily, "2026-09")).absenceDeductionCents).toBe(0);
   });
+
+  test("quinzenal pay is two quinzenas a month and loses a thirtieth of the month per absence", async () => {
+    const id = await contractWith({
+      payType: "biweekly",
+      rateCents: 120000,
+      deductAbsences: true,
+      schedule: { kind: "weekly", weekdays: [1, 2, 3, 4, 5] },
+    });
+    const res = await t.http().get(`/api/v1/contracts/${id}`).auth(employer.token, as);
+    expect(res.body.contract).toMatchObject({ payType: "biweekly", deductAbsences: true });
+    await put(id, "2026-09-16", "absent");
+    expect(await summary(id, "2026-09")).toMatchObject({
+      grossCents: 240000,
+      absenceDeductionCents: 8000,
+      dueCents: 232000,
+    });
+  });
 });
