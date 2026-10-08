@@ -205,9 +205,17 @@ const stopShortcut = watch(
 
 <template>
   <div class="wh">
-    <header>
+    <header class="wh__head">
       <p class="label">{{ greeting() }}, {{ firstName(auth.user?.name ?? "") }}</p>
       <h1 class="visually-hidden">Início</h1>
+      <Button
+        v-if="data && data.items.length > 0"
+        to="/entrar-no-vinculo"
+        icon="key"
+        variant="ghost"
+        class="wh__join"
+        >Entrar em outro vínculo</Button
+      >
     </header>
 
     <div v-if="loading && !data" class="grid grid-cols-12 gap-6 lg:gap-8" aria-busy="true">
@@ -393,6 +401,15 @@ const stopShortcut = watch(
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--s-6);
+}
+
+/* A worker can have several households: the code for a new one is always one tap away. */
+.wh__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
 }
 
 .wh__clock {

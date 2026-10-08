@@ -19,6 +19,16 @@ const router = useRouter();
 const inviteFromLink =
   typeof route.query.convite === "string" ? normalizeInviteCode(route.query.convite) : "";
 
+/** Someone who already has an account opens the invite after signing in, not by signing up again. */
+const loginLink = computed(() => {
+  const next = inviteFromLink
+    ? `/entrar-no-vinculo?convite=${inviteFromLink}`
+    : typeof route.query.next === "string"
+      ? route.query.next
+      : null;
+  return { path: "/entrar", query: next ? { next } : {} };
+});
+
 const { values, errors, formError, submitting, submit, clearError } = useForm(registerSchema, {
   name: "",
   email: "",
@@ -63,6 +73,11 @@ function onSubmit(): void {
   <InviteSignedInNotice v-if="signedInWithInvite" />
   <form v-else class="stack" novalidate @submit.prevent="onSubmit">
     <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
+    <p v-if="inviteFromLink" class="has-account" role="note">
+      Já trabalha com outra família pelo em dia?
+      <RouterLink :to="loginLink">Entre na sua conta</RouterLink> e o convite vira mais um vínculo,
+      sem criar outra conta.
+    </p>
 
     <fieldset class="roles">
       <legend class="label">Você…</legend>
@@ -154,15 +169,20 @@ function onSubmit(): void {
     <Button type="submit" variant="primary" block :loading="submitting">Criar conta</Button>
     <p class="alt">
       Já tem conta?
-      <RouterLink
-        :to="{ path: '/entrar', query: route.query.next ? { next: route.query.next } : {} }"
-        >Entrar</RouterLink
-      >
+      <RouterLink :to="loginLink">Entrar</RouterLink>
     </p>
   </form>
 </template>
 
 <style scoped>
+.has-account {
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-2);
+  background: var(--brand-wash);
+  color: var(--ink);
+  font-size: var(--t-14);
+}
+
 .roles {
   border: 0;
   padding: 0;

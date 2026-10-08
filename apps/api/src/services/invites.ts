@@ -79,7 +79,8 @@ function whatsappText(t: InviteText): string {
   return (
     `Oi, ${t.workerName}! Aqui é ${t.employerName}. Cadastrei você no em dia (${t.householdName}) ` +
     `para a gente anotar junto os dias de trabalho e os pagamentos. ` +
-    `Crie sua conta por este link: ${t.signupUrl} (código ${t.code})`
+    `Crie sua conta por este link: ${t.signupUrl} (código ${t.code}). ` +
+    `Se você já usa o em dia, é só entrar e colar o código em "Entrar em outro vínculo".`
   );
 }
 
@@ -96,6 +97,8 @@ function inviteEmail(to: string, t: InviteText): MailMessage {
       t.signupUrl,
       "",
       `Se preferir, use o código ${t.code} na tela de cadastro. Ele vale até ${t.validUntil}.`,
+      "",
+      `Já tem conta no em dia? Abra o mesmo link e toque em "Entrar", ou, já dentro do app, vá em "Entrar em outro vínculo" e cole o código ${t.code}. O vínculo com ${t.employerName} aparece junto dos que você já tem.`,
       "",
       `Qualquer dúvida, é só falar com ${t.employerName}.`,
       "",
