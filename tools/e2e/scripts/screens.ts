@@ -121,10 +121,13 @@ async function main() {
             await page.goto(`${BASE}${path}`);
             await shoot(page, `${p}${path.replace("/", "-")}`);
           }
-          for (const tab of ["/visao-geral", "", "/pagamentos", "/historico", "/ajustes"]) {
+          for (const tab of ["/visao-geral", "", "/pagamentos", "/historico"]) {
             await page.goto(`${BASE}/equipe/${contractId}${tab}?mes=2026-09`);
             await shoot(page, `${p}-vinculo${tab.replace("/", "-") || "-cartao"}`);
           }
+          await page.goto(`${BASE}/equipe/${contractId}/visao-geral?editar=1`);
+          await page.getByRole("dialog").waitFor();
+          await shoot(page, `${p}-vinculo-editar`, false);
           await page.goto(`${BASE}/equipe/novo`);
           await shoot(page, `${p}-novo-vinculo`);
           await page.goto(`${BASE}/pagamentos/novo?vinculo=${contractId}`);

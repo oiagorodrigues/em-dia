@@ -161,7 +161,7 @@ export function pendencies(
         contractId: c.id,
         tone: "amber",
         text: `${name}: convite ainda não usado`,
-        to: `/equipe/${c.id}/ajustes`,
+        to: `/equipe/${c.id}/visao-geral`,
       });
     }
   }

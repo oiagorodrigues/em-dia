@@ -1,22 +1,34 @@
 <script setup lang="ts">
-import { describeSchedule, OCCUPATION_LABEL, type Contract } from "@emdia/shared";
-import { computed, nextTick, onBeforeUnmount, reactive, useTemplateRef, watch } from "vue";
-import { RouterLink, RouterView, useRoute } from "vue-router";
+import {
+  DEFAULT_TIMEZONE,
+  describeSchedule,
+  endContractSchema,
+  nowInZone,
+  OCCUPATION_LABEL,
+  type Contract,
+} from "@emdia/shared";
+import { computed, nextTick, onBeforeUnmount, reactive, ref, useTemplateRef, watch } from "vue";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { contractsApi } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
 import ContactActions from "@/components/feature/ContactActions.vue";
+import ContractEditSheet from "@/components/feature/ContractEditSheet.vue";
 import ContractTabSkeleton from "@/components/feature/ContractTabSkeleton.vue";
 import Avatar from "@/components/ui/Avatar.vue";
 import Button from "@/components/ui/Button.vue";
 import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
+import DateField from "@/components/ui/DateField.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
+import Field from "@/components/ui/Field.vue";
 import Icon from "@/components/ui/Icon.vue";
 import Menu from "@/components/ui/Menu.vue";
 import type { MenuItem } from "@/components/ui/menu.ts";
+import Sheet from "@/components/ui/Sheet.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import { provideContract, useMonthQuery } from "@/composables/contractContext.ts";
 import { useContractRemoval } from "@/composables/contractRemoval.ts";
+import { useForm } from "@/composables/form.ts";
 import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { contactChannels, contractStatus, isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
@@ -24,11 +36,14 @@ import { MQ, useMediaQuery } from "@/lib/media.ts";
 import { useBack } from "@/composables/back.ts";
 import { useSlidingIndicator } from "@/lib/motion.ts";
 import { useAuthStore } from "@/stores/auth.ts";
+import { useToastStore } from "@/stores/toast.ts";
 
 const { id } = defineProps<{ id: string }>();
 
 const auth = useAuthStore();
+const toast = useToastStore();
 const route = useRoute();
+const router = useRouter();
 const { month, currentMonth, setMonth } = useMonthQuery();
 
 const { data, error, loading, reload, mutate, key } = useResource(
@@ -51,6 +66,33 @@ const { confirmOpen, removing, restoring, askRemove, confirmRemove, restore } = 
   replaceContract,
 );
 
+/** Editing opens in place; `?editar=1` (old Ajustes links, the team table) opens it on arrival. */
+const editOpen = ref(false);
+function edit(): void {
+  editOpen.value = true;
+}
+watch(
+  () => [route.query.editar, data.value?.id] as const,
+  ([flag, loaded]) => {
+    if (flag === undefined || !loaded) return;
+    if (auth.isEmployer && isWritable(data.value!)) editOpen.value = true;
+    const { editar: _, ...query } = route.query;
+    void router.replace({ query });
+  },
+  { immediate: true },
+);
+
+const endOpen = ref(false);
+const endForm = useForm(endContractSchema, { endedOn: nowInZone(DEFAULT_TIMEZONE).date });
+function onEnd(): void {
+  void endForm.submit(async (input) => {
+    const { contract: updated } = await contractsApi.end(id, input.endedOn);
+    replaceContract(updated);
+    endOpen.value = false;
+    toast.success("Vínculo encerrado. O histórico continua aqui.");
+  });
+}
+
 provideContract({
   contract,
   month,
@@ -58,6 +100,7 @@ provideContract({
   setMonth,
   replaceContract,
   askRemove,
+  edit,
   restore,
   restoring,
 });
@@ -70,7 +113,6 @@ const tabs = computed(() => {
     { name: "contract-agreements", label: "Acordos" },
     { name: "contract-history", label: "Histórico" },
   ];
-  if (auth.isEmployer) base.push({ name: "contract-settings", label: "Ajustes" });
   return base;
 });
 
@@ -88,7 +130,15 @@ const menuItems = computed<MenuItem[]>(() => {
   if (!data.value) return [];
   if (data.value.archivedAt)
     return [{ label: "Restaurar", icon: "undo", onSelect: () => void restore() }];
-  return [{ label: "Remover da equipe", icon: "trash", danger: true, onSelect: askRemove }];
+  const items: MenuItem[] = [];
+  if (data.value.status === "active")
+    items.push({
+      label: "Encerrar vínculo",
+      icon: "close",
+      onSelect: () => (endOpen.value = true),
+    });
+  items.push({ label: "Remover da equipe", icon: "trash", danger: true, onSelect: askRemove });
+  return items;
 });
 
 const backNav = useBack(auth.isEmployer ? "/equipe" : "/");
@@ -216,8 +266,8 @@ onBeforeUnmount(() => resize.disconnect());
             />
             <Button
               v-if="writable"
-              :to="{ name: 'contract-settings', params: { id }, query: route.query }"
               icon="pencil"
+              @click="edit"
               icon-only
               label="Editar"
               class="pf__edit"
@@ -268,6 +318,45 @@ onBeforeUnmount(() => resize.disconnect());
           <component :is="Component" :key="`${id}:${String(tabRoute.name)}`" />
         </Transition>
       </RouterView>
+
+      <ContractEditSheet
+        v-if="auth.isEmployer"
+        v-model:open="editOpen"
+        :contract="data"
+        @saved="replaceContract"
+      />
+
+      <Sheet v-model:open="endOpen" title="Encerrar vínculo" :subtitle="data.workerName">
+        <form id="end-form" class="stack" novalidate @submit.prevent="onEnd">
+          <p v-if="endForm.formError.value" class="form-error" role="alert">
+            {{ endForm.formError.value }}
+          </p>
+          <p>
+            Depois de encerrar, ninguém mais anota dias nem pagamentos neste vínculo. Nada é
+            apagado: o cartão, os pagamentos e o histórico continuam aqui.
+          </p>
+          <Field
+            v-slot="{ id: fieldId, invalid, describedBy }"
+            label="Último dia"
+            :error="endForm.errors.value.endedOn"
+          >
+            <DateField
+              :id="fieldId"
+              v-model="endForm.values.endedOn"
+              label="Último dia"
+              :min="data.startedOn"
+              :invalid="invalid"
+              :described-by="describedBy"
+            />
+          </Field>
+        </form>
+        <template #footer>
+          <Button @click="endOpen = false">Cancelar</Button>
+          <Button type="submit" form="end-form" variant="danger" :loading="endForm.submitting.value"
+            >Encerrar</Button
+          >
+        </template>
+      </Sheet>
 
       <ConfirmDialog
         v-model:open="confirmOpen"
@@ -365,10 +454,6 @@ onBeforeUnmount(() => resize.disconnect());
 @media (max-width: 639px) {
   .pf__actions {
     flex-basis: 100%;
-  }
-  /* The Ajustes tab is one tap away; the row keeps contact, payment and the menu. */
-  .pf__actions :deep(.pf__edit) {
-    display: none;
   }
 }
 

@@ -70,7 +70,7 @@ const defaults: FormValues = {
   occupation: initial?.occupation ?? "diarista",
   payType: initial?.payType ?? "daily",
   rateCents: initial?.rateCents ?? null,
-  schedule: structuredClone(initial?.schedule ?? DEFAULT_SCHEDULE),
+  schedule: initial?.schedule ?? DEFAULT_SCHEDULE,
   deductAbsences: initial?.deductAbsences ?? false,
   expectedStart: initial?.expectedStart ?? "08:00",
   expectedEnd: initial?.expectedEnd ?? "17:00",

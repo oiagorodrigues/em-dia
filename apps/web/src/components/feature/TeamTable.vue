@@ -332,7 +332,11 @@ function menuFor(item: DashboardItem): MenuItem[] {
     });
   }
   list.push(
-    { label: "Editar", icon: "pencil", onSelect: () => void router.push(`/equipe/${id}/ajustes`) },
+    {
+      label: "Editar",
+      icon: "pencil",
+      onSelect: () => void router.push(`/equipe/${id}/visao-geral?editar=1`),
+    },
     { label: "Remover", icon: "trash", danger: true, onSelect: () => askRemove(item) },
   );
   return list;

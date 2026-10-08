@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { YearMonth } from "@emdia/shared";
 import Skeleton from "@/components/ui/Skeleton.vue";
-import SkeletonForm from "@/components/ui/SkeletonForm.vue";
 import SkeletonKpi from "@/components/ui/SkeletonKpi.vue";
 import SkeletonLedger from "@/components/ui/SkeletonLedger.vue";
 import SkeletonMonth from "@/components/ui/SkeletonMonth.vue";
@@ -56,10 +55,6 @@ const TABLE_COLUMNS = [{}, {}, {}, { align: "right" as const }, {}];
         </div>
       </div>
     </div>
-  </div>
-
-  <div v-else-if="tab === 'contract-settings'" class="sk-form-col" aria-busy="true">
-    <SkeletonForm :fields="['input', 'input', 'choice', 'two', 'choice', 'two']" />
   </div>
 
   <div v-else class="sk-table" aria-busy="true">
@@ -156,10 +151,6 @@ const TABLE_COLUMNS = [{}, {}, {}, { align: "right" as const }, {}];
   display: grid;
   gap: var(--s-4);
   padding: var(--s-5);
-}
-
-.sk-form-col {
-  max-width: var(--form);
 }
 
 .sk-table {
