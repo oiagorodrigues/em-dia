@@ -35,6 +35,14 @@ Refresh token: opaque random 256-bit, stored hashed (SHA-256) server-side, 30 da
 | PATCH  | `/me`          | `updateMeSchema`       | `{ user }`                                                                   |
 | POST   | `/me/password` | `changePasswordSchema` | 204, revokes other sessions, returns new cookie + `{ accessToken }` with 200 |
 
+## Feedback
+
+| Method | Path        | Body             | Response |
+| ------ | ----------- | ---------------- | -------- |
+| POST   | `/feedback` | `feedbackSchema` | 204      |
+
+Any signed-in user. `kind` is `idea`, `problem` or `other`; `message` is 5 to 2000 characters; `page` (optional, up to 200) is the screen it was sent from. The API mails it to `FEEDBACK_TO` with the user's e-mail as reply-to, plus name, role, page and app version. Limited per IP to `RATE_LIMIT_FEEDBACK` (default 5) per 15 minutes. When the mail can't go out (no SMTP in production, transport error) it answers 500 with "Não deu para enviar agora. Tente de novo em instantes." and nothing is stored.
+
 ## Households (employer)
 
 | Method | Path              | Body              | Response                      |

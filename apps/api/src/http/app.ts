@@ -17,6 +17,7 @@ import { householdRoutes } from "./routes/households.ts";
 import { meRoutes } from "./routes/me.ts";
 import { paymentRoutes } from "./routes/payments.ts";
 import { reportRoutes } from "./routes/reports.ts";
+import { feedbackRoutes } from "./routes/feedback.ts";
 import { webRoutes } from "./web.ts";
 
 export interface AppDeps {
@@ -69,6 +70,9 @@ export function createApp({ config, logger, services }: AppDeps): Express {
   v1.use(paymentRoutes(services, config.receiptMaxBytes));
   v1.use(agreementRoutes(services));
   v1.use(reportRoutes(services));
+  v1.use(
+    feedbackRoutes(services, createRateLimiter(config.rateLimit.feedback, "feedback", config)),
+  );
   api.use("/v1", v1);
   if (config.webDistDir) app.use(webRoutes(config.webDistDir));
 

@@ -98,6 +98,16 @@ export const PAYMENT_KIND_DUE_SIGN: Record<PaymentKind, 1 | 0 | -1> = {
   deduction: -1,
 };
 
+/** What a user tells the team from "enviar feedback". */
+export const FEEDBACK_KINDS = ["idea", "problem", "other"] as const;
+export type FeedbackKind = (typeof FEEDBACK_KINDS)[number];
+
+export const FEEDBACK_KIND_LABEL: Record<FeedbackKind, string> = {
+  idea: "Sugestão",
+  problem: "Problema",
+  other: "Outro",
+};
+
 /** compensation: settled with something other than money (see Agreement). */
 export const PAYMENT_METHODS = ["pix", "cash", "transfer", "compensation", "other"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];

@@ -1,4 +1,5 @@
 import type {
+  FeedbackInput,
   ActivityItem,
   Agreement,
   Contract,
@@ -41,6 +42,11 @@ export const authApi = {
       body: { token, password },
       auth: false,
     }),
+};
+
+export const feedbackApi = {
+  /** Mailed to the team with the user's e-mail as reply-to; 204. */
+  send: (body: FeedbackInput) => request<void>("/feedback", { method: "POST", body }),
 };
 
 export const meApi = {

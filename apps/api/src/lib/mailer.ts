@@ -5,6 +5,8 @@ export interface MailMessage {
   to: string;
   subject: string;
   text: string;
+  /** Where a reply goes, when it isn't the sender (feedback is answered to the user). */
+  replyTo?: string;
 }
 
 export interface SentMail extends MailMessage {

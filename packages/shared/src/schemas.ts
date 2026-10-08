@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   ENTRY_STATUSES,
+  FEEDBACK_KINDS,
   OCCUPATIONS,
   PAY_TYPES,
   PAYMENT_KINDS,
@@ -62,6 +63,20 @@ export const updateMeSchema = z.object({
   pixKey: z.string().trim().max(140).nullable().optional(),
 });
 export type UpdateMeInput = z.infer<typeof updateMeSchema>;
+
+export const FEEDBACK_MESSAGE_MAX = 2000;
+
+export const feedbackSchema = z.object({
+  kind: z.enum(FEEDBACK_KINDS),
+  message: z
+    .string()
+    .trim()
+    .min(5, "Conte um pouco mais")
+    .max(FEEDBACK_MESSAGE_MAX, `Use até ${FEEDBACK_MESSAGE_MAX} caracteres`),
+  /** The screen the feedback was sent from ("/equipe/abc/cartao"), to reproduce a problem. */
+  page: z.string().trim().max(200).optional(),
+});
+export type FeedbackInput = z.infer<typeof feedbackSchema>;
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(128),
