@@ -6,6 +6,7 @@ import {
   formatCents,
   formatDuration,
   isOpenAdvance,
+  expectedDayMinutes,
   isSalaried,
   monthName,
   parseYearMonth,
@@ -39,7 +40,6 @@ import {
   advanceProgress,
   dayPaymentDraft,
   dayValueCents,
-  expectedDayMinutes,
   paymentFormData,
 } from "@/lib/payments.ts";
 import { useAuthStore } from "@/stores/auth.ts";

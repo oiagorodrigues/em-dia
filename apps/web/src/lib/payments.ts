@@ -7,8 +7,8 @@ import {
   PAYMENT_KIND_LABEL,
   PAYMENT_KINDS,
   salaryPerMonthCents,
-  shiftMinutes,
   toYearMonth,
+  workedDayCents,
   type Contract,
   type CreatePaymentInput,
   type IsoDate,
@@ -191,40 +191,19 @@ export function dayPaymentDraft(
   };
 }
 
-type DayContract = Pick<Contract, "payType" | "rateCents" | "expectedStart" | "expectedEnd">;
-
 /**
- * The minutes the contract's times add up to, with the day's own break, so a day that keeps
- * the agreed times is worth exactly one diária. Null when the contract has no times.
- */
-export function expectedDayMinutes(contract: DayContract, breakMinutes: number): number | null {
-  if (!contract.expectedStart || !contract.expectedEnd) return null;
-  const minutes = shiftMinutes(contract.expectedStart, contract.expectedEnd, breakMinutes);
-  return minutes > 0 ? minutes : null;
-}
-
-/**
- * What one worked day is worth: the diária (in proportion when the day ran longer or shorter
- * than the agreed times), the hours worked times the rate, or a thirtieth of the salary (the
- * same rate absences use).
+ * What one worked day is worth: what it adds to the month (see `workedDayCents`), or for a
+ * salary a thirtieth of the month (the same rate absences use). Null for an hourly day with
+ * no hours yet.
  */
 export function dayValueCents(
-  contract: DayContract,
+  contract: Pick<Contract, "payType" | "rateCents" | "expectedStart" | "expectedEnd">,
   day: { minutes: number; breakMinutes: number },
 ): number | null {
-  switch (contract.payType) {
-    case "daily": {
-      const expected = expectedDayMinutes(contract, day.breakMinutes);
-      return expected && day.minutes > 0 && day.minutes !== expected
-        ? Math.round((day.minutes * contract.rateCents) / expected)
-        : contract.rateCents;
-    }
-    case "hourly":
-      return day.minutes > 0 ? Math.round((day.minutes * contract.rateCents) / 60) : null;
-    case "biweekly":
-    case "monthly":
-      return Math.round(salaryPerMonthCents(contract.payType, contract.rateCents)! / 30);
-  }
+  const salary = salaryPerMonthCents(contract.payType, contract.rateCents);
+  if (salary !== null) return Math.round(salary / 30);
+  if (contract.payType === "hourly" && day.minutes <= 0) return null;
+  return workedDayCents(contract, day);
 }
 
 /** Years with possible payments, newest first: from the oldest contract start up to this year. */

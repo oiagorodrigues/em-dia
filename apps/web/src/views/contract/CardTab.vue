@@ -215,7 +215,10 @@ const ledger = computed(() => {
       : s.payType === "daily"
         ? {
             label: "Valor",
-            hint: `${s.daysWorked} × ${formatCents(s.rateCents)}`,
+            hint:
+              s.grossCents === s.daysWorked * s.rateCents
+                ? `${s.daysWorked} × ${formatCents(s.rateCents)}`
+                : `${s.daysWorked} diárias, em proporção às horas`,
             value: formatCents(s.grossCents),
           }
         : s.payType === "biweekly"
@@ -238,7 +241,7 @@ const ledger = computed(() => {
       ? [
           {
             label: "Faltas descontadas",
-            hint: `${s.absences} × ${formatCents(Math.round(s.rateCents / 30))}`,
+            hint: `${s.absences} × ${formatCents(Math.round(s.grossCents / 30))}`,
             value: `− ${formatCents(s.absenceDeductionCents)}`,
             tone: "red" as const,
           },

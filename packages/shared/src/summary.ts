@@ -11,14 +11,59 @@ import {
 } from "./domain.ts";
 import { countsAsPaid } from "./payment.ts";
 import { expectedCountInMonth, expectedDatesInMonth } from "./schedule.ts";
+import { shiftMinutes } from "./time.ts";
+
+type DayContract = Pick<Contract, "payType" | "rateCents" | "expectedStart" | "expectedEnd">;
+
+/**
+ * The minutes the contract's times add up to, less the day's own break, so a day that keeps
+ * the agreed times is worth exactly one diária. Null when the contract has no times.
+ */
+export function expectedDayMinutes(contract: DayContract, breakMinutes: number): number | null {
+  if (!contract.expectedStart || !contract.expectedEnd) return null;
+  const minutes = shiftMinutes(contract.expectedStart, contract.expectedEnd, breakMinutes);
+  return minutes > 0 ? minutes : null;
+}
+
+/**
+ * What one worked day earns with pay counted by the day or the hour: the hours times the rate,
+ * or the diária in proportion to the agreed times. A diária stays whole when the contract has
+ * no times or the day has no check-out yet. Null for a salary, which doesn't change with days.
+ */
+export function workedDayCents(
+  contract: DayContract,
+  day: { minutes: number; breakMinutes: number },
+): number | null {
+  switch (contract.payType) {
+    case "hourly":
+      return Math.round((day.minutes * contract.rateCents) / 60);
+    case "daily": {
+      const expected = expectedDayMinutes(contract, day.breakMinutes);
+      return expected && day.minutes > 0 && day.minutes !== expected
+        ? Math.round((day.minutes * contract.rateCents) / expected)
+        : contract.rateCents;
+    }
+    case "biweekly":
+    case "monthly":
+      return null;
+  }
+}
 
 export interface SummaryInput {
   contract: Pick<
     Contract,
-    "payType" | "rateCents" | "schedule" | "deductAbsences" | "startedOn" | "endedOn" | "workerId"
+    | "payType"
+    | "rateCents"
+    | "schedule"
+    | "deductAbsences"
+    | "startedOn"
+    | "endedOn"
+    | "workerId"
+    | "expectedStart"
+    | "expectedEnd"
   >;
   month: YearMonth;
-  entries: Pick<WorkEntry, "date" | "status" | "minutes" | "confirmedAt">[];
+  entries: Pick<WorkEntry, "date" | "status" | "minutes" | "breakMinutes" | "confirmedAt">[];
   /** Payments-list entries whose referenceMonth equals `month`, of every kind. */
   payments: Pick<Payment, "amountCents" | "kind" | "method">[];
   /** Local "today" of the household; days after it never count as unrecorded. */
@@ -36,6 +81,7 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
   let daysOff = 0;
   let holidays = 0;
   let pendingConfirmation = 0;
+  let diariasCents = 0;
 
   for (const e of entries) {
     if (!e.date.startsWith(month)) continue;
@@ -45,6 +91,7 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
       case "worked":
         daysWorked++;
         totalMinutes += e.minutes;
+        if (contract.payType === "daily") diariasCents += workedDayCents(contract, e)!;
         break;
       case "absent":
         absences++;
@@ -72,7 +119,7 @@ export function computeMonthSummary(input: SummaryInput): MonthSummary {
       grossCents = Math.round((totalMinutes * contract.rateCents) / 60);
       break;
     case "daily":
-      grossCents = daysWorked * contract.rateCents;
+      grossCents = diariasCents;
       break;
     case "biweekly":
     case "monthly":
