@@ -43,14 +43,14 @@ export interface ContactChannels {
 export function contactChannels(
   contract: Pick<
     Contract,
-    "workerId" | "contactEmail" | "contactPhone" | "workerPhone" | "workerPixKey"
+    "workerId" | "contactEmail" | "contactPhone" | "workerEmail" | "workerPhone" | "workerPixKey"
   >,
 ): ContactChannels {
   if (!contract.workerId)
     return { phone: contract.contactPhone, email: contract.contactEmail, pixKey: null };
   return {
     phone: contract.workerPhone ?? contract.contactPhone,
-    email: null,
+    email: contract.workerEmail ?? contract.contactEmail,
     pixKey: contract.workerPixKey,
   };
 }

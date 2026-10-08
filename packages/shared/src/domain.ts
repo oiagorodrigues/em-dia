@@ -156,6 +156,7 @@ export interface Contract {
   workerId: string | null;
   workerName: string;
   /** From the linked worker's profile; null until linked or when not set. */
+  workerEmail: string | null;
   workerPhone: string | null;
   workerPixKey: string | null;
   /** Contact typed by the employer before the worker has an account; used to send the invite. */

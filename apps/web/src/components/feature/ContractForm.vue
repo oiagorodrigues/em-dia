@@ -50,6 +50,7 @@ const {
   lockStart = false,
   contact = false,
   summary = false,
+  summaryTerms = true,
 } = defineProps<{
   initial?: Partial<CreateContractInput>;
   submitLabel: string;
@@ -60,6 +61,8 @@ const {
   contact?: boolean;
   /** Live "resumo" panel with the estimated cost: beside the form on lg, under it below. */
   summary?: boolean;
+  /** Frequency and hours in the resumo; off where the form beside it already shows them. */
+  summaryTerms?: boolean;
 }>();
 
 const defaults: FormValues = {
@@ -244,7 +247,7 @@ function onSubmit(): void {
           v-if="isSalaried(values.payType)"
           v-model="values.deductAbsences"
           label="Descontar faltas sem justificativa"
-          hint="Cada falta sem justificativa desconta 1/30 do salário do mês. Ex.: R$ 3.000 por mês → R$ 100 por falta."
+          hint="Cada falta sem justificativa desconta 1/30 do salário do mês."
         />
       </section>
 
@@ -328,6 +331,7 @@ function onSubmit(): void {
       v-if="summary"
       class="cf-wrap__panel"
       :draft="draft"
+      :terms="summaryTerms"
       :month="previewMonth"
       :today="today"
     />

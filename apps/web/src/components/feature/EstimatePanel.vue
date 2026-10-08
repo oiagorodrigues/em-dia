@@ -29,8 +29,15 @@ export interface EstimateDraft {
   contactPhone?: string;
 }
 
-const { draft, month, today } = defineProps<{
+const {
+  draft,
+  month,
+  today,
+  terms = true,
+} = defineProps<{
   draft: EstimateDraft;
+  /** Frequência and horário; off where the form next to the panel already shows them. */
+  terms?: boolean;
   /** Month the estimate is for: the start month when it starts later, else this month. */
   month: YearMonth;
   today: IsoDate;
@@ -91,11 +98,11 @@ const invite = computed(() => {
     </div>
 
     <dl class="ep__facts">
-      <div>
+      <div v-if="terms">
         <dt class="label">Frequência</dt>
         <dd>{{ frequency }}</dd>
       </div>
-      <div v-if="hours">
+      <div v-if="terms && hours">
         <dt class="label">Horário</dt>
         <dd class="mono">{{ hours }}</dd>
       </div>

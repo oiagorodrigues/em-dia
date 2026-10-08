@@ -111,12 +111,43 @@ function onEnd(): void {
         {{ inviteLabel }}
       </Button>
     </section>
-    <p v-else-if="contract.workerId" class="st__joined muted">
-      {{ contract.workerName }} já entrou no vínculo e bate o ponto pelo próprio celular.
-    </p>
+    <section v-else-if="contract.workerId" class="st__block sheet st__who" aria-labelledby="st-who">
+      <div class="st__head">
+        <h2 id="st-who" class="section-title">Contato de {{ contract.workerName }}</h2>
+        <p class="muted">
+          {{ contract.workerName }} já entrou no vínculo e bate o ponto pelo próprio celular. Estes
+          dados vêm do cadastro de {{ contract.workerName }}, que pode mudá-los no perfil.
+        </p>
+      </div>
+      <dl class="st__contact">
+        <div>
+          <dt class="label">E-mail</dt>
+          <dd>
+            <a v-if="contract.workerEmail" :href="`mailto:${contract.workerEmail}`">{{
+              contract.workerEmail
+            }}</a>
+            <span v-else class="muted">não informado</span>
+          </dd>
+        </div>
+        <div>
+          <dt class="label">Telefone</dt>
+          <dd>
+            <a
+              v-if="contract.workerPhone"
+              :href="`tel:${contract.workerPhone.replace(/\D/g, '')}`"
+              class="mono"
+              >{{ contract.workerPhone }}</a
+            >
+            <span v-else class="muted">não informado</span>
+          </dd>
+        </div>
+      </dl>
+    </section>
 
     <section v-if="writable" class="st__block" aria-labelledby="st-edit">
-      <h2 id="st-edit" class="section-title">Combinado e contato</h2>
+      <h2 id="st-edit" class="section-title">
+        {{ contract.workerId ? "Combinado" : "Combinado e contato" }}
+      </h2>
       <ContractForm
         :key="contract.id"
         :initial="{
@@ -134,8 +165,9 @@ function onEnd(): void {
         }"
         submit-label="Salvar alterações"
         lock-start
-        contact
+        :contact="!contract.workerId"
         summary
+        :summary-terms="false"
         :save="save"
       />
     </section>
@@ -250,6 +282,27 @@ function onEnd(): void {
 .st__head {
   display: grid;
   gap: var(--s-2);
+}
+
+.st__who {
+  width: 100%;
+  padding: var(--s-5);
+}
+
+.st__contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3) var(--s-8);
+}
+
+.st__contact > div {
+  display: grid;
+  gap: 2px;
+}
+
+.st__contact dd {
+  font-size: var(--t-14);
+  overflow-wrap: anywhere;
 }
 
 .st__title {

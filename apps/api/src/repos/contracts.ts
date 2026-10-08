@@ -65,6 +65,7 @@ export function contractsRepo(db: Executor) {
         timezone: households.timezone,
         employerId: owner.id,
         employerName: owner.name,
+        workerEmail: worker.email,
         workerPhone: worker.phone,
         workerPixKey: worker.pixKey,
       })
@@ -87,6 +88,7 @@ export function contractsRepo(db: Executor) {
           employerName: joined.employerName,
           workerId: c.workerId,
           workerName: c.workerName,
+          workerEmail: joined.workerEmail,
           workerPhone: joined.workerPhone,
           workerPixKey: joined.workerPixKey,
           contactEmail: c.contactEmail,

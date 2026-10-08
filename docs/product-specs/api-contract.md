@@ -47,7 +47,7 @@ Refresh token: opaque random 256-bit, stored hashed (SHA-256) server-side, 30 da
 
 Employer sees contracts of households they own. Worker sees contracts where `workerId = me`.
 
-Every `Contract` carries `workerPhone` and `workerPixKey`, read live from the linked worker's profile (`PATCH /me`); both are `null` while no worker is linked.
+Every `Contract` carries `workerEmail`, `workerPhone` and `workerPixKey`, read live from the linked worker's account and profile (`PATCH /me`); all are `null` while no worker is linked. The employer sees them so they can reach the person they pay.
 
 Schedule (`Contract.schedule`, validated by `scheduleSchema`, helpers in `packages/shared/src/schedule.ts`) covers every arrangement a household has:
 

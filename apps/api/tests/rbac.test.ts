@@ -136,16 +136,20 @@ describe("ownership", () => {
 });
 
 describe("contracts and invites", () => {
-  test("employer sees the linked worker's phone and pix key, live from their profile", async () => {
+  test("employer sees the linked worker's e-mail, phone and pix key, live from their account", async () => {
     const employer = await t.register("employer");
     const unlinked = await t.createContract(employer);
-    expect(unlinked).toMatchObject({ workerPhone: null, workerPixKey: null });
+    expect(unlinked).toMatchObject({ workerEmail: null, workerPhone: null, workerPixKey: null });
 
     const { contractId, worker, employer: owner } = await t.linkedPair();
     const as = { type: "bearer" } as const;
     const read = async () =>
       (await t.http().get(`/api/v1/contracts/${contractId}`).auth(owner.token, as)).body.contract;
-    expect(await read()).toMatchObject({ workerPhone: null, workerPixKey: null });
+    expect(await read()).toMatchObject({
+      workerEmail: worker.user.email,
+      workerPhone: null,
+      workerPixKey: null,
+    });
 
     const patch = await t
       .http()
