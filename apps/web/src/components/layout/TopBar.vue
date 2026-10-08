@@ -5,6 +5,7 @@ import { errorMessage } from "@/api";
 import Avatar from "@/components/ui/Avatar.vue";
 import Menu from "@/components/ui/Menu.vue";
 import type { MenuItem } from "@/components/ui/menu.ts";
+import BetaTag from "@/components/ui/BetaTag.vue";
 import Wordmark from "@/components/ui/Wordmark.vue";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
@@ -32,8 +33,8 @@ const menu = computed<MenuItem[]>(() => [
 
 <template>
   <header class="tb">
-    <RouterLink to="/" class="tb__brand" aria-label="em dia, início"
-      ><Wordmark :size="24"
+    <RouterLink to="/" class="tb__brand" aria-label="em dia, versão beta, início"
+      ><Wordmark :size="24" /><BetaTag size="sm"
     /></RouterLink>
     <div v-if="auth.user" class="tb__account">
       <Avatar :name="auth.user.name" :size="32" />
@@ -63,6 +64,9 @@ const menu = computed<MenuItem[]>(() => [
 }
 
 .tb__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
   text-decoration: none;
 }
 
