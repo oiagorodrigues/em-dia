@@ -100,6 +100,7 @@ async function clock(item: DashboardItem, action: "in" | "out"): Promise<void> {
 <style scoped>
 .ht {
   display: grid;
+  align-content: start;
   gap: var(--s-3);
   padding: var(--s-5);
 }

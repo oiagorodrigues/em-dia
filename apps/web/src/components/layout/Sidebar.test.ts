@@ -53,7 +53,7 @@ describe("Sidebar collapse", () => {
     expect(w.get("aside").classes()).not.toContain("is-collapsed");
     expect(w.find(".wordmark").exists()).toBe(true);
     expect(toggle(w).attributes("aria-expanded")).toBe("true");
-    expect(toggle(w).text()).toBe("Recolher menu");
+    expect(toggle(w).attributes("aria-label")).toBe("Recolher menu");
     expect(document.documentElement.dataset.sidebar).toBeUndefined();
   });
 
@@ -64,7 +64,7 @@ describe("Sidebar collapse", () => {
     expect(w.find(".mark").exists()).toBe(true);
     expect(w.find(".wordmark").exists()).toBe(false);
     expect(toggle(w).attributes("aria-expanded")).toBe("false");
-    expect(toggle(w).text()).toBe("Expandir menu");
+    expect(toggle(w).attributes("aria-label")).toBe("Expandir menu");
     expect(document.documentElement.dataset.sidebar).toBe("collapsed");
     expect(localStorage.getItem(SIDEBAR_STORAGE_KEY)).toBe("collapsed");
 
@@ -85,7 +85,7 @@ describe("Sidebar collapse", () => {
   it("shows item labels as tooltips only while collapsed", async () => {
     vi.useFakeTimers();
     const w = await render();
-    const anchor = () => w.findAll(".tip-anchor")[1]!;
+    const anchor = () => w.findAll("nav .tip-anchor")[1]!;
     const tip = () => document.body.querySelector('[role="tooltip"]');
 
     await anchor().trigger("mouseenter");
@@ -100,6 +100,30 @@ describe("Sidebar collapse", () => {
     vi.advanceTimersByTime(TOOLTIP_DELAY);
     await flushPromises();
     expect(tip()?.textContent?.trim()).toBe("Equipe");
+  });
+
+  it("keeps the toggle at the top, beside the logo and outside its link", async () => {
+    const w = await render();
+    const head = w.get(".side__head");
+    expect(head.find("button[aria-controls]").exists()).toBe(true);
+    expect(head.find("a button").exists()).toBe(false);
+    expect(w.get(".side__foot").find("button[aria-controls]").exists()).toBe(false);
+  });
+
+  it("toggles with Ctrl+B or ⌘B, but not while typing", async () => {
+    const w = await render();
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true }));
+    await flushPromises();
+    expect(w.get("aside").classes()).toContain("is-collapsed");
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "B", metaKey: true }));
+    await flushPromises();
+    expect(w.get("aside").classes()).not.toContain("is-collapsed");
+
+    const input = document.createElement("textarea");
+    document.body.append(input);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true }));
+    await flushPromises();
+    expect(w.get("aside").classes()).not.toContain("is-collapsed");
   });
 
   it("still works when storage is blocked", async () => {
