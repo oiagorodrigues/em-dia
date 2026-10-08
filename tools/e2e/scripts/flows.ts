@@ -951,6 +951,42 @@ async function sidebarLogout(state: State): Promise<void> {
   await page.waitForURL(/\/entrar/);
 }
 
+/** Coming back to a screen shows the cached data at once: no request, no skeleton. */
+async function cachedReturn(state: State): Promise<void> {
+  const page = await deskOf(state);
+  const menu = page.getByRole("complementary", { name: "Menu lateral" });
+  const open = async (name: string, url: string) => {
+    await menu.getByRole("link", { name, exact: true }).click();
+    await page.waitForURL(`**${url}`);
+  };
+  await open("Início", "/");
+  await open("Equipe", "/equipe");
+  await open("Cartão", "/cartao");
+  await open("Pagamentos", "/pagamentos");
+  await page.locator("[aria-busy='true']").first().waitFor({ state: "detached" });
+
+  const requests: string[] = [];
+  const track = (r: { url(): string }) => {
+    if (r.url().includes("/api/v1/")) requests.push(new URL(r.url()).pathname);
+  };
+  page.on("request", track);
+  try {
+    for (const [name, url] of [
+      ["Equipe", "/equipe"],
+      ["Cartão", "/cartao"],
+      ["Início", "/"],
+      ["Pagamentos", "/pagamentos"],
+    ] as const) {
+      await open(name, url);
+      const busy = await page.locator("[aria-busy='true']").count();
+      if (busy > 0) throw new Error(`${name} showed a loading state on return`);
+    }
+  } finally {
+    page.off("request", track);
+  }
+  if (requests.length > 0) throw new Error(`returning refetched: ${requests.join(", ")}`);
+}
+
 async function legacyUrl(state: State): Promise<void> {
   const id = need(state.contractId, 1);
   const page = await deskOf(state);
@@ -1201,6 +1237,7 @@ const JOURNEYS: [string, (state: State) => Promise<void>][] = [
   ["16 team search, sort and filter survive a reload", teamSearchSortFilter],
   ["17 board cell opens the day in place, row opens the person", boardCell],
   ["18 payments table lists, filters, worker sees recebi", paymentsTable],
+  ["27 coming back to a screen uses the cache", cachedReturn],
   ["5  vale-transporte keeps a pagar, desconto lowers it", paymentKinds],
   ["26 adiantamento: abate a worked day from the day editor", advanceAbate],
   ["20 old /vinculos URL redirects to /equipe", legacyUrl],

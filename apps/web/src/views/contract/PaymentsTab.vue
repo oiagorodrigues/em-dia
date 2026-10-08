@@ -347,7 +347,7 @@ async function replaceViewed(file: File): Promise<void> {
 const agreements = useResource(
   () => contract.value.id,
   queryKeys.agreements,
-  (id) => agreementsApi.list(id).then((r) => r.agreements),
+  (id) => agreementsApi.list(id, { archived: true }).then((r) => r.agreements),
 );
 const agreementById = computed(
   () => new Map((agreements.data.value ?? []).map((a) => [a.id, a.description])),
