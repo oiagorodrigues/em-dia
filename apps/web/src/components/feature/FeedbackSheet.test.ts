@@ -54,7 +54,7 @@ describe("FeedbackSheet", () => {
       message: "O cartão podia mostrar o total da semana",
       page: "/equipe/c1/cartao",
     });
-    expect(useToastStore().toasts.at(-1)?.message).toContain("Obrigado");
+    expect(useToastStore().toasts.at(-1)?.message).toBe("Mensagem enviada. Obrigado!");
     expect(wrapper.emitted("update:open")?.at(-1)).toEqual([false]);
     await wrapper.setProps({ open: false } as never);
     await wrapper.setProps({ open: true } as never);

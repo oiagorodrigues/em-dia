@@ -39,6 +39,8 @@ Acceptance criteria:
 
 ## Time card with dual confirmation
 
+- The check-out time can be midnight: the time list for a saída ends with "00:00 · meia-noite" after 23:45, and typing 24 or 24:00 means 00:00. A day from 16:00 to 00:00 is 8h, and the day editor says "até meia-noite".
+
 - E and W see the same month card, one row per day, with status, check-in, check-out, break and total.
 - Either party can create or edit a day. The other party sees an unconfirmed marker and a "confirmar" button. The creator cannot confirm their own entry.
 - Editing a confirmed entry clears the confirmation.
@@ -177,8 +179,8 @@ An agreement records something the worker pays back in work (a dining table, an 
 
 ## Feedback
 
-- Both roles can send feedback from "Enviar feedback" (sidebar on desktop, account menu on mobile). A sheet asks what it is about (sugestão, problema, outro) and the message (5 to 2000 characters); the current screen goes along so a problem can be reproduced.
-- The message is mailed to the team with the user's e-mail as reply-to; nothing is stored in the database. Sending clears the form and thanks the user; a failure keeps the draft and says to try again.
+- Both roles can send feedback: a "Feedback" tab on the right edge of the screen on desktop, "Enviar feedback" in the account menu on mobile. A sheet asks what it is about (sugestão, problema, outro) and the message (5 to 2000 characters); the current screen goes along so a problem can be reproduced.
+- The message is mailed to the team with the user's e-mail as reply-to; nothing is stored in the database. Sending clears the form and says "Mensagem enviada. Obrigado!"; a failure keeps the draft and says to try again.
 
 ## Navigation and invite links
 
