@@ -24,7 +24,7 @@ const { lines, total, caption } = defineProps<{
         :class="`ln-tone-${line.tone ?? 'neutral'}`"
       >
         <dt>
-          {{ line.label }}
+          <span class="ledger__label">{{ line.label }}</span>
           <span v-if="line.hint" class="ledger__hint">{{ line.hint }}</span>
         </dt>
         <span class="ledger__lead" aria-hidden="true" />
@@ -44,12 +44,19 @@ const { lines, total, caption } = defineProps<{
 </template>
 
 <style scoped>
+.ledger {
+  min-width: 0;
+}
+
 .ledger__cap {
   margin-bottom: var(--s-3);
 }
 
+/* minmax(0, 1fr): an auto track would grow to the longest line's text and push the amounts
+   past the card's edge; this keeps the list as wide as the card and lets the hints give way. */
 .ledger__list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-2);
 }
 
@@ -60,16 +67,23 @@ const { lines, total, caption } = defineProps<{
   font-size: var(--t-14);
 }
 
-/* A long hint gives way (ellipsis) so the amount on the right is never cut. */
+/* Only the hint gives way (ellipsis): the label and the amount always show whole. */
 .ledger__line dt {
+  display: flex;
+  align-items: baseline;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--ink-2);
   white-space: nowrap;
 }
 
+.ledger__label {
+  flex-shrink: 0;
+}
+
 .ledger__hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   margin-left: var(--s-1);
   color: var(--ink-3);
   font-size: var(--t-12);

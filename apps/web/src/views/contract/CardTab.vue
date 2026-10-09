@@ -218,7 +218,7 @@ const ledger = computed(() => {
             hint:
               s.grossCents === s.daysWorked * s.rateCents
                 ? `${s.daysWorked} × ${formatCents(s.rateCents)}`
-                : `${s.daysWorked} diárias, em proporção às horas`,
+                : `${s.daysWorked} ${s.daysWorked === 1 ? "diária" : "diárias"}, em proporção às horas`,
             value: formatCents(s.grossCents),
           }
         : s.payType === "shift"
@@ -593,6 +593,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 
 .ct__totals {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--s-4);
   padding: var(--s-5);
   background: var(--surface);
@@ -626,8 +627,10 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 }
 
 @media (min-width: 960px) {
+  /* The month's account needs ~280px for a label and an amount side by side; on a laptop
+     with the sidebar open, 4/12 of the content was narrower than that. */
   .ct {
-    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
+    grid-template-columns: minmax(0, 8fr) minmax(280px, 4fr);
     gap: var(--s-6);
     align-items: start;
   }
@@ -667,6 +670,11 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
   }
   .ct__bulk p {
     flex: none;
+  }
+  /* The aside can be ~280px: the label wraps instead of spilling out of the box. */
+  .ct__bulk :deep(.btn) {
+    white-space: normal;
+    text-align: center;
   }
 }
 </style>
