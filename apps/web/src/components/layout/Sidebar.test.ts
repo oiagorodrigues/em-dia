@@ -52,6 +52,7 @@ describe("Sidebar collapse", () => {
     const w = await render();
     expect(w.get("aside").classes()).not.toContain("is-collapsed");
     expect(w.find(".wordmark").exists()).toBe(true);
+    expect(w.get(".side__brand").text()).toContain("Beta");
     expect(toggle(w).attributes("aria-expanded")).toBe("true");
     expect(toggle(w).attributes("aria-label")).toBe("Recolher menu");
     expect(document.documentElement.dataset.sidebar).toBeUndefined();
@@ -63,6 +64,7 @@ describe("Sidebar collapse", () => {
     expect(w.get("aside").classes()).toContain("is-collapsed");
     expect(w.find(".mark").exists()).toBe(true);
     expect(w.find(".wordmark").exists()).toBe(false);
+    expect(w.get(".side__brand").text()).toContain("Beta");
     expect(toggle(w).attributes("aria-expanded")).toBe("false");
     expect(toggle(w).attributes("aria-label")).toBe("Expandir menu");
     expect(document.documentElement.dataset.sidebar).toBe("collapsed");

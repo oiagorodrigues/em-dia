@@ -5,6 +5,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import { errorMessage } from "@/api";
 import Avatar from "@/components/ui/Avatar.vue";
 import Icon from "@/components/ui/Icon.vue";
+import BetaTag from "@/components/ui/BetaTag.vue";
 import Mark from "@/components/ui/Mark.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import Wordmark from "@/components/ui/Wordmark.vue";
@@ -62,9 +63,10 @@ async function logout(): Promise<void> {
     aria-label="Menu lateral"
   >
     <div class="side__head">
-      <RouterLink to="/" class="side__brand" aria-label="em dia, início">
+      <RouterLink to="/" class="side__brand" aria-label="em dia, versão beta, início">
         <Mark v-if="collapsed" :size="26" />
         <Wordmark v-else :size="30" />
+        <BetaTag :size="collapsed ? 'sm' : 'md'" />
       </RouterLink>
       <Tooltip :text="`${toggleLabel} (${shortcut})`" :side="collapsed ? 'right' : 'bottom'">
         <button
@@ -148,6 +150,7 @@ html[data-sidebar-moving] .side {
 .side__brand {
   display: flex;
   align-items: center;
+  gap: var(--s-2);
   min-height: 32px;
   padding: 0 var(--s-3);
   text-decoration: none;
@@ -338,7 +341,9 @@ html[data-sidebar-moving] .side {
 }
 
 .is-collapsed .side__brand {
+  flex-direction: column;
   justify-content: center;
+  gap: var(--s-1);
   padding: 0;
 }
 

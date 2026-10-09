@@ -159,6 +159,7 @@ Tables: team (dashboard + Equipe), payments of every type (per person and across
 - Editar (sheet, `Sheet wide` 760px): once the worker has joined, a "Contato de {nome}" box shows the e-mail and telephone from the worker's own account (mailto/tel links, "não informado" when empty) above the contract form, which then drops its editable contato section. The convite card sits at the top of Visão geral while nobody has joined.
 - Plantão on the card: the check-out cell carries the day it ended ("08:00 S05" as a small brand pill) and the days the stay runs through read "em plantão desde sex 02" (the last one "saída às 08:00 do plantão de sex 02"); a click on them opens the stay's first day.
 - Cartão (time card): a day's observação is a `message` icon with a tooltip of its text, in the nota column on wide cards and after the stamp on narrow ones; the row's accessible name ends with "Observação: …".
+- Beta: while the app is in beta, an amber "Beta" pill (`ui/BetaTag.vue`) sits next to the wordmark in the sidebar (under the mark when collapsed), the mobile top bar and the auth screens. Remove it in those three places when the beta ends.
 
 ## Writing
 

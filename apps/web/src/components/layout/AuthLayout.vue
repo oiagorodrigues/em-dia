@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BetaTag from "@/components/ui/BetaTag.vue";
 import Stamp from "@/components/ui/Stamp.vue";
 import Wordmark from "@/components/ui/Wordmark.vue";
 
@@ -12,7 +13,7 @@ const SAMPLE = [
 <template>
   <div class="auth">
     <aside class="auth__panel" aria-hidden="true">
-      <Wordmark :size="36" />
+      <p class="auth__brand"><Wordmark :size="36" /><BetaTag /></p>
       <p class="auth__pitch display">
         a casa em dia com quem cuida dela<span class="auth__dot">.</span>
       </p>
@@ -40,7 +41,7 @@ const SAMPLE = [
     </aside>
 
     <main id="conteudo" class="auth__main">
-      <div class="auth__mobile-brand"><Wordmark :size="32" /></div>
+      <div class="auth__mobile-brand"><Wordmark :size="32" /><BetaTag size="sm" /></div>
       <div class="auth__form">
         <slot />
       </div>
@@ -66,7 +67,16 @@ const SAMPLE = [
 }
 
 .auth__mobile-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
   margin-bottom: var(--s-8);
+}
+
+.auth__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
 }
 
 .auth__form {
