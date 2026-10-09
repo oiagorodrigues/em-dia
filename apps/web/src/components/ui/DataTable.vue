@@ -934,6 +934,31 @@ td.mono {
   }
 }
 
+/* Phones: count and "limpar" on top, the actions sharing one row below. */
+@media (max-width: 639px) {
+  .dt__bulk {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
+  }
+
+  .dt__bulk .dt__bulk-count {
+    order: 1;
+  }
+
+  .dt__bulk .dt__bulk-clear {
+    order: 2;
+  }
+
+  .dt__bulk .dt__bulk-actions {
+    order: 3;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+  }
+}
+
 .dt__bulk-count {
   font-weight: 700;
   white-space: nowrap;

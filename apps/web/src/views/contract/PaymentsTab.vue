@@ -461,7 +461,7 @@ async function saveBulkEdit(changes: BulkPaymentChanges): Promise<void> {
             :loading="bulk.busy.value === 'confirm'"
             :disabled="!!bulk.busy.value || !picked.some(awaitsReceipt)"
             @click="bulk.confirm(picked).then(keepFailed)"
-            >Marcar como concluído</Button
+            >{{ wide ? "Marcar como concluído" : "Concluir" }}</Button
           >
           <Button icon="pencil" :disabled="!!bulk.busy.value" @click="openBulkEdit(picked)"
             >Editar</Button

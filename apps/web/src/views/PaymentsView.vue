@@ -535,7 +535,7 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
             :loading="bulk.busy.value === 'confirm'"
             :disabled="!!bulk.busy.value || !picked.some((r) => awaitsReceipt(r.payment))"
             @click="bulk.confirm(paymentsOf(picked)).then(keepFailed)"
-            >Marcar como concluído</Button
+            >{{ wide ? "Marcar como concluído" : "Concluir" }}</Button
           >
           <Button icon="pencil" :disabled="!!bulk.busy.value" @click="openBulkEdit(picked)"
             >Editar</Button
