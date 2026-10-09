@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import FeedbackSheet from "@/components/feature/FeedbackSheet.vue";
+import { useFeedbackSheet } from "@/composables/feedback.ts";
 import BottomBar from "./BottomBar.vue";
 import Sidebar from "./Sidebar.vue";
 import TopBar from "./TopBar.vue";
+
+const feedback = useFeedbackSheet();
 </script>
 
 <template>
@@ -15,6 +19,7 @@ import TopBar from "./TopBar.vue";
       </main>
     </div>
     <BottomBar />
+    <FeedbackSheet v-model:open="feedback.open.value" />
   </div>
 </template>
 

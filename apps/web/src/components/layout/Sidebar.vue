@@ -6,16 +6,19 @@ import { errorMessage } from "@/api";
 import Avatar from "@/components/ui/Avatar.vue";
 import Icon from "@/components/ui/Icon.vue";
 import BetaTag from "@/components/ui/BetaTag.vue";
+import { ACTION_ICON } from "@/components/ui/icons.ts";
 import Mark from "@/components/ui/Mark.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import Wordmark from "@/components/ui/Wordmark.vue";
 import { useSidebarCollapse } from "@/composables/sidebar.ts";
+import { useFeedbackSheet } from "@/composables/feedback.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { useSlidingIndicator } from "@/lib/motion.ts";
 import { navItems } from "./nav.ts";
 
 const auth = useAuthStore();
+const feedback = useFeedbackSheet();
 const toast = useToastStore();
 const route = useRoute();
 const router = useRouter();
@@ -101,6 +104,12 @@ async function logout(): Promise<void> {
       </ul>
     </nav>
     <div class="side__foot">
+      <Tooltip text="Enviar feedback" side="right" :disabled="!collapsed">
+        <button type="button" class="side__item" @click="feedback.show">
+          <Icon :name="ACTION_ICON.feedback" :size="22" />
+          <span class="side__label">Enviar feedback</span>
+        </button>
+      </Tooltip>
       <div v-if="auth.user" class="side__user">
         <Tooltip :text="auth.user.name" side="right" :disabled="!collapsed">
           <RouterLink to="/perfil" class="side__who">

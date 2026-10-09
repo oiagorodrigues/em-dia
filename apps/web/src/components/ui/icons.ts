@@ -53,6 +53,9 @@ export const ICON_PATHS = {
   sort: "M8 4v16M4.5 7.5 8 4l3.5 3.5M16 20V4M12.5 16.5 16 20l3.5-3.5",
   "x-circle": "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM9 9l6 6M15 9l-6 6",
   message: "M4 5h16v11H9l-5 4z",
+  send: "M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5z",
+  "message-heart":
+    "M4 5h16v11H9l-5 4zM12 13.2l-2.4-2.3a1.4 1.4 0 0 1 2.4-1.5 1.4 1.4 0 0 1 2.4 1.5z",
   eye: "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
   paperclip:
     "M20 11.5l-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8",
@@ -94,6 +97,7 @@ export const ACTION_ICON = {
   share: "share",
   link: "link",
   whatsapp: "message",
+  feedback: "message-heart",
   email: "mail",
   inviteCode: "key",
   back: "arrow-left",

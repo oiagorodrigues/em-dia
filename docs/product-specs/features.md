@@ -175,6 +175,11 @@ An agreement records something the worker pays back in work (a dining table, an 
 - Início, Equipe, Cartão (board) and the worker home can navigate forward. Future months show "previsto" values from the estimate, styled as projections (dashed outline, "previsto" label), never mixed with actuals.
 - Future months have no hours, no pending counts and no payments to register for them from the dashboard.
 
+## Feedback
+
+- Both roles can send feedback from "Enviar feedback" (sidebar on desktop, account menu on mobile). A sheet asks what it is about (sugestão, problema, outro) and the message (5 to 2000 characters); the current screen goes along so a problem can be reproduced.
+- The message is mailed to the team with the user's e-mail as reply-to; nothing is stored in the database. Sending clears the form and thanks the user; a failure keeps the draft and says to try again.
+
 ## Navigation and invite links
 
 - "voltar" returns to the screen the person came from inside the app, and to the module list only when the page was opened directly. Saving a form returns to where it was opened.

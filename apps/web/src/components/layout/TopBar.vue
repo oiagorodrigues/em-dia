@@ -3,19 +3,23 @@ import { computed } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { errorMessage } from "@/api";
 import Avatar from "@/components/ui/Avatar.vue";
+import { ACTION_ICON } from "@/components/ui/icons.ts";
 import Menu from "@/components/ui/Menu.vue";
 import type { MenuItem } from "@/components/ui/menu.ts";
 import BetaTag from "@/components/ui/BetaTag.vue";
 import Wordmark from "@/components/ui/Wordmark.vue";
+import { useFeedbackSheet } from "@/composables/feedback.ts";
 import { useAuthStore } from "@/stores/auth.ts";
 import { useToastStore } from "@/stores/toast.ts";
 
 const auth = useAuthStore();
 const toast = useToastStore();
 const router = useRouter();
+const feedback = useFeedbackSheet();
 
 const menu = computed<MenuItem[]>(() => [
   { label: "Perfil", icon: "user", onSelect: () => void router.push("/perfil") },
+  { label: "Enviar feedback", icon: ACTION_ICON.feedback, onSelect: feedback.show },
   {
     label: "Sair",
     icon: "logout",

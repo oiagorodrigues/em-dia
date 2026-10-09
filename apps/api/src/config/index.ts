@@ -34,6 +34,8 @@ const envSchema = z.object({
     .optional()
     .refine((v) => !v || /^smtps?:\/\//.test(v), "SMTP_URL must start with smtp:// or smtps://"),
   MAIL_FROM: z.string().trim().min(3).default("em dia <nao-responda@localhost>"),
+  FEEDBACK_TO: z.email().default("yagomello16@gmail.com"),
+  RATE_LIMIT_FEEDBACK: z.coerce.number().int().min(1).default(5),
   REFRESH_REUSE_GRACE_MS: z.coerce.number().int().min(0).max(300_000).default(20_000),
 });
 
@@ -61,11 +63,13 @@ export interface Config {
   webOrigin: string;
   trustProxy: boolean | number | string;
   logLevel: LogLevel;
-  rateLimit: { global: number; auth: number };
+  rateLimit: { global: number; auth: number; feedback: number };
   /** Built web app to serve next to the API (single-origin deploys); null when the API runs alone. */
   webDistDir: string | null;
   smtpUrl: string | null;
   mailFrom: string;
+  /** Inbox that receives "enviar feedback". */
+  feedbackTo: string;
   /** How long a just-rotated refresh token may still be presented without counting as reuse. */
   refreshReuseGraceMs: number;
 }
@@ -162,10 +166,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     // Vercel's edge is the single proxy in front of every function.
     trustProxy: parseTrustProxy(e.TRUST_PROXY ?? (onVercel ? "1" : "false")),
     logLevel: e.LOG_LEVEL,
-    rateLimit: { global: e.RATE_LIMIT_GLOBAL, auth: e.RATE_LIMIT_AUTH },
+    rateLimit: {
+      global: e.RATE_LIMIT_GLOBAL,
+      auth: e.RATE_LIMIT_AUTH,
+      feedback: e.RATE_LIMIT_FEEDBACK,
+    },
     refreshReuseGraceMs: e.REFRESH_REUSE_GRACE_MS,
     webDistDir: e.WEB_DIST_DIR || null,
     smtpUrl: e.SMTP_URL || null,
     mailFrom: e.MAIL_FROM,
+    feedbackTo: e.FEEDBACK_TO,
   };
 }

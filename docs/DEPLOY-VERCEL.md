@@ -69,6 +69,7 @@ Em **Settings** → **Environment Variables**. Marque também **Enable access to
 | `WEB_ORIGIN`               | não         | URL pública. Sem ela: `https://` + `VERCEL_PROJECT_PRODUCTION_URL`. Vale para links de e-mail e CORS  |
 | `SMTP_URL`                 | não         | `smtps://usuario:senha@host:465`. Sem ela, nenhum e-mail sai e os convites voltam `emailSent: false`  |
 | `MAIL_FROM`                | não         | ex.: `em dia <nao-responda@seudominio.com.br>`                                                        |
+| `FEEDBACK_TO`              | não         | caixa que recebe "enviar feedback"; padrão `yagomello16@gmail.com`. Precisa de `SMTP_URL`             |
 | `UPSTASH_REDIS_REST_URL`   | não         | URL REST do Upstash (passo 5)                                                                         |
 | `UPSTASH_REDIS_REST_TOKEN` | não         | token REST do Upstash                                                                                 |
 | `RATE_LIMIT_GLOBAL`        | não         | padrão 300 requisições por IP em 15 min                                                               |

@@ -10,6 +10,7 @@ import { authService } from "./auth.ts";
 import type { ServiceDeps } from "./context.ts";
 import { contractsService } from "./contracts.ts";
 import { entriesService } from "./entries.ts";
+import { feedbackService } from "./feedback.ts";
 import { householdsService } from "./households.ts";
 import { meService } from "./me.ts";
 import { paymentsService } from "./payments.ts";
@@ -56,6 +57,7 @@ export function createServices({
     payments: paymentsService(deps),
     agreements: agreementsService(deps),
     reports: reportsService(deps),
+    feedback: feedbackService(deps),
     health: {
       databaseOk: () =>
         deps.repos.ping().catch((err: unknown) => {
