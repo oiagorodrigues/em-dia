@@ -84,10 +84,12 @@ Acceptance criteria:
 - E edits a payment from the row menu ("Editar") in a sheet with the same fields as the form, except the receipt. Changing the type, reference month, date, amount, method, agreement or adiantamento sends the payment back to "aguardando" (the confirmation was about the old values); the note does not. Compensation edits respect what the agreement or adiantamento still owes. Audited as `payment.update`.
 - The Observação column is narrow and cut with an ellipsis; hovering shows the full note in a tooltip.
 
-## Monthly summary and CSV statement
+## Monthly summary and statement
 
 - Both see hours, amount earned, gratificações, vale-transporte and descontos, payments and balance for any month, computed by the shared pay math. The CSV lists every payments-list entry with its type and ends with what is still to be abated from adiantamentos.
 - The CSV opens correctly in Excel pt-BR (BOM, `;` separator), has one row per day plus totals, and neutralizes formula-looking cells.
+- Both download the month from "Baixar" under the month ledger on the Cartão tab, as PDF or "Planilha (CSV)". The trigger shows a spinner while the file downloads; a failure shows a toast.
+- The PDF (A4) has a header (em dia, "Extrato de {mês} de {ano}", worker, employer, casa, combinado with schedule, times and rate, generation date), the month ledger with the same lines as the app (total devido in bold, saldo highlighted), a table of the days that have an entry or were expected (data, dia, situação, entrada, saída with the check-out date when the stay ends on a later day, pausa, horas, confirmado, observação; header repeated on each page), the month's payments (data, tipo, como pagou, valor, situação, observação) and "Gerado pelo em dia · página X de Y" on every page. Empty tables say so in one line.
 
 ## Activity log
 
