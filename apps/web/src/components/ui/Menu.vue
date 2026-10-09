@@ -11,12 +11,18 @@ const {
   label = "Mais ações",
   icon = "more",
   align = "end",
+  text,
+  loading = false,
 } = defineProps<{
   items: readonly MenuItem[];
-  /** Accessible name of the trigger. */
+  /** Accessible name of the trigger, and of the list. */
   label?: string;
   icon?: IconName;
   align?: "start" | "end";
+  /** Visible trigger text: the trigger becomes a secondary button with a chevron. */
+  text?: string;
+  /** With `text`: spinner in place of the icon while the chosen action runs. */
+  loading?: boolean;
 }>();
 
 const open = ref(false);
@@ -138,14 +144,23 @@ onBeforeUnmount(() => {
       ref="trigger"
       type="button"
       class="menu__trigger"
-      :aria-label="label"
+      :class="{ 'menu__trigger--text': text }"
+      :aria-label="text ? undefined : label"
       aria-haspopup="menu"
       :aria-expanded="open"
       :aria-controls="open ? id : undefined"
+      :aria-busy="loading || undefined"
+      :disabled="loading"
       @click.stop="toggle"
       @keydown="onTriggerKey"
     >
-      <Icon :name="icon" :size="18" />
+      <template v-if="text">
+        <span v-if="loading" class="menu__spinner" aria-hidden="true" />
+        <Icon v-else :name="icon" :size="18" />
+        <span>{{ text }}</span>
+        <Icon name="chevron-down" :size="16" />
+      </template>
+      <Icon v-else :name="icon" :size="18" />
     </button>
     <Teleport :to="layer">
       <Transition name="menu">
@@ -200,6 +215,47 @@ onBeforeUnmount(() => {
 .menu__trigger[aria-expanded="true"] {
   background: var(--surface-2);
   color: var(--ink);
+}
+
+.menu__trigger--text {
+  display: inline-flex;
+  gap: var(--s-2);
+  width: auto;
+  height: auto;
+  min-height: 44px;
+  padding: 0 var(--s-4) 0 var(--s-5);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow-1);
+  font-weight: 600;
+  font-size: var(--t-16);
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.menu__trigger--text:hover,
+.menu__trigger--text[aria-expanded="true"] {
+  border-color: var(--ink-3);
+}
+
+.menu__trigger:disabled {
+  cursor: progress;
+}
+
+.menu__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: menu-spin 0.7s linear infinite;
+}
+
+@keyframes menu-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .menu__list {

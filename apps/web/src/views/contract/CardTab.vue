@@ -22,6 +22,7 @@ import BulkFillSheet from "@/components/feature/BulkFillSheet.vue";
 import DayEditor from "@/components/feature/DayEditor.vue";
 import Ledger from "@/components/feature/Ledger.vue";
 import MonthSwitcher from "@/components/feature/MonthSwitcher.vue";
+import StatementDownload from "@/components/feature/StatementDownload.vue";
 import TimeCard from "@/components/feature/TimeCard.vue";
 import Button from "@/components/ui/Button.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
@@ -286,26 +287,6 @@ const ledger = computed(() => {
   return { lines, total };
 });
 
-const downloading = ref(false);
-async function downloadCsv(): Promise<void> {
-  downloading.value = true;
-  try {
-    const { blob, filename } = await contractsApi.statementCsv(contract.value.id, month.value);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename ?? `emdia-${month.value}.csv`;
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch (e) {
-    toast.error(errorMessage(e));
-  } finally {
-    downloading.value = false;
-  }
-}
-
 const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
 </script>
 
@@ -438,9 +419,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
             icon="wallet-plus"
             >Registrar pagamento</Button
           >
-          <Button icon="download" :loading="downloading" @click="downloadCsv"
-            >Baixar planilha</Button
-          >
+          <StatementDownload :contract-id="contract.id" :month="month" />
         </div>
       </section>
     </aside>
