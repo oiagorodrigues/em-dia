@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import {
+  isSalaried,
   describeSchedule,
   ENTRY_STATUS_LABEL,
   estimateAverageMonthlyCost,
@@ -183,6 +184,17 @@ const cost = computed(() => {
   };
 });
 const partial = computed(() => month.value === currentMonth);
+/** "Realizado" is what the month costs, not what was paid: a salary counts in full from day 1. */
+const dueWhy = computed(() => {
+  switch (contract.value.payType) {
+    case "biweekly":
+      return "As 2 quinzenas do mês, faltas e extras";
+    case "monthly":
+      return "O salário do mês, faltas e extras";
+    default:
+      return "Horas, dias, faltas e extras do mês";
+  }
+});
 
 const rateUnit: Record<string, string> = {
   hourly: "por hora",
@@ -297,7 +309,9 @@ function tabLink(name: string) {
         <section v-else class="sheet ov__box" aria-labelledby="ov-cost">
           <div class="ov__boxhead">
             <h2 id="ov-cost" class="ov__title">Custo de {{ monthLabel }}</h2>
-            <span v-if="partial" class="ov__hint">Realizado até hoje</span>
+            <span v-if="partial" class="ov__hint">{{
+              isSalaried(contract.payType) ? "Salário conta o mês inteiro" : "Realizado até hoje"
+            }}</span>
           </div>
           <div v-if="!cost" aria-busy="true">
             <Skeleton h="20px" />
@@ -317,7 +331,7 @@ function tabLink(name: string) {
             <div class="ov__bar">
               <dt>
                 Realizado
-                <span class="ov__why">Horas, dias, faltas e extras do mês</span>
+                <span class="ov__why">{{ dueWhy }}</span>
               </dt>
               <dd class="mono">{{ formatCents(cost.due) }}</dd>
               <span class="ov__track" aria-hidden="true"
@@ -325,6 +339,12 @@ function tabLink(name: string) {
               /></span>
             </div>
           </dl>
+          <p v-if="s" class="ov__paid">
+            Já pago <span class="mono">{{ formatCents(s.paidCents) }}</span>
+            <template v-if="s.balanceCents > 0">
+              · falta <span class="mono">{{ formatCents(s.balanceCents) }}</span></template
+            >
+          </p>
           <p v-if="cost && cost.diff !== null && cost.est" class="ov__diff">
             <template v-if="cost.diff === 0">Bateu com o estimado.</template>
             <template v-else>
@@ -590,6 +610,11 @@ function tabLink(name: string) {
 
 .ov__fill.is-due {
   background: var(--brand-ink);
+}
+
+.ov__paid {
+  font-size: var(--t-14);
+  color: var(--ink-2);
 }
 
 .ov__diff {
