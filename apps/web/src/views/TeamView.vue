@@ -165,6 +165,7 @@ const monthLabel = computed(() => monthName(parseYearMonth(month.value).month));
     <div v-else class="col-span-12">
       <TeamTable
         variant="full"
+        selectable
         :items="items"
         :state="state"
         :today="today"

@@ -14,6 +14,7 @@ import {
   type CreatePaymentInput,
   type IsoDate,
   type Payment,
+  type UpdatePaymentInput,
   type WorkEntry,
   type PaymentKind,
   type PaymentMethod,
@@ -102,6 +103,47 @@ export function abatementLabel(
   if (!p.advanceId) return null;
   const advance = advances.find((a) => a.id === p.advanceId);
   return advance ? `Adiantamento de ${formatDateShort(advance.paidOn)}` : "Adiantamento";
+}
+
+/** Money was handed over and nobody confirmed it yet: "recebi" and "marcar como concluído" apply. */
+export function awaitsReceipt(p: Pick<Payment, "kind" | "method" | "acknowledgedAt">): boolean {
+  return handsMoney(p) && !p.acknowledgedAt;
+}
+
+/** The API refuses to delete an adiantamento that already has days abated. */
+export function canDeletePayment(p: Pick<Payment, "kind" | "settledCents">): boolean {
+  return !(p.kind === "advance" && (p.settledCents ?? 0) > 0);
+}
+
+/** Fields a bulk edit can set on every selected payment; a missing one stays as it is. */
+export interface BulkPaymentChanges {
+  method?: PaymentMethod;
+  paidOn?: IsoDate;
+  referenceMonth?: YearMonth;
+}
+
+/**
+ * A new "como pagou" fits money handed over that doesn't pay down an agreement or an
+ * adiantamento: a desconto has no method, and a compensação is tied to what it abates.
+ */
+export function takesBulkMethod(
+  p: Pick<Payment, "kind" | "method" | "agreementId" | "advanceId">,
+): boolean {
+  return handsMoney(p) && p.method !== "compensation" && !p.agreementId && !p.advanceId;
+}
+
+/** PATCH body for one payment of a bulk edit, with only what changes for it; null if nothing does. */
+export function bulkPaymentPatch(
+  p: Pick<Payment, "kind" | "method" | "agreementId" | "advanceId" | "paidOn" | "referenceMonth">,
+  changes: BulkPaymentChanges,
+): UpdatePaymentInput | null {
+  const patch: UpdatePaymentInput = {};
+  if (changes.method && changes.method !== p.method && takesBulkMethod(p))
+    patch.method = changes.method;
+  if (changes.paidOn && changes.paidOn !== p.paidOn) patch.paidOn = changes.paidOn;
+  if (changes.referenceMonth && changes.referenceMonth !== p.referenceMonth)
+    patch.referenceMonth = changes.referenceMonth;
+  return Object.keys(patch).length > 0 ? patch : null;
 }
 
 /** Filters of the Pagamentos page; "" means "todos". */
