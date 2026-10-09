@@ -3,6 +3,9 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   abatementLabel,
   advanceProgress,
+  awaitsReceipt,
+  bulkPaymentPatch,
+  canDeletePayment,
   dayPaymentDraft,
   dayValueCents,
   formatSigned,
@@ -230,5 +233,44 @@ describe("paymentYears", () => {
       2026, 2025, 2024,
     ]);
     expect(paymentYears([], 2026)).toEqual([2026]);
+  });
+});
+
+describe("bulk eligibility", () => {
+  it("lets only money still waiting be concluded", () => {
+    expect(awaitsReceipt(payment())).toBe(true);
+    expect(awaitsReceipt(payment({ acknowledgedAt: "2026-10-03T00:00:00Z" }))).toBe(false);
+    expect(awaitsReceipt(payment({ kind: "deduction", method: null }))).toBe(false);
+  });
+
+  it("keeps an adiantamento with days abated out of a delete", () => {
+    expect(canDeletePayment(payment({ kind: "advance", settledCents: 0 }))).toBe(true);
+    expect(canDeletePayment(payment({ kind: "advance", settledCents: 1800 }))).toBe(false);
+    expect(canDeletePayment(payment({ kind: "deduction", method: null }))).toBe(true);
+  });
+});
+
+describe("bulkPaymentPatch", () => {
+  const changes = { method: "cash", paidOn: "2026-10-05", referenceMonth: "2026-10" } as const;
+
+  it("sends only what changes for the payment", () => {
+    expect(bulkPaymentPatch(payment(), changes)).toEqual(changes);
+    expect(bulkPaymentPatch(payment({ method: "cash", paidOn: "2026-10-05" }), changes)).toEqual({
+      referenceMonth: "2026-10",
+    });
+    expect(bulkPaymentPatch(payment(), {})).toBeNull();
+  });
+
+  it("never gives a desconto or a compensação a new method", () => {
+    const deduction = payment({ kind: "deduction", method: null });
+    expect(bulkPaymentPatch(deduction, { method: "cash" })).toBeNull();
+    expect(bulkPaymentPatch(deduction, changes)).toEqual({
+      paidOn: "2026-10-05",
+      referenceMonth: "2026-10",
+    });
+    expect(
+      bulkPaymentPatch(payment({ method: "compensation", agreementId: "a1" }), { method: "pix" }),
+    ).toBeNull();
+    expect(bulkPaymentPatch(payment({ advanceId: "adv" }), { method: "cash" })).toBeNull();
   });
 });

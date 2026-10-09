@@ -14,10 +14,12 @@ import {
 import { computed, ref, useTemplateRef } from "vue";
 import { agreementsApi, errorMessage, paymentsApi } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
+import PaymentBulkEditSheet from "@/components/feature/PaymentBulkEditSheet.vue";
 import PaymentEditSheet from "@/components/feature/PaymentEditSheet.vue";
 import ReceiptStub from "@/components/feature/ReceiptStub.vue";
 import ReceiptViewer from "@/components/feature/ReceiptViewer.vue";
 import Button from "@/components/ui/Button.vue";
+import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
 import DataTable from "@/components/ui/DataTable.vue";
 import EmptyState from "@/components/ui/EmptyState.vue";
 import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
@@ -25,15 +27,20 @@ import Select from "@/components/ui/Select.vue";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import TableActions from "@/components/ui/TableActions.vue";
 import { useContract } from "@/composables/contractContext.ts";
+import { usePaymentBulk } from "@/composables/paymentBulk.ts";
 import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
+import { countOf } from "@/lib/bulk.ts";
 import { isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
 import {
   abatementLabel,
   advanceProgress,
+  awaitsReceipt,
+  canDeletePayment,
   formatSigned,
+  type BulkPaymentChanges,
   KIND_OPTIONS,
   kindNoun,
   kindTone,
@@ -367,6 +374,50 @@ function view(p: Payment): void {
 function onClear(): void {
   clear();
 }
+
+/** The employer acts on many payments at once; the worker only says "recebi" to many. */
+const selectable = computed(() => canManage.value || (auth.isWorker && isWritable(contract.value)));
+const selected = ref<string[]>([]);
+const bulk = usePaymentBulk({
+  updated: (list) => {
+    const byId = new Map(list.map((p) => [p.id, p]));
+    payments.mutate((prev = []) => prev.map((p) => byId.get(p.id) ?? p));
+  },
+  removed: (ids) => payments.mutate((prev = []) => prev.filter((p) => !ids.has(p.id))),
+  fresh: () => [payments],
+});
+
+function selectLabel(p: Payment): string {
+  return `Selecionar ${kindNoun(p)} de ${formatDateShort(p.paidOn)}, ${formatCents(p.amountCents)}`;
+}
+
+/** Rows that failed stay selected, so trying again is one click. */
+function keepFailed(outcome: { failed: { item: Payment }[] } | null): void {
+  if (outcome) selected.value = outcome.failed.map((f) => f.item.id);
+}
+
+const bulkRemoveOpen = ref(false);
+const bulkTargets = ref<readonly Payment[]>([]);
+const bulkKept = computed(() => bulkTargets.value.filter((p) => !canDeletePayment(p)).length);
+function askBulkRemove(list: readonly Payment[]): void {
+  bulkTargets.value = list;
+  bulkRemoveOpen.value = true;
+}
+async function confirmBulkRemove(): Promise<void> {
+  keepFailed(await bulk.remove(bulkTargets.value));
+  bulkRemoveOpen.value = false;
+}
+
+const bulkEditOpen = ref(false);
+function openBulkEdit(list: readonly Payment[]): void {
+  bulkTargets.value = list;
+  bulkEditOpen.value = true;
+}
+async function saveBulkEdit(changes: BulkPaymentChanges): Promise<void> {
+  const outcome = await bulk.edit(bulkTargets.value, changes);
+  keepFailed(outcome);
+  if (outcome) bulkEditOpen.value = false;
+}
 </script>
 
 <template>
@@ -398,8 +449,42 @@ function onClear(): void {
       label="Pagamentos"
       search-placeholder="Buscar mês, tipo, forma, observação"
       :count-label="(n) => (n === 1 ? '1 lançamento' : `${n} lançamentos`)"
+      v-model:selected="selected"
+      :selectable="selectable"
+      :select-label="selectLabel"
       @clear-filters="onClear"
     >
+      <template v-if="selectable" #bulk-actions="{ rows: picked }">
+        <template v-if="canManage">
+          <Button
+            icon="check"
+            :loading="bulk.busy.value === 'confirm'"
+            :disabled="!!bulk.busy.value || !picked.some(awaitsReceipt)"
+            @click="bulk.confirm(picked).then(keepFailed)"
+            >Marcar como concluído</Button
+          >
+          <Button icon="pencil" :disabled="!!bulk.busy.value" @click="openBulkEdit(picked)"
+            >Editar</Button
+          >
+          <Button
+            icon="trash"
+            variant="danger"
+            :disabled="!!bulk.busy.value || !picked.some(canDeletePayment)"
+            @click="askBulkRemove(picked)"
+            >Excluir</Button
+          >
+        </template>
+        <Button
+          v-else
+          variant="primary"
+          icon="check"
+          :loading="bulk.busy.value === 'acknowledge'"
+          :disabled="!picked.some(awaitsReceipt)"
+          @click="bulk.acknowledge(picked).then(keepFailed)"
+          >Recebi</Button
+        >
+      </template>
+
       <template #filters>
         <Select v-model="yearModel" :options="yearOptions" label="Ano" class="pt__filter" />
         <Select v-model="tipo" :options="KIND_FILTER" label="Tipo" class="pt__filter" />
@@ -533,6 +618,29 @@ function onClear(): void {
       :subtitle="contract.workerName"
       @saved="onSaved"
     />
+    <PaymentBulkEditSheet
+      v-if="canManage"
+      v-model:open="bulkEditOpen"
+      :payments="bulkTargets"
+      :busy="bulk.busy.value === 'edit'"
+      @submit="saveBulkEdit"
+    />
+    <ConfirmDialog
+      v-model:open="bulkRemoveOpen"
+      :title="`Excluir ${countOf(bulkTargets.length, 'lançamento')}?`"
+      :message="`${
+        bulkTargets.length - bulkKept === 1
+          ? 'O lançamento sai do histórico, com o comprovante.'
+          : 'Os lançamentos saem do histórico, com os comprovantes.'
+      }${
+        bulkKept > 0
+          ? ` ${countOf(bulkKept, 'adiantamento')} com dias abatidos ${bulkKept === 1 ? 'fica' : 'ficam'}.`
+          : ''
+      }`"
+      :confirm-label="`Excluir ${countOf(bulkTargets.length - bulkKept, 'lançamento')}`"
+      :loading="bulk.busy.value === 'remove'"
+      @confirm="confirmBulkRemove"
+    />
   </div>
 </template>
 
@@ -589,6 +697,12 @@ function onClear(): void {
   background: none;
   border: 0;
   box-shadow: none;
+}
+
+.pt :deep(.dt__card.is-selectable) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-1);
 }
 
 .pt__sum {
