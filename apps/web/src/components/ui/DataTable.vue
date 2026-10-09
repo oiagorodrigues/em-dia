@@ -45,6 +45,9 @@ const {
   filtersActive = false,
   cardActions = "side",
   filterCount,
+  selectable = false,
+  selectLabel = () => "Selecionar linha",
+  selectedLabel = (n: number) => (n === 1 ? "1 selecionado" : `${n} selecionados`),
 } = defineProps<{
   rows: readonly T[];
   columns: readonly Column<T>[];
@@ -69,9 +72,17 @@ const {
   cardActions?: "side" | "below";
   /** Active page filters, shown on the mobile "Filtros (n)" button. */
   filterCount?: number;
+  /** A checkbox per row and, while something is selected, the bar of `bulk-actions`. */
+  selectable?: boolean;
+  /** Accessible name of a row's checkbox, e.g. "Selecionar pagamento de Maria, 05/10". */
+  selectLabel?: (row: T) => string;
+  selectedLabel?: (n: number) => string;
 }>();
 
 const emit = defineEmits<{ "row-click": [row: T]; "clear-filters": [] }>();
+
+/** Keys (`rowKey`) of the selected rows; only rows still shown stay in it. */
+const selected = defineModel<string[]>("selected", { default: () => [] });
 
 defineSlots<{
   /** `cell-<key>`: custom cell content. */
@@ -86,8 +97,13 @@ defineSlots<{
   actions?: () => unknown;
   /** Shown when there are no rows at all (before any filter). */
   empty?: () => unknown;
-  /** Totals row (table) / summary (cards). `columns` are the ones shown, for colspans. */
+  /**
+   * Totals row (table) / summary (cards). `columns` are the ones shown, for colspans; with
+   * `selectable` the checkbox column comes first in it.
+   */
   footer?: (props: { rows: readonly T[]; columns: readonly Column<T>[] }) => unknown;
+  /** Buttons of the bulk action bar, for the selected rows that are shown. */
+  "bulk-actions"?: (props: { rows: readonly T[]; clear: () => void }) => unknown;
 }>();
 
 const router = useRouter();
@@ -168,6 +184,60 @@ const searched = computed(() => searchRows(filtered.value, columns, state.value.
 const shown = computed(() => sortRows(searched.value, columns, state.value.sort));
 const narrowing = computed(() => filtersActive || !!state.value.q.trim());
 
+const SELECT_COLUMN: Column<T> = { key: "_select", label: "Selecionar" };
+const footerColumns = computed(() =>
+  selectable ? [SELECT_COLUMN, ...visibleColumns.value] : visibleColumns.value,
+);
+
+const shownKeys = computed(() => shown.value.map((row) => rowKey(row)));
+const selectedSet = computed(() => new Set(selected.value));
+const selectedRows = computed(() =>
+  shown.value.filter((row) => selectedSet.value.has(rowKey(row))),
+);
+const allSelected = computed(
+  () => shown.value.length > 0 && selectedRows.value.length === shown.value.length,
+);
+const someSelected = computed(() => selectedRows.value.length > 0 && !allSelected.value);
+
+// A search or filter that hides a row also unselects it, so an action never reaches rows
+// the person can't see.
+watch(shownKeys, (keys) => {
+  const visible = new Set(keys);
+  const kept = selected.value.filter((k) => visible.has(k));
+  if (kept.length !== selected.value.length) selected.value = kept;
+});
+
+/** Last row toggled by hand; shift-click selects the run of rows between it and the next one. */
+let anchor: string | null = null;
+
+function toggleRow(row: T, event: MouseEvent): void {
+  const key = rowKey(row);
+  const on = (event.target as HTMLInputElement).checked;
+  let keys = [key];
+  if (event.shiftKey && anchor && anchor !== key) {
+    const from = shownKeys.value.indexOf(anchor);
+    const to = shownKeys.value.indexOf(key);
+    if (from >= 0 && to >= 0)
+      keys = shownKeys.value.slice(Math.min(from, to), Math.max(from, to) + 1);
+  }
+  anchor = key;
+  const next = new Set(selected.value);
+  for (const k of keys) {
+    if (on) next.add(k);
+    else next.delete(k);
+  }
+  selected.value = shownKeys.value.filter((k) => next.has(k));
+}
+
+function toggleAll(): void {
+  selected.value = allSelected.value ? [] : [...shownKeys.value];
+}
+
+function clearSelection(): void {
+  selected.value = [];
+  anchor = null;
+}
+
 const slots = useSlots();
 function hasSlot(name: string): boolean {
   return !!slots[name];
@@ -197,7 +267,8 @@ function ariaSort(col: Column<T>): "ascending" | "descending" | "none" | undefin
 /** Clicks on buttons and links inside a row do their own thing. */
 function isInteractive(target: EventTarget | null): boolean {
   return (
-    target instanceof Element && !!target.closest("button, a, input, select, [role='menuitem']")
+    target instanceof Element &&
+    !!target.closest("button, a, input, select, [role='menuitem'], .dt__check")
   );
 }
 
@@ -272,6 +343,19 @@ function clearAll(): void {
       <table :id="id" class="dt__table" :class="{ 'is-tight': tight }">
         <thead>
           <tr>
+            <th v-if="selectable" scope="col" class="dt__select-col">
+              <label class="dt__check">
+                <input
+                  type="checkbox"
+                  :checked="allSelected"
+                  :indeterminate="someSelected"
+                  @change="toggleAll"
+                />
+                <span class="visually-hidden"
+                  >Selecionar todas as linhas ({{ countLabel(shown.length) }})</span
+                >
+              </label>
+            </th>
             <th
               v-for="col in visibleColumns"
               :key="col.key"
@@ -307,11 +391,21 @@ function clearAll(): void {
             v-for="(row, index) in shown"
             :key="rowKey(row)"
             :style="{ '--stagger': `${staggerDelay(index)}ms` }"
-            :class="{ 'is-link': !!rowLink }"
+            :class="{ 'is-link': !!rowLink, 'is-selected': selectedSet.has(rowKey(row)) }"
             :tabindex="rowLink ? 0 : undefined"
             @click="rowLink ? activate(row, $event) : emit('row-click', row)"
             @keydown.enter.self="activate(row, $event)"
           >
+            <td v-if="selectable" class="dt__select-cell">
+              <label class="dt__check">
+                <input
+                  type="checkbox"
+                  :checked="selectedSet.has(rowKey(row))"
+                  @click="toggleRow(row, $event)"
+                />
+                <span class="visually-hidden">{{ selectLabel(row) }}</span>
+              </label>
+            </td>
             <td
               v-for="col in visibleColumns"
               :key="col.key"
@@ -336,23 +430,45 @@ function clearAll(): void {
           </tr>
         </TransitionGroup>
         <tfoot v-if="hasSlot('footer')">
-          <slot name="footer" :rows="shown" :columns="visibleColumns" />
+          <slot name="footer" :rows="shown" :columns="footerColumns" />
         </tfoot>
       </table>
     </div>
 
     <template v-else>
+      <label v-if="selectable" class="dt__check dt__select-all">
+        <input
+          type="checkbox"
+          :checked="allSelected"
+          :indeterminate="someSelected"
+          @change="toggleAll"
+        />
+        <span>Selecionar todos</span>
+      </label>
       <TransitionGroup :id="id" tag="ul" name="dt-row" class="dt__cards" appear>
         <li
           v-for="(row, index) in shown"
           :key="rowKey(row)"
           :style="{ '--stagger': `${staggerDelay(index)}ms` }"
           class="dt__card"
-          :class="{ 'is-link': !!rowLink, 'has-actions-below': cardActions === 'below' }"
+          :class="{
+            'is-link': !!rowLink,
+            'has-actions-below': cardActions === 'below',
+            'is-selectable': selectable,
+            'is-selected': selectedSet.has(rowKey(row)),
+          }"
           :tabindex="rowLink ? 0 : undefined"
           @click="rowLink ? activate(row, $event) : emit('row-click', row)"
           @keydown.enter.self="activate(row, $event)"
         >
+          <label v-if="selectable" class="dt__check dt__card-check">
+            <input
+              type="checkbox"
+              :checked="selectedSet.has(rowKey(row))"
+              @click="toggleRow(row, $event)"
+            />
+            <span class="visually-hidden">{{ selectLabel(row) }}</span>
+          </label>
           <slot name="card" :row="row">
             <dl class="dt__pairs">
               <div v-for="col in columns" :key="col.key" class="dt__pair">
@@ -374,6 +490,27 @@ function clearAll(): void {
         <slot name="footer" :rows="shown" :columns="columns" />
       </div>
     </template>
+
+    <p v-if="selectable" class="visually-hidden" aria-live="polite">
+      {{ selectedRows.length ? selectedLabel(selectedRows.length) : "" }}
+    </p>
+    <Transition name="dt-bulk">
+      <div
+        v-if="selectable && selectedRows.length > 0"
+        class="dt__bulk"
+        role="region"
+        :aria-label="`Ações para ${selectedLabel(selectedRows.length)}`"
+        @keydown.esc="clearSelection"
+      >
+        <p class="dt__bulk-count">{{ selectedLabel(selectedRows.length) }}</p>
+        <div class="dt__bulk-actions">
+          <slot name="bulk-actions" :rows="selectedRows" :clear="clearSelection" />
+        </div>
+        <button type="button" class="dt__bulk-clear" @click="clearSelection">
+          <Icon name="close" :size="16" />Limpar seleção
+        </button>
+      </div>
+    </Transition>
   </section>
 </template>
 
@@ -535,6 +672,10 @@ function clearAll(): void {
   cursor: pointer;
 }
 
+.dt__table tbody tr.is-selected {
+  background: var(--brand-wash);
+}
+
 .dt__table tr:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: -2px;
@@ -645,6 +786,23 @@ td.mono {
   cursor: pointer;
 }
 
+.dt__card.is-selectable {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.dt__card.is-selectable.has-actions-below {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.dt__card.is-selectable.has-actions-below .dt__card-actions {
+  grid-column: 2;
+}
+
+.dt__card.is-selected {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+
 .dt__card:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
@@ -706,6 +864,124 @@ td.mono {
   text-underline-offset: 3px;
 }
 
+/* A 44px hit area around a native checkbox in the brand color. */
+.dt__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.dt__check input {
+  width: 18px;
+  height: 18px;
+  margin: 0 auto;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+.dt__check input:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.dt__table th.dt__select-col,
+.dt__table td.dt__select-cell,
+.dt__table.is-tight th.dt__select-col,
+.dt__table.is-tight td.dt__select-cell {
+  width: 1%;
+  padding: 0 0 0 var(--s-2);
+}
+
+.dt__card-check {
+  align-self: start;
+  margin: calc(var(--s-2) * -1) 0 0 calc(var(--s-2) * -1);
+}
+
+.dt__select-all {
+  justify-self: start;
+  padding-right: var(--s-2);
+  font-size: var(--t-14);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.dt__select-all input {
+  margin: 0 0 0 var(--s-3);
+}
+
+/* Sticks to the bottom of the screen while the rows scroll past, above the bottom bar. */
+.dt__bulk {
+  position: sticky;
+  z-index: 5;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + var(--s-2));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--brand);
+  border-radius: var(--r-2);
+  box-shadow: var(--shadow-2);
+}
+
+@media (min-width: 960px) {
+  .dt__bulk {
+    bottom: var(--s-4);
+  }
+}
+
+.dt__bulk-count {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dt__bulk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.dt__bulk-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: 44px;
+  margin-left: auto;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-1);
+  color: var(--ink-2);
+  font-size: var(--t-14);
+  font-weight: 600;
+}
+
+.dt__bulk-clear:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.dt-bulk-enter-active {
+  transition:
+    opacity var(--d-base) var(--ease-out),
+    transform var(--d-base) var(--ease-out);
+}
+
+.dt-bulk-leave-active {
+  transition: opacity var(--d-fast) var(--ease-in);
+}
+
+.dt-bulk-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.dt-bulk-leave-to {
+  opacity: 0;
+}
+
 /* Rows fade in with a short stagger on load and when filters change; removed rows fade out. */
 .dt-row-enter-active {
   transition:
@@ -744,6 +1020,7 @@ td.mono {
 
 @media (prefers-reduced-motion: reduce) {
   .dt-row-enter-from,
+  .dt-bulk-enter-from,
   .dt__card.is-link:hover {
     transform: none;
   }
