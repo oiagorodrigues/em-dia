@@ -68,7 +68,7 @@ async function share(): Promise<void> {
       <Button
         v-if="delivery?.whatsappUrl"
         :href="delivery.whatsappUrl"
-        icon="message"
+        icon="whatsapp-logo"
         variant="primary"
         >Mandar no WhatsApp</Button
       >
