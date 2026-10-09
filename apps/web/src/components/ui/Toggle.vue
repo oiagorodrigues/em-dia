@@ -2,18 +2,28 @@
 import { useId } from "vue";
 
 const model = defineModel<boolean>({ required: true });
-const { label, hint } = defineProps<{ label: string; hint?: string }>();
+const {
+  label,
+  hint,
+  disabled = false,
+} = defineProps<{
+  label: string;
+  /** Line breaks ("\n") show as separate lines. */
+  hint?: string;
+  disabled?: boolean;
+}>();
 const id = useId();
 </script>
 
 <template>
-  <label class="tg" :for="id">
+  <label class="tg" :class="{ 'is-disabled': disabled }" :for="id">
     <input
       :id="id"
       v-model="model"
       class="visually-hidden"
       type="checkbox"
       role="switch"
+      :disabled="disabled"
       :aria-describedby="hint ? `${id}-hint` : undefined"
     />
     <span class="tg__track" aria-hidden="true"><span class="tg__knob" /></span>
@@ -84,5 +94,14 @@ const id = useId();
 .tg__hint {
   font-size: var(--t-14);
   color: var(--ink-2);
+  white-space: pre-line;
+}
+
+.tg.is-disabled {
+  cursor: default;
+}
+
+.tg.is-disabled .tg__track {
+  opacity: 0.6;
 }
 </style>
