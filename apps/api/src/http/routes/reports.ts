@@ -20,11 +20,20 @@ export function reportRoutes({ reports }: Services): Router {
 
   router.get("/contracts/:id/statement.csv", async (req, res) => {
     const { month } = parse(monthQuerySchema, req.query);
-    const { filename, csv } = await reports.statement(actorOf(res), req.params.id, month);
+    const { filename, csv } = await reports.statementCsv(actorOf(res), req.params.id, month);
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Cache-Control", "private, no-store");
     res.send(csv);
+  });
+
+  router.get("/contracts/:id/statement.pdf", async (req, res) => {
+    const { month } = parse(monthQuerySchema, req.query);
+    const { filename, pdf } = await reports.statementPdf(actorOf(res), req.params.id, month);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(pdf);
   });
 
   router.get("/contracts/:id/activity", async (req, res) => {

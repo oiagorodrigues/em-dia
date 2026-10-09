@@ -3,26 +3,15 @@ import {
   computeMonthSummary,
   datesOfMonth,
   DEFAULT_TIMEZONE,
-  describeSchedule,
-  ENTRY_STATUS_LABEL,
   estimateMonthCost,
-  handsMoney,
-  PAYMENT_KIND_LABEL,
-  PAYMENT_METHOD_LABEL,
-  formatDuration,
-  formatYearMonth,
   nowInZone,
   toYearMonth,
-  weekdayOf,
 } from "@emdia/shared";
-import { centsToDecimal, toCsv } from "../lib/csv.ts";
 import { toPayment, type LocatedContract } from "../repos/index.ts";
 import { listContracts, loadContract } from "./access.ts";
 import { requirePermission, type Actor, type ServiceDeps } from "./context.ts";
-
-const WEEKDAY_SHORT = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
-
-const brDate = (date: IsoDate) => date.split("-").reverse().join("/");
+import { brDate, statementCsv, type StatementData } from "./statement.ts";
+import { renderStatementPdf } from "./statementPdf.ts";
 
 export function reportsService(deps: ServiceDeps) {
   const { repos } = deps;
@@ -42,6 +31,42 @@ export function reportsService(deps: ServiceDeps) {
       today: todayIn(timezone),
     });
     return { summary, entries, payments };
+  }
+
+  async function statementData(located: LocatedContract, month: YearMonth): Promise<StatementData> {
+    const { contract } = located;
+    const [{ summary, entries, payments: monthPayments }, agreements, advances] = await Promise.all(
+      [
+        summarize(located, month),
+        repos.agreements.list(contract.id),
+        repos.payments.listAdvances(contract.id),
+      ],
+    );
+    const agreementNames = new Map(agreements.map((a) => [a.id, a.description]));
+    const advanceDates = new Map(advances.map((a) => [a.id, a.paidOn]));
+    const payments = [...monthPayments].reverse().map((payment) => {
+      const agreement = payment.agreementId ? agreementNames.get(payment.agreementId) : undefined;
+      const advancedOn = payment.advanceId ? advanceDates.get(payment.advanceId) : undefined;
+      const source = agreement ?? (advancedOn ? `adiantamento de ${brDate(advancedOn)}` : null);
+      return { payment, source };
+    });
+    const byDate = new Map(entries.map((e) => [e.date, e]));
+    const unrecorded = new Set(summary.unrecordedDates);
+    const expected = new Set(summary.expectedDates);
+    return {
+      month,
+      contract,
+      summary,
+      days: datesOfMonth(month).map((date) => ({
+        date,
+        entry: byDate.get(date) ?? null,
+        expected: expected.has(date),
+        unrecorded: unrecorded.has(date),
+      })),
+      payments,
+      openAdvancesCents: advances.reduce((sum, a) => sum + (a.remainingCents ?? 0), 0),
+      generatedAt: nowInZone(located.timezone, deps.clock()),
+    };
   }
 
   async function teamItem(located: LocatedContract, month: YearMonth): Promise<DashboardItem> {
@@ -65,110 +90,22 @@ export function reportsService(deps: ServiceDeps) {
       return (await summarize(await loadContract(deps, actor, contractId), month)).summary;
     },
 
-    async statement(
+    async statementCsv(
       actor: Actor,
       contractId: string,
       month: YearMonth,
     ): Promise<{ filename: string; csv: string }> {
-      const located = await loadContract(deps, actor, contractId);
-      const { contract } = located;
-      const [{ summary, entries, payments: monthPayments }, agreements, advances] =
-        await Promise.all([
-          summarize(located, month),
-          repos.agreements.list(contract.id),
-          repos.payments.listAdvances(contract.id),
-        ]);
-      const agreementNames = new Map(agreements.map((a) => [a.id, a.description]));
-      const advanceDates = new Map(advances.map((a) => [a.id, a.paidOn]));
-      const payments = [...monthPayments].reverse().map((p) => {
-        const agreement = p.agreementId ? agreementNames.get(p.agreementId) : undefined;
-        const advancedOn = p.advanceId ? advanceDates.get(p.advanceId) : undefined;
-        const method = p.method ? PAYMENT_METHOD_LABEL[p.method] : "";
-        const source = agreement ?? (advancedOn ? `adiantamento de ${brDate(advancedOn)}` : null);
-        return [
-          brDate(p.paidOn),
-          PAYMENT_KIND_LABEL[p.kind],
-          source ? `${method}: ${source}` : method,
-          centsToDecimal(p.amountCents),
-          handsMoney(p) ? (p.acknowledgedAt ? "Sim" : "Não") : "",
-          p.note ?? "",
-        ];
-      });
-      const byDate = new Map(entries.map((e) => [e.date, e]));
-      const unrecorded = new Set(summary.unrecordedDates);
-      const expected = new Set(summary.expectedDates);
+      const data = await statementData(await loadContract(deps, actor, contractId), month);
+      return { filename: `extrato-${month}.csv`, csv: statementCsv(data) };
+    },
 
-      const days = datesOfMonth(month).map((date) => {
-        const e = byDate.get(date);
-        const status = e
-          ? ENTRY_STATUS_LABEL[e.status]
-          : unrecorded.has(date)
-            ? "Não registrado"
-            : "";
-        return [
-          brDate(date),
-          WEEKDAY_SHORT[weekdayOf(date)] ?? "",
-          expected.has(date) ? "Sim" : "",
-          status,
-          e?.checkIn ?? "",
-          e?.checkOut
-            ? e.checkOutDate
-              ? `${e.checkOutDate.split("-").reverse().join("/")} ${e.checkOut}`
-              : e.checkOut
-            : "",
-          e && e.status === "worked" ? e.breakMinutes : "",
-          e && e.minutes > 0 ? formatDuration(e.minutes) : "",
-          e ? (e.confirmedAt ? "Sim" : "Não") : "",
-          e?.note ?? "",
-        ];
-      });
-
-      const csv = toCsv([
-        ["Extrato", formatYearMonth(month)],
-        ["Profissional", contract.workerName],
-        ["Contratante", contract.employerName],
-        ["Casa", contract.householdName],
-        ["Combinado", describeSchedule(contract.schedule)],
-        [],
-        [
-          "Data",
-          "Dia",
-          "Previsto",
-          "Situação",
-          "Entrada",
-          "Saída",
-          "Pausa (min)",
-          "Horas",
-          "Confirmado",
-          "Observação",
-        ],
-        ...days,
-        [],
-        ["Dias previstos", summary.expectedDays],
-        ["Dias trabalhados", summary.daysWorked],
-        ["Horas trabalhadas", formatDuration(summary.totalMinutes)],
-        ["Faltas", summary.absences],
-        ["Faltas justificadas", summary.excused],
-        ["Valor bruto (R$)", centsToDecimal(summary.grossCents)],
-        ["Desconto por faltas (R$)", centsToDecimal(summary.absenceDeductionCents)],
-        ["Adicional noturno (R$)", centsToDecimal(summary.nightBonusCents)],
-        [
-          "Gratificações, vale-transporte e descontos (R$)",
-          centsToDecimal(summary.adjustmentsCents),
-        ],
-        ["Total devido (R$)", centsToDecimal(summary.dueCents)],
-        ["Pago (R$)", centsToDecimal(summary.paidCents)],
-        ["Saldo (R$)", centsToDecimal(summary.balanceCents)],
-        [
-          "Adiantamentos ainda a abater (R$)",
-          centsToDecimal(advances.reduce((sum, a) => sum + (a.remainingCents ?? 0), 0)),
-        ],
-        [],
-        ["Pagamentos"],
-        ["Data", "Tipo", "Forma", "Valor (R$)", "Recebido", "Observação"],
-        ...payments,
-      ]);
-      return { filename: `extrato-${month}.csv`, csv };
+    async statementPdf(
+      actor: Actor,
+      contractId: string,
+      month: YearMonth,
+    ): Promise<{ filename: string; pdf: Buffer }> {
+      const data = await statementData(await loadContract(deps, actor, contractId), month);
+      return { filename: `extrato-${month}.pdf`, pdf: await renderStatementPdf(data) };
     },
 
     async activity(actor: Actor, contractId: string, limit: number): Promise<ActivityItem[]> {
