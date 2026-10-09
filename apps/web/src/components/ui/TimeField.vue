@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import { useMediaQuery } from "@/lib/media.ts";
-import { maskTime, nearestSlot, normalizeTime, timeSlots } from "@/lib/timeinput.ts";
+import { maskTime, nearestSlot, normalizeTime, slotOptions } from "@/lib/timeinput.ts";
 import Button from "./Button.vue";
 import Icon from "./Icon.vue";
 import Popover from "./Popover.vue";
@@ -17,6 +17,7 @@ const {
   step = 15,
   label = "Horário",
   placeholder = "--:--",
+  untilMidnight = false,
 } = defineProps<{
   id?: string;
   invalid?: boolean;
@@ -27,6 +28,8 @@ const {
   /** Names the picker dialog. */
   label?: string;
   placeholder?: string;
+  /** A check-out: the list ends with 00:00, midnight, after 23:45. */
+  untilMidnight?: boolean;
 }>();
 
 const coarse = useMediaQuery("(pointer: coarse)", false);
@@ -65,7 +68,8 @@ function commit(): void {
   }
 }
 
-const slots = computed(() => timeSlots(step));
+const options = computed(() => slotOptions(step, untilMidnight));
+const slots = computed(() => options.value.map((o) => o.value));
 const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, "0"));
 const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"));
 const wheelHour = ref("08");
@@ -137,18 +141,18 @@ function onSlotKey(e: KeyboardEvent, i: number): void {
 
     <Popover v-if="!coarse" v-model:open="open" :anchor="wrap" :label="label" :width="140">
       <ul ref="slotList" class="tf__slots" role="listbox" :aria-label="label">
-        <li v-for="(s, i) in slots" :key="s" role="none">
+        <li v-for="(s, i) in options" :key="`${i}-${s.value}`" role="none">
           <button
             type="button"
             role="option"
             class="tf__slot mono"
-            :class="{ 'is-on': s === model }"
-            :aria-selected="s === model"
+            :class="{ 'is-on': s.value === model }"
+            :aria-selected="s.value === model"
             :data-i="i"
-            @click="pick(s)"
+            @click="pick(s.value)"
             @keydown="onSlotKey($event, i)"
           >
-            {{ s }}
+            {{ s.label }}
           </button>
         </li>
       </ul>

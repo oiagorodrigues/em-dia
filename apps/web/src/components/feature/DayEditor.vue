@@ -520,6 +520,7 @@ async function onRemove(): Promise<void> {
               :id="id"
               v-model="values.checkOut"
               label="Saída"
+              until-midnight
               :step="15"
               :disabled="ended"
               :invalid="invalid"
@@ -561,7 +562,9 @@ async function onRemove(): Promise<void> {
         </Field>
         <p v-if="preview" class="de__preview">
           {{ checkOutDate ? "Total" : "Total do dia" }} <strong class="mono">{{ preview }}</strong>
-          <span v-if="overnight" class="de__night">· passou da meia-noite</span>
+          <span v-if="overnight" class="de__night">{{
+            values.checkOut === "00:00" ? "· até meia-noite" : "· passou da meia-noite"
+          }}</span>
           <span v-if="night > 0" class="de__night"
             >· {{ formatDuration(night) }} entre 22h e 5h</span
           >

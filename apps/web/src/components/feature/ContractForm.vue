@@ -310,6 +310,7 @@ function onSubmit(): void {
               :id="id"
               v-model="values.expectedEnd"
               label="Sai às"
+              until-midnight
               :invalid="invalid"
               :described-by="describedBy"
               @update:model-value="clearError('expectedEnd')"
