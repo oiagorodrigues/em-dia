@@ -959,11 +959,16 @@ async function cachedReturn(state: State): Promise<void> {
     await menu.getByRole("link", { name, exact: true }).click();
     await page.waitForURL(`**${url}`);
   };
-  await open("Início", "/");
-  await open("Equipe", "/equipe");
-  await open("Cartão", "/cartao");
-  await open("Pagamentos", "/pagamentos");
-  await page.locator("[aria-busy='true']").first().waitFor({ state: "detached" });
+  // Each screen finishes loading before the next, so what comes back is fully cached.
+  for (const [name, url] of [
+    ["Início", "/"],
+    ["Equipe", "/equipe"],
+    ["Cartão", "/cartao"],
+    ["Pagamentos", "/pagamentos"],
+  ] as const) {
+    await open(name, url);
+    await page.locator("[aria-busy='true']").first().waitFor({ state: "detached" });
+  }
 
   const requests: string[] = [];
   const track = (r: { url(): string }) => {

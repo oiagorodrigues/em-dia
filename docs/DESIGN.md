@@ -161,6 +161,8 @@ Tables: team (dashboard + Equipe), payments of every type (per person and across
 - Cartão (time card): a day's observação is a `message` icon with a tooltip of its text, in the nota column on wide cards and after the stamp on narrow ones; the row's accessible name ends with "Observação: …".
 - Feedback: from `lg` up a vertical "Feedback" tab (`layout/FeedbackButton.vue`, 28px wide, surface, rule border) hangs on the right edge at mid-height, inside the page gutter, so it never covers content or sticky asides; it hides while a sheet is open. Below `lg` there is no floating button: the corner belongs to the bottom bar and the card actions, so feedback lives in the account menu.
 - Ledger (month account): label and amount always show whole; only the hint truncates. The Cartão aside is at least 280px wide from `lg` up.
+- Icons: bater entrada and bater saída are a clock with a play (entrada) or stop (saída) mark in its corner, not the door arrows of login/logout. WhatsApp actions use the WhatsApp mark (`whatsapp-logo`, filled, in the text color; brand colors would break the token rule).
+- Custo do mês (Visão geral): "Realizado" says what it counts ("As 2 quinzenas do mês, faltas e extras" for quinzenal, "O salário do mês…" for mensal, and "Salário conta o mês inteiro" instead of "Realizado até hoje"), followed by "Já pago R$ x · falta R$ y".
 - Beta: while the app is in beta, an amber "Beta" pill (`ui/BetaTag.vue`) sits next to the wordmark in the sidebar (under the mark when collapsed), the mobile top bar and the auth screens. Remove it in those three places when the beta ends.
 
 ## Writing
