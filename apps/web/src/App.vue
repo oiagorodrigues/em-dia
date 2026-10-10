@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import { RouterView, useRoute } from "vue-router";
+import { Analytics } from "@vercel/analytics/vue";
 import AppShell from "@/components/layout/AppShell.vue";
 import AuthLayout from "@/components/layout/AuthLayout.vue";
 import OfflineBanner from "@/components/layout/OfflineBanner.vue";
@@ -27,6 +28,7 @@ watch(
 </script>
 
 <template>
+  <Analytics />
   <OfflineBanner />
   <AuthLayout v-if="layout === 'auth'">
     <RouterView v-slot="{ Component }">
