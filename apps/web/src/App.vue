@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from "vue";
 import { RouterView, useRoute } from "vue-router";
+import { SpeedInsights } from "@vercel/speed-insights/vue";
 import AppShell from "@/components/layout/AppShell.vue";
 import AuthLayout from "@/components/layout/AuthLayout.vue";
 import OfflineBanner from "@/components/layout/OfflineBanner.vue";
@@ -46,4 +47,5 @@ watch(
   </AppShell>
   <main v-else id="conteudo"><RouterView /></main>
   <ToastHost />
+  <SpeedInsights />
 </template>
