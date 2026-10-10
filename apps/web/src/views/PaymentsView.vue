@@ -14,6 +14,7 @@ import {
 import { computed, ref, useTemplateRef } from "vue";
 import { useRouter } from "vue-router";
 import { errorMessage, paymentsApi } from "@/api";
+import PaymentBulkEditSheet from "@/components/feature/PaymentBulkEditSheet.vue";
 import PaymentEditSheet from "@/components/feature/PaymentEditSheet.vue";
 import ReceiptStub from "@/components/feature/ReceiptStub.vue";
 import ReceiptViewer from "@/components/feature/ReceiptViewer.vue";
@@ -29,15 +30,20 @@ import StatusChip from "@/components/ui/StatusChip.vue";
 import TableActions from "@/components/ui/TableActions.vue";
 import Tooltip from "@/components/ui/Tooltip.vue";
 import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
+import { usePaymentBulk } from "@/composables/paymentBulk.ts";
 import { useInvalidate } from "@/composables/resource.ts";
 import { useTableState } from "@/composables/tableState.ts";
 import { useTeamPayments } from "@/composables/teamPayments.ts";
+import { countOf } from "@/lib/bulk.ts";
 import { isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
 import { MQ, useMediaQuery } from "@/lib/media.ts";
 import {
   advanceProgress,
+  awaitsReceipt,
+  canDeletePayment,
   formatSigned,
+  type BulkPaymentChanges,
   KIND_OPTIONS,
   kindNoun,
   kindTone,
@@ -375,6 +381,68 @@ function menuItems(row: PaymentRow): MenuItem[] {
 }
 
 const canRegister = computed(() => auth.isEmployer && contracts.value.some(isWritable));
+
+/** The employer acts on many payments at once; the worker only says "recebi" to many. */
+const selectable = computed(() => contracts.value.some(isWritable));
+const selected = ref<string[]>([]);
+const writableContracts = computed(
+  () => new Set(contracts.value.filter(isWritable).map((c) => c.id)),
+);
+const bulk = usePaymentBulk({
+  updated: (list) => {
+    const byId = new Map(list.map((p) => [p.id, p]));
+    payments.mutate((prev) => ({
+      contracts: prev?.contracts ?? [],
+      advances: prev?.advances ?? [],
+      rows: (prev?.rows ?? []).map((r) => {
+        const p = byId.get(r.payment.id);
+        return p ? { ...r, payment: p } : r;
+      }),
+    }));
+  },
+  removed: (ids) =>
+    payments.mutate((prev) => ({
+      contracts: prev?.contracts ?? [],
+      advances: prev?.advances ?? [],
+      rows: (prev?.rows ?? []).filter((r) => !ids.has(r.payment.id)),
+    })),
+  canWrite: (p) => writableContracts.value.has(p.contractId),
+  fresh: () => [payments],
+});
+
+function selectLabel(row: PaymentRow): string {
+  return `Selecionar ${kindNoun(row.payment)} de ${personOf(row.contract)}, ${formatDateShort(row.payment.paidOn)}`;
+}
+
+const paymentsOf = (picked: readonly PaymentRow[]) => picked.map((r) => r.payment);
+
+/** Rows that failed stay selected, so trying again is one click. */
+function keepFailed(outcome: { failed: { item: Payment }[] } | null): void {
+  if (outcome) selected.value = outcome.failed.map((f) => f.item.id);
+}
+
+const bulkTargets = ref<Payment[]>([]);
+const bulkKept = computed(() => bulkTargets.value.filter((p) => !canDeletePayment(p)).length);
+const bulkRemoveOpen = ref(false);
+function askBulkRemove(picked: readonly PaymentRow[]): void {
+  bulkTargets.value = paymentsOf(picked);
+  bulkRemoveOpen.value = true;
+}
+async function confirmBulkRemove(): Promise<void> {
+  keepFailed(await bulk.remove(bulkTargets.value));
+  bulkRemoveOpen.value = false;
+}
+
+const bulkEditOpen = ref(false);
+function openBulkEdit(picked: readonly PaymentRow[]): void {
+  bulkTargets.value = paymentsOf(picked);
+  bulkEditOpen.value = true;
+}
+async function saveBulkEdit(changes: BulkPaymentChanges): Promise<void> {
+  const outcome = await bulk.edit(bulkTargets.value, changes);
+  keepFailed(outcome);
+  if (outcome) bulkEditOpen.value = false;
+}
 const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown, "valor");
 </script>
 
@@ -455,8 +523,42 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
       search-placeholder="Buscar por pessoa, mês, tipo ou forma"
       :count-label="(n) => (n === 1 ? '1 lançamento' : `${n} lançamentos`)"
       :empty-title="`Nenhum pagamento em ${year}.`"
+      v-model:selected="selected"
+      :selectable="selectable"
+      :select-label="selectLabel"
       @clear-filters="onClear"
     >
+      <template v-if="selectable" #bulk-actions="{ rows: picked }">
+        <template v-if="auth.isEmployer">
+          <Button
+            icon="check"
+            :loading="bulk.busy.value === 'confirm'"
+            :disabled="!!bulk.busy.value || !picked.some((r) => awaitsReceipt(r.payment))"
+            @click="bulk.confirm(paymentsOf(picked)).then(keepFailed)"
+            >{{ wide ? "Marcar como concluído" : "Concluir" }}</Button
+          >
+          <Button icon="pencil" :disabled="!!bulk.busy.value" @click="openBulkEdit(picked)"
+            >Editar</Button
+          >
+          <Button
+            icon="trash"
+            variant="danger"
+            :disabled="!!bulk.busy.value || !picked.some((r) => canDeletePayment(r.payment))"
+            @click="askBulkRemove(picked)"
+            >Excluir</Button
+          >
+        </template>
+        <Button
+          v-else
+          variant="primary"
+          icon="check"
+          :loading="bulk.busy.value === 'acknowledge'"
+          :disabled="!picked.some((r) => awaitsReceipt(r.payment))"
+          @click="bulk.acknowledge(paymentsOf(picked)).then(keepFailed)"
+          >Recebi</Button
+        >
+      </template>
+
       <template #filters>
         <Select
           :model-value="state.filters.ano ?? ''"
@@ -638,6 +740,29 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
       :loading="!!removing && busyId === removing.payment.id"
       @confirm="confirmRemove"
     />
+    <PaymentBulkEditSheet
+      v-if="auth.isEmployer"
+      v-model:open="bulkEditOpen"
+      :payments="bulkTargets"
+      :busy="bulk.busy.value === 'edit'"
+      @submit="saveBulkEdit"
+    />
+    <ConfirmDialog
+      v-model:open="bulkRemoveOpen"
+      :title="`Excluir ${countOf(bulkTargets.length, 'lançamento')}?`"
+      :message="`${
+        bulkTargets.length - bulkKept === 1
+          ? 'O lançamento sai do histórico, com o comprovante.'
+          : 'Os lançamentos saem do histórico, com os comprovantes.'
+      }${
+        bulkKept > 0
+          ? ` ${countOf(bulkKept, 'adiantamento')} com dias abatidos ${bulkKept === 1 ? 'fica' : 'ficam'}.`
+          : ''
+      }`"
+      :confirm-label="`Excluir ${countOf(bulkTargets.length - bulkKept, 'lançamento')}`"
+      :loading="bulk.busy.value === 'remove'"
+      @confirm="confirmBulkRemove"
+    />
   </div>
 </template>
 
@@ -727,6 +852,11 @@ const footerSpans = (shown: readonly Column<PaymentRow>[]) => spansAround(shown,
   background: none;
   box-shadow: none;
   grid-template-columns: minmax(0, 1fr);
+}
+
+:deep(.dt__card.is-selectable:has(.pv__card)) {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--s-1);
 }
 
 :deep(.dt__card:has(.pv__card) .dt__card-actions:empty) {

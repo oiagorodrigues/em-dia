@@ -927,6 +927,34 @@ async function paymentsTable(state: State): Promise<void> {
   await see("the 'recebi' button for the worker", action(worker, /^recebi$/i));
 }
 
+/** Selects every payment still without "recebi" and concludes them from the bulk bar. */
+async function bulkConclude(state: State): Promise<void> {
+  const id = need(state.contractId, 1);
+  const page = await deskOf(state);
+  await registerPayment(page, id, "1300");
+  await registerPayment(page, id, "1400");
+
+  await page.goto(`${BASE}/pagamentos`);
+  const table = page.getByRole("region", { name: "Pagamentos" });
+  const rows = dataRows(table);
+  await choose(page, "Recebido", "Sem “recebi”");
+  await poll("the filter in the URL", async () => page.url().includes("recebido=nao"));
+  await poll("at least the two new payments waiting", async () => (await rows.count()) >= 2);
+
+  const all = table.getByRole("checkbox", { name: /^Selecionar todas as linhas/ });
+  await all.check();
+  const label = (await all.evaluate((el) => el.closest("label")?.textContent)) ?? "";
+  const waiting = Number(/\((\d+) lançamentos?\)/.exec(label)?.[1]);
+  const bar = page.getByRole("region", { name: `Ações para ${waiting} selecionados` });
+  await see(`the bulk bar with ${waiting} selected`, bar);
+  await action(bar, /^Marcar como concluído$/).click();
+
+  const plural = waiting === 1 ? "pagamento concluído" : "pagamentos concluídos";
+  await see("the summary toast", page.getByText(`${waiting} ${plural}.`));
+  await poll("no payment left without 'recebi'", async () => (await rows.count()) === 0);
+  await absent("the bulk bar once nothing is selected", bar);
+}
+
 async function sidebarLogout(state: State): Promise<void> {
   const { page } = await openSession(state, "desk-logout", DESKTOP);
   await login(page, state.employerEmail, PASSWORD);
@@ -1242,6 +1270,7 @@ const JOURNEYS: [string, (state: State) => Promise<void>][] = [
   ["16 team search, sort and filter survive a reload", teamSearchSortFilter],
   ["17 board cell opens the day in place, row opens the person", boardCell],
   ["18 payments table lists, filters, worker sees recebi", paymentsTable],
+  ["28 select payments and mark them concluded in bulk", bulkConclude],
   ["27 coming back to a screen uses the cache", cachedReturn],
   ["5  vale-transporte keeps a pagar, desconto lowers it", paymentKinds],
   ["26 adiantamento: abate a worked day from the day editor", advanceAbate],

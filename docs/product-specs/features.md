@@ -87,11 +87,14 @@ Acceptance criteria:
 - E can "marcar como concluído" (row menu or "Concluir" on the stub) without waiting for W. The payment then shows "concluído", records who confirmed it (`acknowledgedBy`, `acknowledgedByRole: "employer"`) and is audited as `payment.confirm`. A later "recebi" keeps the first confirmation.
 - E edits a payment from the row menu ("Editar") in a sheet with the same fields as the form, except the receipt. Changing the type, reference month, date, amount, method, agreement or adiantamento sends the payment back to "aguardando" (the confirmation was about the old values); the note does not. Compensation edits respect what the agreement or adiantamento still owes. Audited as `payment.update`.
 - The Observação column is narrow and cut with an ellipsis; hovering shows the full note in a tooltip.
+- Bulk actions, in /pagamentos and the person's Pagamentos tab: E and W select payments with the row checkboxes (or all shown rows from the header, "Selecionar todos" on phones). A bar with "{n} selecionados" and "Limpar seleção" offers E "Marcar como concluído", "Editar" and "Excluir", and W "Recebi". Each action runs the single-payment request for every selected row the action fits and skips the rest: concluir and recebi only take money not yet confirmed (no descontos), excluir keeps adiantamentos with days abated, and rows of ended or removed contracts are left out. "Excluir" asks first, with the count. "Editar" opens a sheet with "Como pagou", "Pago em" and "Mês de referência", each on "Manter como está" until changed; only the changed fields are sent, and the method is not changed on descontos or compensações. One toast sums it up ("3 pagamentos concluídos; 1 ficou de fora (…); 1 não deu: <motivo>"); rows that failed stay selected. A search or filter that hides a row unselects it.
 
-## Monthly summary and CSV statement
+## Monthly summary and statement
 
 - Both see hours, amount earned, gratificações, vale-transporte and descontos, payments and balance for any month, computed by the shared pay math. The CSV lists every payments-list entry with its type and ends with what is still to be abated from adiantamentos.
 - The CSV opens correctly in Excel pt-BR (BOM, `;` separator), has one row per day plus totals, and neutralizes formula-looking cells.
+- Both download the month from "Baixar" under the month ledger on the Cartão tab, as PDF or "Planilha (CSV)". The trigger shows a spinner while the file downloads; a failure shows a toast.
+- The PDF (A4) has a header (em dia, "Extrato de {mês} de {ano}", worker, employer, casa, combinado with schedule, times and rate, generation date), the month ledger with the same lines as the app (total devido in bold, saldo highlighted), a table of the days that have an entry or were expected (data, dia, situação, entrada, saída with the check-out date when the stay ends on a later day, pausa, horas, confirmado, observação; header repeated on each page), the month's payments (data, tipo, como pagou, valor, situação, observação) and "Gerado pelo em dia · página X de Y" on every page. Empty tables say so in one line.
 
 ## Activity log
 
@@ -112,6 +115,7 @@ Layout and columns: [DESIGN](../DESIGN.md#screens).
 - E sees status tabs with counts (ativos, convites pendentes, encerrados, removidos), a search box (name and text columns, accent-insensitive), filters (função, forma de pagamento) and sortable columns.
 - Search, filters, tab and sort are in the URL query; reloading or sharing the link keeps them.
 - Removed people show "restaurar". "Convites pendentes" are contracts with no linked worker.
+- E selects people with checkboxes and uses the bulk bar: "Remover da equipe" (one confirmation for all, then a toast with "Desfazer") and, for removed people, "Restaurar". Início's team table has no selection.
 - W has no /equipe; the route redirects to Início.
 
 ## Profissional page (/equipe/:id)
@@ -134,6 +138,7 @@ Layout and columns: [DESIGN](../DESIGN.md#screens).
 
 - E sees all payments of all contracts in one table (pessoa, referência, pago em, valor, forma, recebido) with filters (pessoa, ano/mês, forma, recebido) and totals. Row actions: the receipt icon inline; ver pagamentos da pessoa, editar, marcar como concluído and remover in the menu.
 - W sees their own payments. Receipts open from either view.
+- Both can select payments and act on them in bulk (see [Payments, receipts and acknowledgement](#payments-receipts-and-acknowledgement)).
 
 ## Logical removal and restore
 

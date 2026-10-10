@@ -13,11 +13,13 @@ import { computed, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { contractsApi, entriesApi, errorMessage } from "@/api";
 import Avatar from "@/components/ui/Avatar.vue";
+import Button from "@/components/ui/Button.vue";
 import ConfirmDialog from "@/components/ui/ConfirmDialog.vue";
 import DataTable from "@/components/ui/DataTable.vue";
 import type { InlineAction, MenuItem } from "@/components/ui/menu.ts";
 import StatusChip from "@/components/ui/StatusChip.vue";
 import TableActions from "@/components/ui/TableActions.vue";
+import { bulkSummary, countOf, runEach } from "@/lib/bulk.ts";
 import { isWritable } from "@/lib/contract.ts";
 import { clockStateOf } from "@/lib/entry.ts";
 import type { Column, TableState } from "@/lib/table.ts";
@@ -44,6 +46,7 @@ const {
   filtersActive = false,
   filterCount,
   loading = false,
+  selectable = false,
 } = defineProps<{
   items: readonly DashboardItem[];
   state: TableState;
@@ -57,6 +60,8 @@ const {
   filtersActive?: boolean;
   filterCount?: number;
   loading?: boolean;
+  /** Checkboxes and the bulk bar: remover da equipe, or restaurar the removed ones. */
+  selectable?: boolean;
 }>();
 
 /** Something changed on the server; the page refetches. */
@@ -271,6 +276,59 @@ async function confirmRemove(): Promise<void> {
   }
 }
 
+const selected = ref<string[]>([]);
+const bulkBusy = ref<"remove" | "restore" | null>(null);
+const bulkRemoveOpen = ref(false);
+const bulkTargets = ref<DashboardItem[]>([]);
+const isArchived = (i: DashboardItem) => teamStatus(i.contract) === "archived";
+
+/** Rows that failed stay selected, so trying again is one click. */
+async function bulkRun(
+  action: "remove" | "restore",
+  list: readonly DashboardItem[],
+  task: (id: string) => Promise<unknown>,
+): Promise<DashboardItem[]> {
+  bulkBusy.value = action;
+  try {
+    const outcome = await runEach(list, (i) => task(i.contract.id));
+    selected.value = outcome.failed.map((f) => f.item.contract.id);
+    if (outcome.done.length > 0) emit("reload");
+    const n = outcome.done.length;
+    const summary = bulkSummary({
+      done:
+        n === 0
+          ? null
+          : action === "remove"
+            ? `${countOf(n, "pessoa")} ${n === 1 ? "saiu" : "saíram"} da equipe`
+            : `${countOf(n, "pessoa")} ${n === 1 ? "voltou" : "voltaram"} para a equipe`,
+      skipped: 0,
+      failed: outcome.failed.map((f) => errorMessage(f.error)),
+    });
+    const done = outcome.done.map((d) => d.item);
+    toast.show(summary.message, {
+      tone: summary.tone,
+      timeout: outcome.failed.length > 0 ? 8000 : 6000,
+      action:
+        action === "remove" && n > 0
+          ? { label: "Desfazer", run: () => void bulkRun("restore", done, contractsApi.restore) }
+          : undefined,
+    });
+    return done;
+  } finally {
+    bulkBusy.value = null;
+  }
+}
+
+function askBulkRemove(list: readonly DashboardItem[]): void {
+  bulkTargets.value = list.filter((i) => !isArchived(i));
+  bulkRemoveOpen.value = true;
+}
+
+async function confirmBulkRemove(): Promise<void> {
+  await bulkRun("remove", bulkTargets.value, contractsApi.remove);
+  bulkRemoveOpen.value = false;
+}
+
 const cardLink = (item: DashboardItem) => ({
   path: `/equipe/${item.contract.id}`,
   query: { mes: month },
@@ -358,8 +416,30 @@ function menuFor(item: DashboardItem): MenuItem[] {
     :count-label="(n) => (n === 1 ? '1 pessoa' : `${n} pessoas`)"
     card-actions="below"
     :filter-count="filterCount"
+    v-model:selected="selected"
+    :selectable="selectable"
+    :select-label="(i) => `Selecionar ${i.contract.workerName}`"
+    :selected-label="(n) => (n === 1 ? '1 pessoa selecionada' : `${n} pessoas selecionadas`)"
     @clear-filters="emit('clear-filters')"
   >
+    <template v-if="selectable" #bulk-actions="{ rows: picked }">
+      <Button
+        v-if="picked.some(isArchived)"
+        icon="undo"
+        :loading="bulkBusy === 'restore'"
+        :disabled="!!bulkBusy"
+        @click="bulkRun('restore', picked.filter(isArchived), contractsApi.restore)"
+        >Restaurar</Button
+      >
+      <Button
+        v-if="picked.some((i) => !isArchived(i))"
+        icon="trash"
+        variant="danger"
+        :disabled="!!bulkBusy"
+        @click="askBulkRemove(picked)"
+        >Remover da equipe</Button
+      >
+    </template>
     <template v-if="$slots.filters" #filters><slot name="filters" /></template>
     <template v-if="$slots.actions" #actions><slot name="actions" /></template>
     <template v-if="$slots.empty" #empty><slot name="empty" /></template>
@@ -487,6 +567,14 @@ function menuFor(item: DashboardItem): MenuItem[] {
     confirm-label="Remover"
     :loading="removeBusy"
     @confirm="confirmRemove"
+  />
+  <ConfirmDialog
+    v-model:open="bulkRemoveOpen"
+    :title="`Remover ${countOf(bulkTargets.length, 'pessoa')} da equipe?`"
+    message="O histórico fica guardado e você pode restaurar em Equipe → removidos."
+    confirm-label="Remover"
+    :loading="bulkBusy === 'remove'"
+    @confirm="confirmBulkRemove"
   />
 </template>
 

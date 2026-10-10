@@ -51,6 +51,7 @@ async function setup(
     state?: TableState;
     columns?: Column<Person>[];
     actions?: boolean;
+    selectable?: boolean;
   } = {},
 ) {
   stubMatchMedia(opts.wide ?? true);
@@ -79,10 +80,16 @@ async function setup(
           filter: opts.filter,
           filtersActive: !!opts.filter,
           rowLink: opts.link ? (p: Person) => `/equipe/${p.id}` : undefined,
+          selectable: opts.selectable,
+          selectLabel: (p: Person) => `Selecionar ${p.name}`,
         },
-        opts.actions
-          ? { "row-actions": () => h("button", { type: "button", class: "act" }, "Editar") }
-          : undefined,
+        {
+          ...(opts.actions
+            ? { "row-actions": () => h("button", { type: "button", class: "act" }, "Editar") }
+            : {}),
+          "bulk-actions": ({ rows }: { rows: readonly Person[] }) =>
+            h("button", { type: "button", class: "bulk-act" }, rows.map((p) => p.name).join(",")),
+        },
       );
   });
   const wrapper = mount(Host, {
@@ -203,6 +210,82 @@ describe("DataTable", () => {
     expect(cell.find(".dt__trunc").attributes("style")).toContain("max-width: 10ch");
     expect(cell.find(".dt__trunc-text").text()).toBe("Diarista");
     expect(cell.find(".tip-anchor").exists()).toBe(true);
+  });
+
+  describe("selection", () => {
+    const header = (w: Awaited<ReturnType<typeof setup>>["wrapper"]) =>
+      w.get("thead input[type='checkbox']").element as HTMLInputElement;
+    const boxFor = (w: Awaited<ReturnType<typeof setup>>["wrapper"], name: string) =>
+      w
+        .findAll(".dt__check")
+        .find((l) => l.text() === `Selecionar ${name}`)!
+        .get("input");
+
+    it("has no checkboxes or bar unless the table is selectable", async () => {
+      const { wrapper } = await setup();
+      expect(wrapper.find("input[type='checkbox']").exists()).toBe(false);
+      expect(wrapper.find(".dt__bulk").exists()).toBe(false);
+    });
+
+    it("selects every shown row from the header and clears from the bar", async () => {
+      const { wrapper } = await setup({ selectable: true });
+      expect(wrapper.find(".dt__bulk").exists()).toBe(false);
+      await wrapper.get("thead input[type='checkbox']").setValue(true);
+      expect(header(wrapper).checked).toBe(true);
+      expect(wrapper.get(".dt__bulk").text()).toContain("4 selecionados");
+      expect(wrapper.get(".bulk-act").text()).toBe("Ângela,Antônio,Joana,Maria");
+      expect(wrapper.get(".dt__bulk").attributes("aria-label")).toBe("Ações para 4 selecionados");
+
+      await wrapper.get(".dt__bulk-clear").trigger("click");
+      // The bar fades out, so it stays in the DOM for its leave transition.
+      expect(wrapper.find(".dt__bulk:not(.dt-bulk-leave-active)").exists()).toBe(false);
+      expect(header(wrapper).checked).toBe(false);
+    });
+
+    it("shows the header as indeterminate while only some rows are selected", async () => {
+      const { wrapper } = await setup({ selectable: true });
+      await boxFor(wrapper, "Joana").trigger("click");
+      expect(header(wrapper).indeterminate).toBe(true);
+      expect(header(wrapper).checked).toBe(false);
+      expect(wrapper.get(".dt__bulk").text()).toContain("1 selecionado");
+      expect(wrapper.findAll("tbody tr.is-selected")).toHaveLength(1);
+    });
+
+    it("selects the run between two rows with shift-click", async () => {
+      const { wrapper } = await setup({ selectable: true });
+      await boxFor(wrapper, "Ângela").trigger("click");
+      await boxFor(wrapper, "Joana").trigger("click", { shiftKey: true });
+      expect(wrapper.get(".bulk-act").text()).toBe("Ângela,Antônio,Joana");
+    });
+
+    it("drops rows a search hides from the selection", async () => {
+      const { wrapper } = await setup({ selectable: true });
+      await wrapper.get("thead input[type='checkbox']").setValue(true);
+      await wrapper.get('input[type="search"]').setValue("maria");
+      expect(wrapper.get(".bulk-act").text()).toBe("Maria");
+      await wrapper.get('input[type="search"]').setValue("");
+      expect(wrapper.get(".dt__bulk").text()).toContain("1 selecionado");
+      expect(header(wrapper).indeterminate).toBe(true);
+    });
+
+    it("does not open the row when its checkbox is used", async () => {
+      const { wrapper, router } = await setup({ selectable: true, link: true });
+      await boxFor(wrapper, "Maria").trigger("click");
+      await flushPromises();
+      expect(router.currentRoute.value.path).toBe("/equipe");
+    });
+
+    it("selects cards on small screens, with a select-all above them", async () => {
+      const { wrapper } = await setup({ selectable: true, wide: false });
+      const boxes = wrapper.findAll(".dt__card input[type='checkbox']");
+      expect(boxes).toHaveLength(4);
+      await boxes[1]!.trigger("click");
+      expect(wrapper.get(".bulk-act").text()).toBe("Antônio");
+      const all = wrapper.get(".dt__select-all input").element as HTMLInputElement;
+      expect(all.indeterminate).toBe(true);
+      await wrapper.get(".dt__select-all input").setValue(true);
+      expect(wrapper.get(".dt__bulk").text()).toContain("4 selecionados");
+    });
   });
 
   it("renders a card list on small screens from the same columns", async () => {

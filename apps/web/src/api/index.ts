@@ -98,6 +98,8 @@ export const contractsApi = {
     request<{ summary: MonthSummary }>(`/contracts/${enc(id)}/summary`, { query: { month } }),
   statementCsv: (id: string, month: YearMonth) =>
     requestBlob(`/contracts/${enc(id)}/statement.csv`, { query: { month } }),
+  statementPdf: (id: string, month: YearMonth) =>
+    requestBlob(`/contracts/${enc(id)}/statement.pdf`, { query: { month } }),
   activity: (id: string, limit = 50) =>
     request<{ activity: ActivityItem[] }>(`/contracts/${enc(id)}/activity`, { query: { limit } }),
 };

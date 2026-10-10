@@ -97,6 +97,7 @@ describe("ownership", () => {
       t.http().get(`${base}/payments`).auth(other.token, as),
       t.http().get(`${base}/summary?month=2026-10`).auth(other.token, as),
       t.http().get(`${base}/statement.csv?month=2026-10`).auth(other.token, as),
+      t.http().get(`${base}/statement.pdf?month=2026-10`).auth(other.token, as),
       t.http().get(`${base}/activity`).auth(other.token, as),
     ]);
     for (const res of responses) {
