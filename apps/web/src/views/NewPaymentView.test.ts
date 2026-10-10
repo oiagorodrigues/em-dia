@@ -12,7 +12,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { createApp, defineComponent } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { agreementsApi, contractsApi, paymentsApi } from "@/api";
+import { agreementsApi, contractsApi, entriesApi, paymentsApi } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
 import { queryCacheOptions } from "@/api/query.ts";
 import NewPaymentView from "./NewPaymentView.vue";
@@ -113,5 +113,91 @@ describe("NewPaymentView type field", () => {
     const fields = await setup("?vinculo=c1&tipo=deduction", true);
     const button = fields.element.closest("form")?.querySelector('button[type="submit"]');
     expect(button?.textContent).toContain("Lançar desconto");
+  });
+});
+
+describe("NewPaymentView adiantamento on a worked day", () => {
+  const today = nowInZone(DEFAULT_TIMEZONE).date;
+  const daily = {
+    ...contract,
+    payType: "daily",
+    rateCents: 15000,
+    expectedStart: "08:00",
+    expectedEnd: "16:00",
+    nightBonus: false,
+  } as unknown as Contract;
+  const worked = {
+    id: "e1",
+    contractId: "c1",
+    date: today,
+    status: "worked",
+    checkIn: "08:00",
+    checkOut: "16:00",
+    checkOutDate: null,
+    breakMinutes: 60,
+    minutes: 420,
+  };
+
+  async function mountAdvance(payments: unknown[] = []) {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    vi.spyOn(contractsApi, "list").mockResolvedValue({ contracts: [daily] });
+    vi.spyOn(contractsApi, "summary").mockResolvedValue({ summary } as never);
+    vi.spyOn(paymentsApi, "advances").mockResolvedValue({ advances: [] });
+    vi.spyOn(paymentsApi, "list").mockResolvedValue({ payments } as never);
+    vi.spyOn(entriesApi, "list").mockResolvedValue({ entries: [worked] } as never);
+    const create = vi
+      .spyOn(paymentsApi, "create")
+      .mockResolvedValueOnce({
+        payment: {
+          id: "adv1",
+          kind: "advance",
+          referenceMonth: month,
+          paidOn: today,
+          amountCents: 30000,
+          remainingCents: 30000,
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        payment: { id: "pay1", kind: "pay", referenceMonth: month, paidOn: today },
+      } as never);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: "/:rest(.*)*", component: { render: () => null } }],
+    });
+    await router.push("/pagamentos/novo?vinculo=c1&tipo=advance");
+    const wrapper = mount(NewPaymentView, {
+      attachTo: document.body,
+      global: {
+        plugins: [router, pinia, [PiniaColada, queryCacheOptions({ retry: false })]],
+        stubs: { PaymentFields, PaymentsSidePanel: true, PageHeader: true },
+      },
+    });
+    await flushPromises();
+    wrapper.getComponent(PaymentFields).vm.$emit("update:amountCents", 30000);
+    await flushPromises();
+    return { wrapper, create };
+  }
+
+  it("abates the worked day from the new adiantamento", async () => {
+    const { wrapper, create } = await mountAdvance();
+    expect(wrapper.text()).toContain("Abater o dia");
+    expect(wrapper.text()).toContain("sai deste adiantamento na hora");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(create).toHaveBeenCalledTimes(2);
+    const form = create.mock.calls[1]![1] as FormData;
+    expect(form.get("kind")).toBe("pay");
+    expect(form.get("method")).toBe("compensation");
+    expect(form.get("advanceId")).toBe("adv1");
+    expect(form.get("paidOn")).toBe(today);
+    expect(form.get("amountCents")).toBe("15000");
+    wrapper.unmount();
+  });
+
+  it("doesn't offer a day already paid", async () => {
+    const { wrapper } = await mountAdvance([{ id: "p0", kind: "pay", paidOn: today }]);
+    expect(wrapper.text()).not.toContain("Abater o dia");
+    wrapper.unmount();
   });
 });

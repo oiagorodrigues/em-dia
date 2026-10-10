@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { maskTime, nearestSlot, normalizeTime, timeSlots } from "./timeinput.ts";
+import { maskTime, nearestSlot, normalizeTime, slotOptions, timeSlots } from "./timeinput.ts";
 
 describe("time input", () => {
   it("masks digits into HH:MM as you type", () => {
@@ -16,7 +16,7 @@ describe("time input", () => {
     expect(normalizeTime("8:5")).toBe("08:05");
     expect(normalizeTime("8h30")).toBe("08:30");
     expect(normalizeTime("17:45")).toBe("17:45");
-    expect(normalizeTime("24:00")).toBeNull();
+    expect(normalizeTime("25:00")).toBeNull();
     expect(normalizeTime("12:60")).toBeNull();
     expect(normalizeTime("abc")).toBeNull();
     expect(normalizeTime("")).toBeNull();
@@ -28,5 +28,21 @@ describe("time input", () => {
     expect(slots[33]).toBe("08:15");
     expect(slots[nearestSlot(slots, "08:20")]).toBe("08:30");
     expect(slots[nearestSlot(slots, null)]).toBe("08:00");
+  });
+});
+
+describe("midnight", () => {
+  it("reads 24 and 24:00 as 00:00", () => {
+    expect(normalizeTime("24")).toBe("00:00");
+    expect(normalizeTime("24:00")).toBe("00:00");
+    expect(normalizeTime("2400")).toBe("00:00");
+    expect(normalizeTime("24:30")).toBeNull();
+  });
+
+  it("ends a check-out list with midnight after 23:45", () => {
+    const slots = slotOptions(15, true);
+    expect(slots.at(-2)?.value).toBe("23:45");
+    expect(slots.at(-1)).toEqual({ value: "00:00", label: "00:00 · meia-noite" });
+    expect(slotOptions(15).at(-1)?.value).toBe("23:45");
   });
 });

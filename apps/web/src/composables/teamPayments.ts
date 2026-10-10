@@ -9,10 +9,16 @@ export interface OpenAdvance {
   contract: Contract;
 }
 
+export interface TeamPayments {
+  contracts: Contract[];
+  rows: PaymentRow[];
+  advances: OpenAdvance[];
+}
+
 /** Every payment of the year across the caller's contracts (removed ones too: it's history). */
 export function useTeamPayments(year: () => number) {
   const read = useCachedRead();
-  return useResource(year, queryKeys.teamPayments, async (y) => {
+  return useResource(year, queryKeys.teamPayments, async (y): Promise<TeamPayments> => {
     const contracts = await read(queryKeys.contractsWithArchived(), () =>
       contractsApi.list({ archived: true }).then((r) => r.contracts),
     );

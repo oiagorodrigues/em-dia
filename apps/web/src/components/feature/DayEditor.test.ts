@@ -59,10 +59,12 @@ function advance(id: string, paidOn: string, amountCents: number, remainingCents
 let upsert: ReturnType<typeof vi.spyOn>;
 let create: ReturnType<typeof vi.spyOn>;
 let advances: ReturnType<typeof vi.spyOn>;
+let list: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   upsert = vi.spyOn(entriesApi, "upsert").mockResolvedValue({ entry: savedEntry });
   create = vi.spyOn(paymentsApi, "create").mockResolvedValue({ payment: { id: "p1" } } as never);
   advances = vi.spyOn(paymentsApi, "advances").mockResolvedValue({ advances: [] });
+  list = vi.spyOn(paymentsApi, "list").mockResolvedValue({ payments: [] });
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -326,6 +328,36 @@ describe("DayEditor plantão", () => {
     await flushPromises();
     const [, , body] = upsert.mock.calls[0] as [string, string, Record<string, unknown>];
     expect(body).toMatchObject({ checkIn: "08:00", checkOut: null, checkOutDate: null });
+    wrapper.unmount();
+  });
+});
+
+describe("DayEditor day already abated", () => {
+  it("shows the abatement switched on, not a fresh abate switch", async () => {
+    advances.mockResolvedValue({ advances: [advance("a1", "2026-09-10", 36000, 18000)] });
+    list.mockResolvedValue({
+      payments: [
+        {
+          id: "p9",
+          contractId: "c1",
+          kind: "pay",
+          method: "compensation",
+          advanceId: "a1",
+          referenceMonth: "2026-09",
+          paidOn: "2026-09-30",
+          amountCents: 18000,
+        } as Payment,
+      ],
+    });
+    const wrapper = setup("employer", null, "2026-09-30");
+    await flushPromises();
+    const sw = toggle("Abatido do adiantamento");
+    expect(sw?.checked).toBe(true);
+    expect(sw?.disabled).toBe(true);
+    expect(document.body.textContent?.replaceAll(String.fromCharCode(160), " ")).toContain(
+      "R$ 180,00 abatidos do adiantamento de 10/09/2026",
+    );
+    expect(toggle("Abater do adiantamento")).toBeNull();
     wrapper.unmount();
   });
 });

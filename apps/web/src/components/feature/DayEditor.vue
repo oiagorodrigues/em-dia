@@ -261,6 +261,35 @@ const advances = useResource(
   (id) => (id ? queryKeys.advances(id) : null),
   (id) => paymentsApi.advances(id).then((r) => r.advances),
 );
+/**
+ * A day already abated shows as such when the editor opens again: its compensation payment is
+ * dated the worked day and linked to an adiantamento.
+ */
+const dayPayments = useResource(
+  () =>
+    open.value && canAbate.value && date
+      ? { id: contract.id, year: Number(date.slice(0, 4)) }
+      : null,
+  (s) => (s ? queryKeys.payments(s) : null),
+  (s) => (s ? paymentsApi.list(s.id, s.year).then((r) => r.payments) : Promise.resolve([])),
+);
+const abated = computed(
+  () =>
+    dayPayments.data.value?.find(
+      (p) =>
+        p.kind === "pay" &&
+        p.method === "compensation" &&
+        p.advanceId !== null &&
+        p.paidOn === date,
+    ) ?? null,
+);
+const abatedHint = computed(() => {
+  const p = abated.value;
+  if (!p) return undefined;
+  const from = advances.data.value?.find((a) => a.id === p.advanceId);
+  return `${formatCents(p.amountCents)} abatidos${from ? ` do adiantamento de ${formatDateShort(from.paidOn)}` : ""}.\nPara desfazer, apague o abatimento em Pagamentos.`;
+});
+
 /** Oldest first: an advance is paid down in the order it was handed. */
 const openAdvances = computed(() =>
   [...(advances.data.value ?? [])].filter(isOpenAdvance).reverse(),
@@ -286,7 +315,7 @@ const abateHint = computed(() => {
   const left = advanceProgress(a);
   const remaining = a.remainingCents ?? 0;
   return dayValue.value !== null && dayValue.value > remaining
-    ? `${left}. O dia vale ${formatCents(dayValue.value)}: o resto fica a pagar.`
+    ? `${left}.\nO dia vale ${formatCents(dayValue.value)}: o resto fica a pagar.`
     : `${left}.`;
 });
 
@@ -520,6 +549,7 @@ async function onRemove(): Promise<void> {
               :id="id"
               v-model="values.checkOut"
               label="Saída"
+              until-midnight
               :step="15"
               :disabled="ended"
               :invalid="invalid"
@@ -561,7 +591,9 @@ async function onRemove(): Promise<void> {
         </Field>
         <p v-if="preview" class="de__preview">
           {{ checkOutDate ? "Total" : "Total do dia" }} <strong class="mono">{{ preview }}</strong>
-          <span v-if="overnight" class="de__night">· passou da meia-noite</span>
+          <span v-if="overnight" class="de__night">{{
+            values.checkOut === "00:00" ? "· até meia-noite" : "· passou da meia-noite"
+          }}</span>
           <span v-if="night > 0" class="de__night"
             >· {{ formatDuration(night) }} entre 22h e 5h</span
           >
@@ -583,7 +615,7 @@ async function onRemove(): Promise<void> {
       </Field>
 
       <section
-        v-if="worked && (canPay || openAdvances.length > 0)"
+        v-if="worked && (canPay || openAdvances.length > 0 || abated)"
         class="de__pay"
         aria-label="Pagamento do dia"
       >
@@ -605,7 +637,14 @@ async function onRemove(): Promise<void> {
             />
           </div>
         </template>
-        <template v-if="openAdvances.length > 0">
+        <Toggle
+          v-if="abated"
+          :model-value="true"
+          disabled
+          label="Abatido do adiantamento"
+          :hint="abatedHint"
+        />
+        <template v-else-if="openAdvances.length > 0">
           <Toggle v-model="abateNow" label="Abater do adiantamento" :hint="abateHint" />
           <div v-if="abateNow" class="de__payfields">
             <Field

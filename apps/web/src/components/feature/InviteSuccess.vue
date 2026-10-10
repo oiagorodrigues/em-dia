@@ -90,7 +90,7 @@ async function share(): Promise<void> {
           v-if="invite.whatsappUrl"
           :href="invite.whatsappUrl"
           variant="primary"
-          icon="message"
+          icon="whatsapp-logo"
           >Mandar no WhatsApp</Button
         >
         <Button

@@ -7,7 +7,8 @@ export function maskTime(raw: string): string {
 
 /**
  * Reads a typed time leniently: "8" → 08:00, "830" → 08:30, "8:5" → 08:05, "8h30" → 08:30.
- * Returns null when it isn't a valid 24h time.
+ * "24" or "24:00" is midnight, 00:00 (a check-out at 00:00 ends the day). Returns null when it
+ * isn't a valid 24h time.
  */
 export function normalizeTime(raw: string): string | null {
   const s = raw.trim().toLowerCase();
@@ -29,6 +30,7 @@ export function normalizeTime(raw: string): string | null {
   } else {
     return null;
   }
+  if (h === 24 && m === 0) return "00:00";
   if (h > 23 || m > 59) return null;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
@@ -40,6 +42,17 @@ export function timeSlots(step = 15): string[] {
     out.push(`${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`);
   }
   return out;
+}
+
+export interface TimeSlot {
+  value: string;
+  label: string;
+}
+
+/** The slot list as options; `untilMidnight` ends it with 00:00, the end of the day, for a check-out. */
+export function slotOptions(step = 15, untilMidnight = false): TimeSlot[] {
+  const slots = timeSlots(step).map((value) => ({ value, label: value }));
+  return untilMidnight ? [...slots, { value: "00:00", label: "00:00 · meia-noite" }] : slots;
 }
 
 /** Index of the slot at or right after `time`, so the list opens scrolled near the value. */

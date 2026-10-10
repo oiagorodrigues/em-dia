@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ACTION_ICON } from "@/components/ui/icons.ts";
 import { computed } from "vue";
 import IconButton from "@/components/ui/IconButton.vue";
 import { telLink, whatsappLink } from "@/lib/contact.ts";
@@ -25,7 +26,7 @@ async function copyPix(): Promise<void> {
 
 <template>
   <div v-if="wa || tel || mail || channels.pixKey" class="ca" role="group" aria-label="Contato">
-    <IconButton v-if="wa" icon="message" label="WhatsApp" :href="wa" />
+    <IconButton v-if="wa" :icon="ACTION_ICON.whatsapp" label="WhatsApp" :href="wa" />
     <IconButton v-if="tel" icon="phone" :label="`Ligar para ${channels.phone}`" :href="tel" />
     <IconButton v-if="mail" icon="mail" :label="`E-mail para ${channels.email}`" :href="mail" />
     <IconButton v-if="channels.pixKey" icon="copy" label="Copiar chave Pix" @click="copyPix" />

@@ -42,7 +42,7 @@ function onSubmit(): void {
   void submit(
     async (data) => {
       await feedbackApi.send(data);
-      toast.success("Obrigado! Sua mensagem chegou.");
+      toast.success("Mensagem enviada. Obrigado!");
       values.message = "";
       values.kind = "idea";
       open.value = false;

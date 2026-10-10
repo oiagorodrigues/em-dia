@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ICON_PATHS, type IconName } from "./icons.ts";
+import { FILLED_ICONS, ICON_PATHS, type IconName } from "./icons.ts";
 
 const { name, size = 20 } = defineProps<{ name: IconName; size?: number; label?: string }>();
 </script>
@@ -10,8 +10,8 @@ const { name, size = 20 } = defineProps<{ name: IconName; size?: number; label?:
     :width="size"
     :height="size"
     viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
+    :fill="FILLED_ICONS.has(name) ? 'currentColor' : 'none'"
+    :stroke="FILLED_ICONS.has(name) ? 'none' : 'currentColor'"
     stroke-width="1.5"
     stroke-linecap="round"
     stroke-linejoin="round"

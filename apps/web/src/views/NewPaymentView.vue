@@ -13,7 +13,7 @@ import {
 } from "@emdia/shared";
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { agreementsApi, contractsApi, paymentsApi } from "@/api";
+import { agreementsApi, contractsApi, entriesApi, paymentsApi } from "@/api";
 import { queryKeys } from "@/api/keys.ts";
 import PaymentFields from "@/components/feature/PaymentFields.vue";
 import PaymentsSidePanel from "@/components/feature/PaymentsSidePanel.vue";
@@ -24,17 +24,25 @@ import Field from "@/components/ui/Field.vue";
 import MonthField from "@/components/ui/MonthField.vue";
 import Select from "@/components/ui/Select.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
+import Toggle from "@/components/ui/Toggle.vue";
 import SkeletonForm from "@/components/ui/SkeletonForm.vue";
 import SkeletonLedger from "@/components/ui/SkeletonLedger.vue";
 import ChoiceField from "@/components/ui/ChoiceField.vue";
 import { previousInApp, useBack } from "@/composables/back.ts";
 import { useForm } from "@/composables/form.ts";
+import { useRecordPayment } from "@/composables/paymentsCache.ts";
 import { useInvalidate, useResource } from "@/composables/resource.ts";
 import { useToastStore } from "@/stores/toast.ts";
 import { isOpenAgreement, nextInstallmentCents } from "@/lib/agreement.ts";
 import { isWritable } from "@/lib/contract.ts";
 import { formatDateShort } from "@/lib/format.ts";
-import { advanceProgress, KIND_HINT, KIND_OPTIONS, paymentFormData } from "@/lib/payments.ts";
+import {
+  advanceProgress,
+  dayValueCents,
+  KIND_HINT,
+  KIND_OPTIONS,
+  paymentFormData,
+} from "@/lib/payments.ts";
 
 const SUBMIT_LABEL: Record<PaymentKind, string> = {
   pay: "Registrar pagamento",
@@ -83,6 +91,7 @@ const contracts = {
   data: computed(() => allContracts.data.value?.filter(isWritable)),
 };
 const invalidate = useInvalidate();
+const recordPayment = useRecordPayment();
 const queryAgreement = typeof route.query.acordo === "string" ? route.query.acordo : null;
 const contractId = ref(typeof route.query.vinculo === "string" ? route.query.vinculo : "");
 watch(
@@ -213,6 +222,50 @@ watch(advanceId, (id) => {
   clearError("advanceId");
 });
 
+/**
+ * An adiantamento handed on a day the person worked pays that day at once: "abater o dia" comes
+ * on, and saving also records the day as a compensation linked to the new adiantamento.
+ */
+const isAdvance = computed(() => values.kind === "advance");
+const advanceDay = useResource(
+  () => ({ id: isAdvance.value ? contractId.value : "", month: values.paidOn.slice(0, 7) }),
+  (s) => (s.id && YEAR_MONTH_RE.test(s.month) ? queryKeys.entries(s) : null),
+  (s) => entriesApi.list(s.id, s.month).then((r) => r.entries),
+);
+const advanceDayPayments = useResource(
+  () => ({ id: isAdvance.value ? contractId.value : "", year: Number(values.paidOn.slice(0, 4)) }),
+  (s) => (s.id && s.year ? queryKeys.payments(s) : null),
+  (s) => paymentsApi.list(s.id, s.year).then((r) => r.payments),
+);
+const workedDay = computed(() => {
+  const entry = advanceDay.data.value?.find(
+    (e) => e.date === values.paidOn && e.status === "worked" && e.checkOut !== null,
+  );
+  if (!entry || !contract.value) return null;
+  // A day already paid (or abated) on its own date isn't offered again.
+  const paid = advanceDayPayments.data.value?.some(
+    (p) => p.kind === "pay" && p.paidOn === entry.date,
+  );
+  if (paid) return null;
+  const cents = dayValueCents(contract.value, entry);
+  return cents ? { entry, cents } : null;
+});
+const abateDay = ref(true);
+watch(workedDay, (day, prev) => {
+  if (day?.entry.id !== prev?.entry.id) abateDay.value = true;
+});
+const abateDayCents = computed(() =>
+  workedDay.value ? Math.min(workedDay.value.cents, values.amountCents ?? 0) : 0,
+);
+const abateDayHint = computed(() => {
+  const day = workedDay.value;
+  if (!day) return undefined;
+  const value = formatCents(day.cents);
+  return abateDayCents.value < day.cents
+    ? `O dia vale ${value}; o adiantamento cobre ${formatCents(abateDayCents.value)} e o resto fica a pagar.`
+    : `O dia vale ${value} e sai deste adiantamento na hora.`;
+});
+
 const amountHint = computed(() => {
   if (agreement.value) return `Falta ${formatCents(agreement.value.remainingCents)} neste acordo.`;
   if (advance.value) return `${advanceProgress(advance.value)} deste adiantamento.`;
@@ -238,9 +291,42 @@ function onSubmit(): void {
   };
   void submit(async (data) => {
     if (!contract.value) return;
-    await paymentsApi.create(contract.value.id, paymentFormData(data, receipt.value));
+    const { payment } = await paymentsApi.create(
+      contract.value.id,
+      paymentFormData(data, receipt.value),
+    );
+    recordPayment(contract.value, payment);
+    const day = data.kind === "advance" && abateDay.value ? workedDay.value : null;
+    let abated = 0;
+    if (day && abateDayCents.value > 0) {
+      try {
+        const res = await paymentsApi.create(
+          contract.value.id,
+          paymentFormData(
+            {
+              kind: "pay",
+              referenceMonth: toYearMonth(day.entry.date),
+              paidOn: day.entry.date,
+              amountCents: abateDayCents.value,
+              method: "compensation",
+              advanceId: payment.id,
+              note: `Dia ${formatDateShort(day.entry.date).slice(0, 5)} abatido do adiantamento`,
+            },
+            null,
+          ),
+        );
+        recordPayment(contract.value, res.payment);
+        abated = abateDayCents.value;
+      } catch {
+        toast.error("O adiantamento foi registrado, mas o dia não foi abatido. Abata pelo cartão.");
+      }
+    }
     void invalidate.records(contract.value.id);
-    toast.success(SAVED[data.kind](formatCents(data.amountCents)));
+    toast.success(
+      abated
+        ? `Adiantamento de ${formatCents(data.amountCents)} registrado; ${formatCents(abated)} abatidos pelo dia ${formatDateShort(day!.entry.date).slice(0, 5)}.`
+        : SAVED[data.kind](formatCents(data.amountCents)),
+    );
     // Back to where the form was opened from; a direct visit lands on the person's payments.
     if (previousInApp()) router.back();
     else
@@ -402,6 +488,13 @@ const { to: back } = useBack(
             </Field>
           </template>
         </PaymentFields>
+
+        <Toggle
+          v-if="isAdvance && workedDay"
+          v-model="abateDay"
+          :label="`Abater o dia ${formatDateShort(workedDay.entry.date).slice(0, 5)}, trabalhado`"
+          :hint="abateDayHint"
+        />
 
         <Field
           v-slot="{ id, invalid, describedBy }"

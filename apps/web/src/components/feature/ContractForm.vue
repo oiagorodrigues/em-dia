@@ -142,34 +142,36 @@ function onSubmit(): void {
 
       <section class="cf__sec" :aria-labelledby="`${formId}-who`">
         <h2 :id="`${formId}-who`" class="cf__title">Quem é</h2>
-        <Field
-          v-slot="{ id, invalid, describedBy }"
-          label="Nome de quem trabalha"
-          :error="errors.workerName"
-        >
-          <input
-            :id="id"
-            v-model="values.workerName"
-            class="input"
-            type="text"
-            autocomplete="off"
-            placeholder="Maria da Silva"
-            :aria-invalid="invalid || undefined"
-            :aria-describedby="describedBy"
-            @input="clearError('workerName')"
-          />
-        </Field>
-        <Field v-slot="{ id, invalid, describedBy }" label="Função" :error="errors.occupation">
-          <Select
-            :id="id"
-            :model-value="values.occupation"
-            :options="occupationOptions"
-            label="Função"
-            :invalid="invalid"
-            :described-by="describedBy"
-            @update:model-value="(v) => v && (values.occupation = v)"
-          />
-        </Field>
+        <div class="cf__two cf__two--wide">
+          <Field
+            v-slot="{ id, invalid, describedBy }"
+            label="Nome de quem trabalha"
+            :error="errors.workerName"
+          >
+            <input
+              :id="id"
+              v-model="values.workerName"
+              class="input"
+              type="text"
+              autocomplete="off"
+              placeholder="Maria da Silva"
+              :aria-invalid="invalid || undefined"
+              :aria-describedby="describedBy"
+              @input="clearError('workerName')"
+            />
+          </Field>
+          <Field v-slot="{ id, invalid, describedBy }" label="Função" :error="errors.occupation">
+            <Select
+              :id="id"
+              :model-value="values.occupation"
+              :options="occupationOptions"
+              label="Função"
+              :invalid="invalid"
+              :described-by="describedBy"
+              @update:model-value="(v) => v && (values.occupation = v)"
+            />
+          </Field>
+        </div>
       </section>
 
       <section v-if="contact" class="cf__sec" :aria-labelledby="`${formId}-contact`">
@@ -310,6 +312,7 @@ function onSubmit(): void {
               :id="id"
               v-model="values.expectedEnd"
               label="Sai às"
+              until-midnight
               :invalid="invalid"
               :described-by="describedBy"
               @update:model-value="clearError('expectedEnd')"

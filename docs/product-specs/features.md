@@ -39,6 +39,8 @@ Acceptance criteria:
 
 ## Time card with dual confirmation
 
+- The check-out time can be midnight: the time list for a saída ends with "00:00 · meia-noite" after 23:45, and typing 24 or 24:00 means 00:00. A day from 16:00 to 00:00 is 8h, and the day editor says "até meia-noite".
+
 - E and W see the same month card, one row per day, with status, check-in, check-out, break and total.
 - Either party can create or edit a day. The other party sees an unconfirmed marker and a "confirmar" button. The creator cannot confirm their own entry.
 - Editing a confirmed entry clears the confirmation.
@@ -66,6 +68,8 @@ Acceptance criteria:
 - "Novo pagamento" and the edit sheet have a "Tipo" field with a one-line explanation of the chosen type. The amount is prefilled with the month's balance only for diárias/salário. `?tipo=` opens the form on a type; the old `?extra=1` link opens it on gratificação.
 - Compensation is offered only for diárias/salário.
 - Payment tables have a Tipo column and a type filter, for both roles. Totals ("total pago") count only what counts as paid; "com recebi" and "aguardando recebi" count only entries where money changed hands.
+- Adiantamento on a worked day (E): in "novo pagamento", when the adiantamento's date has a worked day (with check-out) that no "diárias/salário" payment covers yet, "Abater o dia DD/MM, trabalhado" comes on. Saving records the adiantamento and then the day as a compensation linked to it (the day's value, capped at the adiantamento). If that second step fails, the adiantamento stays and the user is told to abate from the card.
+- A day already abated reopens in the day editor with "Abatido do adiantamento" switched on and locked, saying how much and from which adiantamento; undoing it is deleting that payment in Pagamentos.
 - Abate a day (E): when E marks a past or current day as worked and the person has an open adiantamento, the day editor offers "abater do adiantamento" (next to "pagar este dia agora" on today; turning one on turns the other off). It shows what remains ("restam R$ 180,00 de R$ 360,00"), picks the oldest open adiantamento (a select appears when there are several) and prefills the day's value (the diária, hours × rate, or salário ÷ 30) capped at what remains; when the day is worth more, the hint says the rest stays to be paid. An amount over what remains is blocked with a message and the day is not saved. Abating creates a compensation payment for the worked day's month, dated the worked day and linked to the adiantamento, so the day counts as paid and the adiantamento's balance drops. Days of any later month can be abated.
 - Pagamentos (the person's tab and /pagamentos) shows "Adiantamentos em aberto" with what remains and a progress bar, for E and W. Each abatement names its adiantamento ("Adiantamento de 15/09/2026").
 - An adiantamento with abated days cannot be removed (409 with the abated amount), retyped, or lowered below what was abated. Removing an abatement gives its amount back to the adiantamento.
@@ -177,8 +181,8 @@ An agreement records something the worker pays back in work (a dining table, an 
 
 ## Feedback
 
-- Both roles can send feedback from "Enviar feedback" (sidebar on desktop, account menu on mobile). A sheet asks what it is about (sugestão, problema, outro) and the message (5 to 2000 characters); the current screen goes along so a problem can be reproduced.
-- The message is mailed to the team with the user's e-mail as reply-to; nothing is stored in the database. Sending clears the form and thanks the user; a failure keeps the draft and says to try again.
+- Both roles can send feedback: a "Feedback" tab on the right edge of the screen on desktop, "Enviar feedback" in the account menu on mobile. A sheet asks what it is about (sugestão, problema, outro) and the message (5 to 2000 characters); the current screen goes along so a problem can be reproduced.
+- The message is mailed to the team with the user's e-mail as reply-to; nothing is stored in the database. Sending clears the form and says "Mensagem enviada. Obrigado!"; a failure keeps the draft and says to try again.
 
 ## Navigation and invite links
 
