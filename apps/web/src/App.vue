@@ -2,6 +2,7 @@
 import { computed, watch } from "vue";
 import { RouterView, useRoute } from "vue-router";
 import { Analytics } from "@vercel/analytics/vue";
+import { SpeedInsights } from "@vercel/speed-insights/vue";
 import AppShell from "@/components/layout/AppShell.vue";
 import AuthLayout from "@/components/layout/AuthLayout.vue";
 import OfflineBanner from "@/components/layout/OfflineBanner.vue";
@@ -29,6 +30,7 @@ watch(
 
 <template>
   <Analytics />
+  <SpeedInsights />
   <OfflineBanner />
   <AuthLayout v-if="layout === 'auth'">
     <RouterView v-slot="{ Component }">
