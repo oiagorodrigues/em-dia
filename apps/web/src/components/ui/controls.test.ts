@@ -421,3 +421,62 @@ describe("floating layers inside a modal dialog", () => {
     expect(wrapper.element.contains(list)).toBe(false);
   });
 });
+
+describe("Sheet", () => {
+  it("locks page scroll while open and lets go on close", async () => {
+    media();
+    vi.useFakeTimers();
+    const open = ref(true);
+    const wrapper = mount(
+      defineComponent(
+        () => () =>
+          h(C(Sheet), {
+            open: open.value,
+            "onUpdate:open": (v: boolean) => (open.value = v),
+            title: "Filtros",
+          }),
+      ),
+      { attachTo: document.body },
+    );
+    await flushPromises();
+    expect(document.documentElement.classList.contains("has-sheet")).toBe(true);
+
+    open.value = false;
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(document.documentElement.classList.contains("has-sheet")).toBe(false);
+    wrapper.unmount();
+    vi.useRealTimers();
+  });
+
+  it("does not close the dialog after it unmounts mid-animation", async () => {
+    media();
+    vi.useFakeTimers();
+    const open = ref(true);
+    const closed = vi.fn();
+    const wrapper = mount(
+      defineComponent(
+        () => () =>
+          h(C(Sheet), {
+            open: open.value,
+            "onUpdate:open": (v: boolean) => (open.value = v),
+            onClosed: closed,
+            title: "Filtros",
+          }),
+      ),
+      { attachTo: document.body },
+    );
+    await flushPromises();
+    const dialog = document.querySelector("dialog")!;
+
+    open.value = false;
+    await flushPromises();
+    wrapper.unmount();
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(dialog.open).toBe(true);
+    expect(closed).not.toHaveBeenCalled();
+    expect(document.documentElement.classList.contains("has-sheet")).toBe(false);
+    vi.useRealTimers();
+  });
+});
