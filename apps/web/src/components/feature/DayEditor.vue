@@ -181,10 +181,8 @@ const title = computed(() =>
   date ? `${WEEKDAY_LONG[weekdayOf(date)]}, ${formatDayMonth(date)}` : "",
 );
 
-/** The employer can abate any worked day up to today from an open adiantamento. */
-const canAbate = computed(() => auth.isEmployer && !ended.value && !isFuture.value);
-/** Paying in the same step is for the day being worked: it is paid today, on the day. */
-const canPay = computed(() => canAbate.value && date === today);
+/** The employer can pay, abate and discount any worked day up to today. */
+const canPay = computed(() => auth.isEmployer && !ended.value && !isFuture.value);
 const payNow = ref(false);
 const {
   values: payValues,
@@ -201,8 +199,11 @@ const {
 });
 const receipt = ref<File | null>(null);
 const paying = computed(() => payNow.value && worked.value && canPay.value);
+const monthLabel = computed(() =>
+  date ? monthName(parseYearMonth(date.slice(0, 7)).month) : undefined,
+);
 const payHint = computed(() =>
-  date ? `Entra na conta de ${monthName(parseYearMonth(date.slice(0, 7)).month)}.` : undefined,
+  monthLabel.value ? `Entra na conta de ${monthLabel.value}.` : undefined,
 );
 
 const dayMinutes = computed(() => (stay.value ? stayMinutes(stay.value) : 0));
@@ -233,7 +234,7 @@ const amountHint = computed(() => {
     : undefined;
 });
 
-/** The amount follows the hours until the employer types one. */
+/** The amount follows the hours, less what is abated and discounted, until the employer types one. */
 const amountTyped = ref(false);
 watch(
   () => [open.value, date] as const,
@@ -248,16 +249,14 @@ watch(
   },
   { immediate: true },
 );
-watch(dayValue, (cents) => {
-  if (!amountTyped.value && !isSalaried(contract.payType)) payValues.amountCents = cents;
-});
 
 /**
- * Instead of paying, the employer can abate the day from an open adiantamento: a compensation
- * payment linked to it, in the day's month, so the day counts as paid and the advance shrinks.
+ * Besides paying, the employer can abate the day from an open adiantamento (a compensation
+ * payment linked to it, so the day counts as paid and the advance shrinks) and discount an
+ * amount from it (a desconto, which only lowers what is due in the day's month).
  */
 const advances = useResource(
-  () => (open.value && canAbate.value ? contract.id : ""),
+  () => (open.value && canPay.value ? contract.id : ""),
   (id) => (id ? queryKeys.advances(id) : null),
   (id) => paymentsApi.advances(id).then((r) => r.advances),
 );
@@ -267,9 +266,7 @@ const advances = useResource(
  */
 const dayPayments = useResource(
   () =>
-    open.value && canAbate.value && date
-      ? { id: contract.id, year: Number(date.slice(0, 4)) }
-      : null,
+    open.value && canPay.value && date ? { id: contract.id, year: Number(date.slice(0, 4)) } : null,
   (s) => (s ? queryKeys.payments(s) : null),
   (s) => (s ? paymentsApi.list(s.id, s.year).then((r) => r.payments) : Promise.resolve([])),
 );
@@ -308,7 +305,7 @@ const advanceOptions = computed(() =>
     description: advanceProgress(a).toLowerCase(),
   })),
 );
-const abating = computed(() => abateNow.value && worked.value && canAbate.value && !!advance.value);
+const abating = computed(() => abateNow.value && worked.value && canPay.value && !!advance.value);
 const abateHint = computed(() => {
   const a = advance.value;
   if (!a) return undefined;
@@ -319,14 +316,38 @@ const abateHint = computed(() => {
     : `${left}.`;
 });
 
-watch(payNow, (on) => on && (abateNow.value = false));
+const deductNow = ref(false);
+const deductCents = ref<number | null>(null);
+const deductNote = ref("");
+const deductError = ref<string | null>(null);
+const deducting = computed(() => deductNow.value && worked.value && canPay.value);
+const defaultDeductNote = computed(() =>
+  date ? `Desconto do dia ${formatDateShort(date).slice(0, 5)}` : "",
+);
+
+/** What is left to hand over once the abatement and the desconto are taken off the day. */
+const suggestedPay = computed(() => {
+  if (isSalaried(contract.payType) || dayValue.value === null) return dayValue.value;
+  const taken =
+    (abating.value ? (abateCents.value ?? 0) : 0) +
+    (deducting.value ? (deductCents.value ?? 0) : 0);
+  return Math.max(0, dayValue.value - taken);
+});
+watch(suggestedPay, (cents) => {
+  if (!amountTyped.value && !isSalaried(contract.payType)) payValues.amountCents = cents;
+});
+
 watch(abateNow, (on) => {
   if (!on) return;
-  payNow.value = false;
   abateError.value = null;
   const a = advance.value;
   if (a)
     abateCents.value = Math.min(dayValue.value ?? a.remainingCents ?? 0, a.remainingCents ?? 0);
+});
+watch(deductNow, (on) => {
+  if (!on) return;
+  deductError.value = null;
+  if (!deductNote.value) deductNote.value = defaultDeductNote.value;
 });
 watch(advanceId, () => {
   const a = advance.value;
@@ -341,8 +362,30 @@ watch(
     advanceId.value = "";
     abateCents.value = null;
     abateError.value = null;
+    deductNow.value = false;
+    deductCents.value = null;
+    deductNote.value = "";
+    deductError.value = null;
   },
 );
+
+/** With the day covered by abatements and descontos, there is nothing left to hand over. */
+const handsNothing = computed(
+  () => paying.value && (abating.value || deducting.value) && (payValues.amountCents ?? 0) <= 0,
+);
+const payPlanned = computed(() => paying.value && !handsNothing.value);
+const planned = computed(() => [payPlanned.value, abating.value, deducting.value].filter(Boolean));
+
+const splitText = computed(() => {
+  const parts: string[] = [];
+  if (abating.value) parts.push(`abate ${formatCents(abateCents.value ?? 0)}`);
+  if (deducting.value) parts.push(`desconta ${formatCents(deductCents.value ?? 0)}`);
+  if (payPlanned.value && (payValues.amountCents ?? 0) > 0)
+    parts.push(`paga ${formatCents(payValues.amountCents ?? 0)}`);
+  else if (handsNothing.value) parts.push("não paga em dinheiro");
+  if (parts.length === 0) return null;
+  return `${parts.join(", ").replace(/^./, (c) => c.toUpperCase())}.`;
+});
 
 function abateInput() {
   const remaining = advance.value?.remainingCents ?? 0;
@@ -364,21 +407,67 @@ function abateInput() {
       };
 }
 
+function deductInput() {
+  const amount = deductCents.value ?? 0;
+  deductError.value = amount <= 0 ? "Informe o valor" : null;
+  return deductError.value || !date
+    ? null
+    : {
+        kind: "deduction" as const,
+        referenceMonth: toYearMonth(date),
+        paidOn: date,
+        amountCents: amount,
+        method: null,
+        note: deductNote.value.trim() || defaultDeductNote.value,
+      };
+}
+
 const payInput = () => ({ ...payValues, amountCents: payValues.amountCents ?? 0 });
 
-async function payDay(): Promise<boolean> {
-  const data = abating.value ? abateInput() : validatePay(payInput());
-  if (!data) return false;
+/** Money paid on a day goes from the worked day up to today, never before it. */
+function validatePayment() {
+  if (date && payValues.paidOn && payValues.paidOn < date) {
+    payErrors.value = { paidOn: "O pagamento não pode ser antes do dia trabalhado" };
+    return null;
+  }
+  return validatePay(payInput());
+}
+
+type Step = "abate" | "deduct" | "pay";
+
+/** Checks every planned payment first, so a typo doesn't leave the day saved and unpaid. */
+function validateSteps(): boolean {
+  const checks = [
+    abating.value ? abateInput() : true,
+    deducting.value ? deductInput() : true,
+    payPlanned.value ? validatePayment() : true,
+  ];
+  return checks.every(Boolean);
+}
+
+async function send(step: Step): Promise<boolean> {
   try {
-    const form = paymentFormData(data, abating.value ? null : receipt.value);
+    const data =
+      step === "pay" ? validatePayment() : step === "abate" ? abateInput() : deductInput();
+    if (!data) return false;
+    const form = paymentFormData(data, step === "pay" ? receipt.value : null);
     const res = await paymentsApi.create(contract.id, form);
     emit("paid", res.payment);
     return true;
   } catch (e) {
-    if (abating.value) abateError.value = errorMessage(e);
+    if (step === "abate") abateError.value = errorMessage(e);
+    else if (step === "deduct") deductError.value = errorMessage(e);
     else applyPayError(e);
     return false;
   }
+}
+
+/** A step that went through is switched off, so trying again after a failure doesn't repeat it. */
+function settle(step: Step): void {
+  amountTyped.value = true;
+  if (step === "abate") abateNow.value = false;
+  else if (step === "deduct") deductNow.value = false;
+  else payNow.value = false;
 }
 
 function focusFirstError(): void {
@@ -409,46 +498,73 @@ const unchanged = computed(() => {
   );
 });
 const saveLabel = computed(() => {
-  if (paying.value) return unchanged.value ? "Pagar" : entry ? "Salvar e pagar" : "Anotar e pagar";
-  if (abating.value)
-    return unchanged.value ? "Abater" : entry ? "Salvar e abater" : "Anotar e abater";
-  return entry ? "Salvar" : "Anotar";
+  const only = planned.value.length === 1;
+  const verb = !only
+    ? "lançar"
+    : payPlanned.value
+      ? "pagar"
+      : abating.value
+        ? "abater"
+        : "descontar";
+  if (planned.value.length === 0) return entry ? "Salvar" : "Anotar";
+  if (unchanged.value) return verb[0]!.toUpperCase() + verb.slice(1);
+  return `${entry ? "Salvar" : "Anotar"} e ${verb}`;
 });
+
+const DONE: Record<Step, (cents: number) => string> = {
+  abate: (c) => `${formatCents(c)} abatidos do adiantamento`,
+  deduct: (c) => `desconto de ${formatCents(c)} lançado`,
+  pay: (c) => `pagamento de ${formatCents(c)} registrado`,
+};
+const FAILED: Record<Step, string> = {
+  abate: "o abatimento",
+  deduct: "o desconto",
+  pay: "o pagamento",
+};
+const upper = (text: string) => text[0]!.toUpperCase() + text.slice(1);
+const joinDone = (done: string[]) =>
+  done.length < 2 ? (done[0] ?? "") : `${done.slice(0, -1).join(", ")} e ${done.at(-1)}`;
 
 function onSave(): void {
   if (!date) return;
   const input = entryInput.value;
-  const withAbate = abating.value;
-  const withPayment = paying.value || withAbate;
-  // Check the payment before saving the day, so a typo doesn't leave the day saved and unpaid.
-  if (withPayment && !(withAbate ? abateInput() : validatePay(payInput()))) {
+  const steps: Step[] = [
+    ...(abating.value ? (["abate"] as const) : []),
+    ...(deducting.value ? (["deduct"] as const) : []),
+    ...(payPlanned.value ? (["pay"] as const) : []),
+  ];
+  if (!validateSteps()) {
     focusFirstError();
     return;
   }
-  const skipEntry = withPayment && unchanged.value;
-  const what = withAbate ? "o abatimento" : "o pagamento";
+  const skipEntry = steps.length > 0 && unchanged.value;
+  const cents: Record<Step, number> = {
+    abate: abateCents.value ?? 0,
+    deduct: deductCents.value ?? 0,
+    pay: payValues.amountCents ?? 0,
+  };
   void submit(async (data) => {
     if (!skipEntry) {
       const res = await entriesApi.upsert(contract.id, date, data);
       emit("saved", res.entry);
     }
-    if (withPayment) {
-      if (!(await payDay())) {
+    const done: string[] = skipEntry ? [] : ["dia anotado"];
+    for (const step of steps) {
+      if (!(await send(step))) {
+        const saved = done.length > 0 ? `${upper(joinDone(done))}, mas` : "";
         toast.error(
-          skipEntry
-            ? `${withAbate ? "O abatimento" : "O pagamento"} não foi registrado. Confira e tente de novo.`
-            : `Dia anotado, mas ${what} não foi registrado. Confira e tente de novo.`,
+          saved
+            ? `${saved} ${FAILED[step]} não foi registrado. Confira e tente de novo.`
+            : `${upper(FAILED[step])} não foi registrado. Confira e tente de novo.`,
         );
         focusFirstError();
         return;
       }
-      const amount = formatCents((withAbate ? abateCents.value : payValues.amountCents) ?? 0);
-      const done = withAbate
-        ? `${amount} abatidos do adiantamento`
-        : `pagamento de ${amount} registrado`;
-      toast.success(
-        skipEntry ? `${done[0]!.toUpperCase()}${done.slice(1)}.` : `Dia anotado e ${done}.`,
-      );
+      settle(step);
+      done.push(DONE[step](cents[step]));
+    }
+    if (steps.length > 0) {
+      toast.success(`${upper(joinDone(done))}.`);
     } else {
       toast.success(
         entry?.confirmedAt ? "Dia atualizado. Precisa de nova confirmação." : "Dia anotado.",
@@ -614,29 +730,24 @@ async function onRemove(): Promise<void> {
         />
       </Field>
 
-      <section
-        v-if="worked && (canPay || openAdvances.length > 0 || abated)"
-        class="de__pay"
-        aria-label="Pagamento do dia"
-      >
-        <template v-if="canPay">
-          <Toggle v-model="payNow" label="Pagar este dia agora" :hint="payHint" />
-          <div v-if="payNow" class="de__payfields">
-            <p v-if="payError" class="form-error" role="alert">{{ payError }}</p>
-            <PaymentFields
-              v-model:paid-on="payValues.paidOn"
-              v-model:amount-cents="payValues.amountCents"
-              v-model:method="payValues.method"
-              v-model:receipt="receipt"
-              :errors="payErrors"
-              :today="today"
-              :amount-hint="amountHint"
-              date-locked
-              @clear="clearPayError"
-              @amount-input="amountTyped = true"
-            />
-          </div>
-        </template>
+      <section v-if="worked && canPay" class="de__pay" aria-label="Pagamento do dia">
+        <Toggle v-model="payNow" label="Pagar este dia" :hint="payHint" />
+        <div v-if="payNow" class="de__payfields">
+          <p v-if="payError" class="form-error" role="alert">{{ payError }}</p>
+          <PaymentFields
+            v-model:paid-on="payValues.paidOn"
+            v-model:amount-cents="payValues.amountCents"
+            v-model:method="payValues.method"
+            v-model:receipt="receipt"
+            :errors="payErrors"
+            :today="today"
+            :min-date="date ?? undefined"
+            :amount-hint="amountHint"
+            @clear="clearPayError"
+            @amount-input="amountTyped = true"
+          />
+        </div>
+
         <Toggle
           v-if="abated"
           :model-value="true"
@@ -677,6 +788,39 @@ async function onRemove(): Promise<void> {
             </Field>
           </div>
         </template>
+
+        <Toggle
+          v-model="deductNow"
+          label="Descontar um valor do dia"
+          :hint="`Diminui o que você deve da conta de ${monthLabel}. Não é dinheiro entregue.`"
+        />
+        <div v-if="deductNow" class="de__payfields">
+          <Field
+            v-slot="{ id, invalid, describedBy }"
+            label="Valor do desconto"
+            :error="deductError"
+          >
+            <MoneyInput
+              :id="id"
+              v-model="deductCents"
+              :invalid="invalid"
+              :described-by="describedBy"
+              @update:model-value="deductError = null"
+            />
+          </Field>
+          <Field v-slot="{ id, describedBy }" label="Descrição">
+            <input
+              :id="id"
+              v-model="deductNote"
+              class="input"
+              type="text"
+              maxlength="500"
+              :aria-describedby="describedBy"
+            />
+          </Field>
+        </div>
+
+        <p v-if="splitText" class="de__split">{{ splitText }}</p>
       </section>
     </form>
 
@@ -772,6 +916,11 @@ async function onRemove(): Promise<void> {
   gap: var(--s-5);
   padding-top: var(--s-4);
   border-top: 1px dashed var(--rule);
+}
+
+.de__split {
+  font-size: var(--t-14);
+  color: var(--ink-2);
 }
 
 .de__payfields {

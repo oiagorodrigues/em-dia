@@ -268,6 +268,60 @@ describe("computeMonthSummary", () => {
     expect(abated.balanceCents).toBe(18000);
   });
 
+  it("settles a diária paid with an abatement, a desconto and money", () => {
+    const entry = {
+      date: "2026-09-07",
+      status: "worked" as const,
+      minutes: 0,
+      breakMinutes: 0,
+      checkIn: null,
+      checkOut: null,
+      checkOutDate: null,
+      confirmedAt: "x",
+    };
+    const s = computeMonthSummary({
+      ...base,
+      contract: { ...base.contract, payType: "daily", rateCents: 18000 },
+      entries: [entry],
+      payments: [
+        { kind: "advance", method: "pix", amountCents: 36000 },
+        { kind: "pay", method: "compensation", amountCents: 5000 },
+        { kind: "deduction", method: null, amountCents: 1000 },
+        { kind: "pay", method: "pix", amountCents: 12000 },
+      ],
+    });
+    expect(s.dueCents).toBe(18000 - 1000);
+    expect(s.paidCents).toBe(17000);
+    expect(s.balanceCents).toBe(0);
+  });
+
+  it("leaves a salary to be closed with the abatement and the desconto already taken off", () => {
+    const s = computeMonthSummary({
+      ...base,
+      contract: { ...base.contract, payType: "monthly", rateCents: 250000 },
+      payments: [
+        { kind: "advance", method: "pix", amountCents: 50000 },
+        { kind: "pay", method: "compensation", amountCents: 50000 },
+        { kind: "deduction", method: null, amountCents: 10000 },
+      ],
+    });
+    expect(s.dueCents).toBe(240000);
+    expect(s.paidCents).toBe(50000);
+    expect(s.balanceCents).toBe(190000);
+
+    const closed = computeMonthSummary({
+      ...base,
+      contract: { ...base.contract, payType: "monthly", rateCents: 250000 },
+      payments: [
+        { kind: "advance", method: "pix", amountCents: 50000 },
+        { kind: "pay", method: "compensation", amountCents: 50000 },
+        { kind: "deduction", method: null, amountCents: 10000 },
+        { kind: "pay", method: "pix", amountCents: 190000 },
+      ],
+    });
+    expect(closed.balanceCents).toBe(0);
+  });
+
   it("counts expected and unrecorded scheduled days up to today", () => {
     const s = computeMonthSummary({
       ...base,

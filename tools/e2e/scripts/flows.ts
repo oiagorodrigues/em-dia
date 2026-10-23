@@ -546,9 +546,12 @@ async function acknowledgePayment(state: State): Promise<void> {
 async function downloadCsv(state: State): Promise<void> {
   const { page } = need(state.employer, 1);
   await page.goto(`${BASE}/equipe/${need(state.contractId, 1)}`);
-  const button = action(page, /baixar planilha/i);
+  const button = action(page, /^baixar$/i);
   await see("the download button", button);
-  const [download] = await Promise.all([page.waitForEvent("download"), button.click()]);
+  await button.click();
+  const csv = page.getByRole("menuitem", { name: /planilha \(csv\)/i });
+  await see("the CSV option", csv);
+  const [download] = await Promise.all([page.waitForEvent("download"), csv.click()]);
 
   const filename = download.suggestedFilename();
   if (!filename.endsWith(".csv")) throw new Error(`download is named "${filename}", expected .csv`);
@@ -895,7 +898,7 @@ async function boardCell(state: State): Promise<void> {
 
   await cell.click();
   const sheet = page.getByRole("dialog");
-  await see("the day editor opened in place", sheet.getByText("Pagar este dia agora"));
+  await see("the day editor opened in place", sheet.getByText("Pagar este dia"));
   if (!page.url().endsWith("/cartao")) throw new Error(`a day click navigated to ${page.url()}`);
   await page.keyboard.press("Escape");
   await sheet.waitFor({ state: "hidden" });
