@@ -58,16 +58,6 @@ function onCancel(e: Event): void {
   open.value = false;
 }
 
-/** A press that starts and ends on the backdrop (the dialog box itself, outside the panel) closes. */
-let downOnBackdrop = false;
-function onPointerDown(e: PointerEvent): void {
-  downOnBackdrop = e.target === dialog.value;
-}
-function onPointerUp(e: PointerEvent): void {
-  if (downOnBackdrop && e.target === dialog.value) open.value = false;
-  downOnBackdrop = false;
-}
-
 onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
 </script>
 
@@ -78,8 +68,6 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
     :aria-labelledby="titleId"
     @close="onClose"
     @cancel="onCancel"
-    @pointerdown="onPointerDown"
-    @pointerup="onPointerUp"
   >
     <div class="sheet-dlg__panel" :class="{ 'is-wide': wide }">
       <header class="sheet-dlg__head">
@@ -103,12 +91,11 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
 
 <style scoped>
 .sheet-dlg {
-  /* The dialog box is the full-viewport backdrop hit area; the panel is the visible sheet. */
   position: fixed;
   inset: 0;
   width: 100%;
   max-width: none;
-  height: 100%;
+  height: 100dvh;
   max-height: none;
   margin: 0;
   padding: 0;
@@ -116,8 +103,7 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
   background: transparent;
   color: var(--ink);
   display: none;
-  align-items: flex-end;
-  justify-content: center;
+  overflow: clip;
   overscroll-behavior: contain;
 }
 
@@ -132,25 +118,19 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
 }
 
 .sheet-dlg__panel {
+  /* The panel fills the viewport; --col keeps the text column readable on wide screens. */
+  --col: 560px;
+  --gutter: max(var(--s-5), (100% - var(--col)) / 2);
   width: 100%;
-  max-width: 560px;
-}
-
-.sheet-dlg__panel.is-wide {
-  max-width: 760px;
-}
-
-.sheet-dlg__panel {
-  max-height: min(92dvh, 100%);
+  height: 100%;
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  border: 1px solid var(--rule);
-  border-bottom: 0;
-  border-radius: var(--r-3) var(--r-3) 0 0;
-  box-shadow: var(--shadow-2);
-  padding-bottom: env(safe-area-inset-bottom);
   animation: sheet-up var(--d-sheet) var(--ease);
+}
+
+.sheet-dlg__panel.is-wide {
+  --col: 760px;
 }
 
 .sheet-dlg.is-leaving .sheet-dlg__panel {
@@ -162,11 +142,12 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
 }
 
 .sheet-dlg__head {
+  flex: none;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--s-3);
-  padding: var(--s-5) var(--s-5) var(--s-3);
+  padding: calc(var(--s-5) + env(safe-area-inset-top)) var(--gutter) var(--s-3);
   border-bottom: 1px dashed var(--rule);
 }
 
@@ -197,15 +178,22 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
 }
 
 .sheet-dlg__body {
-  padding: var(--s-5);
-  overflow-y: auto;
   flex: 1;
+  min-height: 0;
+  padding: var(--s-5) var(--gutter);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.sheet-dlg__panel:not(:has(.sheet-dlg__foot)) .sheet-dlg__body {
+  padding-bottom: calc(var(--s-5) + env(safe-area-inset-bottom));
 }
 
 .sheet-dlg__foot {
+  flex: none;
   display: flex;
   gap: var(--s-3);
-  padding: var(--s-4) var(--s-5) var(--s-5);
+  padding: var(--s-4) var(--gutter) calc(var(--s-5) + env(safe-area-inset-bottom));
   border-top: 1px solid var(--rule);
 }
 
@@ -214,13 +202,7 @@ onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
 }
 
 @media (min-width: 720px) {
-  .sheet-dlg {
-    align-items: center;
-  }
   .sheet-dlg__panel {
-    border-bottom: 1px solid var(--rule);
-    border-radius: var(--r-3);
-    max-height: 86dvh;
     animation-name: sheet-in;
   }
   .sheet-dlg.is-leaving .sheet-dlg__panel {

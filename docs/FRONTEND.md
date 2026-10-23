@@ -102,6 +102,6 @@ Reads go through `useResource(source, key, fetcher)` in `composables/resource.ts
 ## Accessibility
 
 - WCAG AA contrast in both themes, visible focus ring, touch targets at least 44px, `lang="pt-BR"`.
-- Bottom sheets use `<dialog>` with focus trap and Esc to close.
+- Sheets use `<dialog>` with focus trap and Esc to close, fill the whole viewport and lock page scroll while open.
 - Stamps and status dots have `aria-label` with the full status text; color is never the only signal.
 - Respect `prefers-reduced-motion`.
