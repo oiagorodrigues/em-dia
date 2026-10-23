@@ -23,15 +23,15 @@ const {
   today,
   amountHint,
   disabled = false,
-  dateLocked = false,
+  minDate,
   kind = "pay",
 } = defineProps<{
   errors: Record<string, string>;
   today: IsoDate;
   amountHint?: string;
   disabled?: boolean;
-  /** The date can't change: paying a day from the day editor is always paid today. */
-  dateLocked?: boolean;
+  /** Earliest "pago em": paying a worked day can't be dated before the day. */
+  minDate?: IsoDate;
   /** A desconto hands no money: no method, no receipt, and its date is just "Data". */
   kind?: PaymentKind;
 }>();
@@ -56,18 +56,14 @@ function onAmount(): void {
 <template>
   <div class="pf__two">
     <slot name="beside-date" />
-    <Field
-      v-slot="{ id, invalid, describedBy }"
-      :label="dateLabel"
-      :error="errors.paidOn"
-      :hint="dateLocked ? 'O dia é pago hoje.' : undefined"
-    >
+    <Field v-slot="{ id, invalid, describedBy }" :label="dateLabel" :error="errors.paidOn">
       <DateField
         :id="id"
         v-model="paidOn"
         :label="dateLabel"
+        :min="minDate"
         :max="today"
-        :disabled="disabled || dateLocked"
+        :disabled="disabled"
         :invalid="invalid"
         :described-by="describedBy"
         @update:model-value="emit('clear', 'paidOn')"

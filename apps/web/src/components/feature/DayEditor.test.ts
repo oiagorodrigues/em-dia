@@ -77,6 +77,7 @@ const toggle = (label: string) =>
   ) ?? null;
 const payToggle = () => toggle("Pagar este dia");
 const moneyInput = () => document.querySelector<HTMLInputElement>("input.money__input");
+const moneyInputs = () => [...document.querySelectorAll<HTMLInputElement>("input.money__input")];
 const submit = () => document.querySelector<HTMLFormElement>("#day-editor")!;
 
 describe("DayEditor payment section", () => {
@@ -98,7 +99,9 @@ describe("DayEditor payment section", () => {
     payToggle()!.click();
     await flushPromises();
     expect(moneyInput()!.value).toBe("180,00");
-    expect(document.querySelector<HTMLInputElement>("#day-editor .df__input")!.disabled).toBe(true);
+    expect(document.querySelector<HTMLInputElement>("#day-editor .df__input")!.disabled).toBe(
+      false,
+    );
     submit().dispatchEvent(new Event("submit"));
     await flushPromises();
 
@@ -158,11 +161,27 @@ describe("DayEditor payment section", () => {
     wrapper.unmount();
   });
 
-  it("is offered only on the day itself", async () => {
+  it("is offered on a past day, with an editable date between that day and today", async () => {
     const wrapper = setup("employer", null, "2026-09-30");
     await flushPromises();
+    payToggle()!.click();
+    await flushPromises();
+    const dateInput = document.querySelector<HTMLInputElement>("#day-editor .df__input")!;
+    expect(dateInput.disabled).toBe(false);
+    expect(moneyInput()!.value).toBe("180,00");
+    submit().dispatchEvent(new Event("submit"));
+    await flushPromises();
+    const [, form] = create.mock.calls[0] as [string, FormData];
+    expect(form.get("referenceMonth")).toBe("2026-09");
+    expect(form.get("paidOn")).toBe(TODAY);
+    expect(form.get("amountCents")).toBe("18000");
+    wrapper.unmount();
+  });
+
+  it("is not offered on a future day", async () => {
+    const wrapper = setup("employer", null, "2026-10-08");
+    await flushPromises();
     expect(payToggle()).toBeNull();
-    expect(document.body.textContent).not.toContain("Pagar este dia");
     wrapper.unmount();
   });
 
@@ -214,17 +233,18 @@ describe("DayEditor abate from an adiantamento", () => {
     advances.mockResolvedValue({ advances: [advance("a0", "2026-09-01", 10000, 0)] });
     const wrapper = setup();
     await flushPromises();
-    expect(switches()).toHaveLength(1);
+    expect(switches()).toHaveLength(2);
+    expect(abateToggle()).toBeNull();
     wrapper.unmount();
   });
 
-  it("is offered on a past day, where paying is not", async () => {
+  it("is offered on a past day next to paying it", async () => {
     advances.mockResolvedValue({ advances: [advance("a1", "2026-09-10", 36000, 36000)] });
     const wrapper = setup("employer", null, "2026-09-30");
     await flushPromises();
-    expect(switches()).toHaveLength(1);
+    expect(switches()).toHaveLength(3);
     expect(document.body.textContent).toContain("Abater do adiantamento");
-    expect(document.body.textContent).not.toContain("Pagar este dia");
+    expect(document.body.textContent).toContain("Pagar este dia");
     wrapper.unmount();
   });
 
@@ -279,16 +299,120 @@ describe("DayEditor abate from an adiantamento", () => {
     wrapper.unmount();
   });
 
-  it("turns paying off when abating is on", async () => {
+  const moneyValues = () => moneyInputs().map((el) => el.value);
+  const type = async (el: HTMLInputElement, value: string) => {
+    el.value = value;
+    el.dispatchEvent(new Event("input"));
+    await flushPromises();
+  };
+  const formsOf = (): FormData[] => create.mock.calls.map((c: unknown[]) => c[1] as FormData);
+
+  it("pays the rest of the day after abating and discounting, in order", async () => {
     advances.mockResolvedValue({ advances: [advance("a1", "2026-09-10", 36000, 36000)] });
-    const wrapper = setup();
+    const wrapper = setup("employer", null, "2026-09-30");
+    await flushPromises();
+    payToggle()!.click();
+    abateToggle()!.click();
+    await flushPromises();
+    // Abating defaults to the whole day, so nothing is left to pay yet.
+    const [, abateMoney] = moneyValues();
+    await type(moneyInputs()[1]!, "50,00");
+    expect(abateMoney).toBe("180,00");
+    toggle("Descontar um valor")!.click();
+    await flushPromises();
+    expect(
+      [...document.querySelectorAll<HTMLInputElement>("input.input")].some(
+        (el) => el.value === "Desconto do dia 30/09",
+      ),
+    ).toBe(true);
+    await type(moneyInputs()[2]!, "10,00");
+    expect(moneyInputs()[0]!.value).toBe("120,00");
+    expect(document.body.textContent?.replaceAll(String.fromCharCode(160), " ")).toContain(
+      "Abate R$ 50,00, desconta R$ 10,00, paga R$ 120,00.",
+    );
+    submit().dispatchEvent(new Event("submit"));
+    await flushPromises();
+
+    const forms = formsOf();
+    expect(forms.map((f) => f.get("kind"))).toEqual(["pay", "deduction", "pay"]);
+    expect(forms.map((f) => f.get("amountCents"))).toEqual(["5000", "1000", "12000"]);
+    expect(forms[0]!.get("method")).toBe("compensation");
+    expect(forms[0]!.get("advanceId")).toBe("a1");
+    expect(forms[1]!.get("method")).toBeNull();
+    expect(forms[1]!.get("referenceMonth")).toBe("2026-09");
+    expect(forms[1]!.get("note")).toBe("Desconto do dia 30/09");
+    expect(forms[2]!.get("method")).toBe("pix");
+    expect(forms[2]!.get("paidOn")).toBe(TODAY);
+    wrapper.unmount();
+  });
+
+  it("saves with no money payment when abating and discounting cover the day", async () => {
+    advances.mockResolvedValue({ advances: [advance("a1", "2026-09-10", 36000, 36000)] });
+    const wrapper = setup("employer", null, "2026-09-30");
+    await flushPromises();
+    payToggle()!.click();
+    abateToggle()!.click();
+    await flushPromises();
+    await type(moneyInputs()[1]!, "170,00");
+    toggle("Descontar um valor")!.click();
+    await flushPromises();
+    await type(moneyInputs()[2]!, "10,00");
+    expect(moneyInputs()[0]!.value).toBe("0,00");
+    submit().dispatchEvent(new Event("submit"));
+    await flushPromises();
+    expect(formsOf().map((f) => f.get("kind"))).toEqual(["pay", "deduction"]);
+    expect(formsOf().map((f) => f.get("method"))).toEqual(["compensation", null]);
+    wrapper.unmount();
+  });
+
+  it("discounts alone, on a salaried contract, without prefilling an amount", async () => {
+    const monthly = { ...contract, payType: "monthly", rateCents: 250000 } as Contract;
+    const wrapper = setup("employer", null, "2026-09-30", monthly);
+    await flushPromises();
+    toggle("Descontar um valor")!.click();
+    await flushPromises();
+    await type(moneyInputs()[0]!, "30,00");
+    expect(document.querySelector('button[form="day-editor"]')!.textContent).toContain(
+      "Anotar e descontar",
+    );
+    submit().dispatchEvent(new Event("submit"));
+    await flushPromises();
+    expect(formsOf().map((f) => f.get("kind"))).toEqual(["deduction"]);
+    wrapper.unmount();
+  });
+
+  it("says what was done when a later payment fails, and does not repeat the earlier one", async () => {
+    advances.mockResolvedValue({ advances: [advance("a1", "2026-09-10", 36000, 36000)] });
+    create
+      .mockResolvedValueOnce({ payment: { id: "p1" } } as never)
+      .mockRejectedValueOnce(new Error("boom"));
+    const wrapper = setup("employer", null, "2026-09-30");
+    await flushPromises();
+    payToggle()!.click();
+    abateToggle()!.click();
+    await flushPromises();
+    await type(moneyInputs()[1]!, "50,00");
+    submit().dispatchEvent(new Event("submit"));
+    await flushPromises();
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(wrapper.emitted("update:open")?.at(-1)).not.toEqual([false]);
+    expect(abateToggle()!.checked).toBe(false);
+    expect(payToggle()!.checked).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("does not save the day when a desconto has no amount", async () => {
+    const wrapper = setup("employer", null, "2026-09-30");
     await flushPromises();
     payToggle()!.click();
     await flushPromises();
-    abateToggle()!.click();
+    toggle("Descontar um valor")!.click();
     await flushPromises();
-    expect(switches()[0]!.checked).toBe(false);
-    expect(moneyInput()!.value).toBe("180,00");
+    await type(moneyInputs()[1]!, "0,00");
+    submit().dispatchEvent(new Event("submit"));
+    await flushPromises();
+    expect(upsert).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });

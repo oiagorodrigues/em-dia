@@ -175,4 +175,4 @@ pt-BR, informal, short. Numbers always in mono. Money as `R$ 1.234,56`. Duration
 
 ## Accessibility
 
-WCAG AA contrast for text on both themes. Every control reachable by keyboard, visible focus ring `2px solid var(--brand)` with 2px offset. Stamps have `aria-label` with the full status. Bottom sheets are `<dialog>` with focus trap and Esc to close. Touch targets ≥ 44px. `lang="pt-BR"`.
+WCAG AA contrast for text on both themes. Every control reachable by keyboard, visible focus ring `2px solid var(--brand)` with 2px offset. Stamps have `aria-label` with the full status. Bottom sheets are `<dialog>` with focus trap and Esc to close. Every `Sheet` (forms, filters, receipt viewer, confirmations, date and time wheels) fills the whole viewport at every width (`100dvh`, no radius, safe-area insets on header and footer, footer pinned); on wide screens the content keeps a centered column (560px, or 760px with `wide`). While a sheet is open `html.has-sheet` locks page scroll. Touch targets ≥ 44px. `lang="pt-BR"`.

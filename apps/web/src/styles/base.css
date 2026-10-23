@@ -445,3 +445,10 @@ input[type="date"].input::-webkit-calendar-picker-indicator {
 .section-title::first-letter {
   text-transform: uppercase;
 }
+
+/* A modal Sheet is open: the page behind it must not scroll under the wheel or a touch drag. */
+html.has-sheet,
+html.has-sheet body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
