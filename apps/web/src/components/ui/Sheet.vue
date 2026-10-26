@@ -18,6 +18,7 @@ const emit = defineEmits<{ closed: [] }>();
 const dialog = useTemplateRef<HTMLDialogElement>("dialog");
 const titleId = useId();
 let closing = false;
+let leaveTimer: ReturnType<typeof setTimeout> | undefined;
 
 watch(
   open,
@@ -41,7 +42,7 @@ async function animateOut(el: HTMLDialogElement): Promise<void> {
   closing = true;
   el.classList.add("is-leaving");
   const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  await new Promise((r) => setTimeout(r, reduce ? 0 : 180));
+  await new Promise((r) => (leaveTimer = setTimeout(r, reduce ? 0 : 180)));
   el.classList.remove("is-leaving");
   el.close();
 }
@@ -58,7 +59,11 @@ function onCancel(e: Event): void {
   open.value = false;
 }
 
-onBeforeUnmount(() => document.documentElement.classList.remove("has-sheet"));
+// An unmount during the leave animation must not close the detached dialog afterwards.
+onBeforeUnmount(() => {
+  clearTimeout(leaveTimer);
+  document.documentElement.classList.remove("has-sheet");
+});
 </script>
 
 <template>

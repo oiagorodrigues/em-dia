@@ -8,7 +8,13 @@ export function useServiceWorker(): void {
   const toast = useToastStore();
   const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW({
     onRegisteredSW(_url, registration) {
-      if (registration) setInterval(() => void registration.update(), HOUR);
+      if (!registration) return;
+      setInterval(() => void registration.update(), HOUR);
+      // An installed PWA resumes from the background without reloading, and the hourly timer
+      // doesn't run while it sleeps, so a new deploy would go unnoticed until a cold start.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") void registration.update();
+      });
     },
   });
 
