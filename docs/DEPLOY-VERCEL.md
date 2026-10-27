@@ -35,7 +35,7 @@ Faça isso depois de criar o projeto (passo 2), na aba **Storage** ou no Marketp
 | `DATABASE_URL_UNPOOLED` | conexão **direta**. `db:migrate` usa esta no build                            |
 | `PG*`, `POSTGRES_*`     | partes da URL e nomes legados; a API não usa                                  |
 
-**Branches para previews.** Ative o preview branching na integração. A cada deploy de preview o Neon cria a branch `preview/<branch-do-git>` (uma cópia do banco de produção) e a Vercel injeta as URLs dela só naquele deploy. O build roda as migrações nessa branch, então uma migração nova nunca toca a produção antes do merge. As branches são apagadas quando os deploys correspondentes saem do ar.
+**Previews sem banco.** Deixe o preview branching desligado na integração e conecte o banco só ao ambiente Production. Com o branching ligado, o Neon cria uma branch `preview/<branch-do-git>` por deploy de preview e só a apaga quando o deploy sai do ar; no plano Free (10 branches) o limite estoura depois de poucas PRs e o deploy falha com "Branch limit reached". Sem o branching, conectar o Preview ao banco faria o build de preview rodar as migrações na produção antes do merge. Por isso o Preview fica sem `DATABASE_URL`: o build pula `db:migrate`, o frontend do preview carrega, mas a API não sobe lá. Teste mudanças de API e migrações localmente (PGlite ou Postgres em Docker, abaixo).
 
 Sem integração (outro Postgres, ou CI próprio): defina `DATABASE_URL` com a URL pooled e `DATABASE_URL_UNPOOLED` com a direta. Se só houver a pooled, `db:migrate` remove o sufixo `-pooler` do host, a convenção documentada do Neon.
 
@@ -100,7 +100,7 @@ Clique em **Deploy**. No log do build, confira:
 
 Depois abra `https://<seu-projeto>.vercel.app/api/health`. A resposta esperada é `{"status":"ok","db":"ok",...}`. Então crie a primeira conta pelo app.
 
-Quer dados de demonstração num banco de preview? Rode o seed da sua máquina apontando para ele (nunca para produção):
+Quer dados de demonstração num banco que não seja a produção (por exemplo uma branch do Neon criada à mão)? Rode o seed da sua máquina apontando para ele (nunca para produção):
 
 ```bash
 DATABASE_URL='postgresql://...-pooler...neon.tech/neondb?sslmode=require' BLOB_READ_WRITE_TOKEN=... bun run seed -- --reset
