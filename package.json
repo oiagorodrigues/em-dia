@@ -24,11 +24,11 @@
     "docs:schema": "vp run --filter @emdia/harness docs:schema"
   },
   "devDependencies": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
-    "vite-plus": "1.0.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0",
+    "vite-plus": "1.3.0"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0"
   },
   "devEngines": {
     "packageManager": {
